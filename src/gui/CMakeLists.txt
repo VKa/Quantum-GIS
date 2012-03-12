@@ -69,6 +69,7 @@ qgsprojectbadlayerguihandler.cpp
 qgsprojectionselector.cpp
 qgsquickprint.cpp
 qgsrubberband.cpp
+qgsscalecombobox.cpp
 qgstextannotationitem.cpp
 qgsvertexmarker.cpp
 qgsludialog.cpp
@@ -135,6 +136,7 @@ qgsludialog.h
 qgsprojectbadlayerguihandler.h
 qgslonglongvalidator.h
 qgssearchquerybuilder.h
+qgsscalecombobox.h
 qgsexpressionbuilderwidget.h
 qgsexpressionhighlighter.h
 qgsquerybuilder.h
@@ -167,6 +169,7 @@ qgsprojectionselector.h
 qgsrubberband.h
 qgsvertexmarker.h
 qgsmaptip.h
+qgsscalecombobox.h
 qgssearchquerybuilder.h
 qgsattributeeditor.h
 qgsfieldvalidator.h
@@ -193,6 +196,19 @@ ${CMAKE_CURRENT_BINARY_DIR}/../ui/ui_qgsquerybuilderbase.h
 ${CMAKE_CURRENT_BINARY_DIR}/../ui/ui_qgsexpressionbuilder.h
 ${CMAKE_CURRENT_BINARY_DIR}/../ui/ui_qgsexpressionbuilderdialogbase.h
 )
+
+# ModelTest
+#SET(MODELTEST_SRCS
+#  ../../tests/qt_modeltest/modeltest.cpp
+#  ../../tests/qt_modeltest/dynamictreemodel.cpp
+#)
+#SET(MODELTEST_MOC_HDRS
+#  ../../tests/qt_modeltest/modeltest.h
+#  ../../tests/qt_modeltest/dynamictreemodel.h
+#)
+#QT4_WRAP_CPP(MODELTEST_MOC_SRCS ${MODELTEST_MOC_HDRS})
+#INCLUDE_DIRECTORIES(../../tests/qt_modeltest)
+
 
 INCLUDE_DIRECTORIES(
   ${QT_QTUITOOLS_INCLUDE_DIR}
@@ -242,7 +258,10 @@ ENDIF(MSVC)
 #############################################################
 # qgis_gui library
 
-ADD_LIBRARY(qgis_gui SHARED ${QGIS_GUI_SRCS} ${QGIS_GUI_MOC_SRCS} ${QGIS_GUI_HDRS} ${QGIS_GUI_MOC_HDRS})
+ADD_LIBRARY(qgis_gui SHARED
+     ${QGIS_GUI_SRCS} ${QGIS_GUI_MOC_SRCS} ${QGIS_GUI_HDRS} ${QGIS_GUI_MOC_HDRS}
+     #${MODELTEST_SRCS} ${MODELTEST_MOC_SRCS}  # for ModelTest
+)
 
 SET_TARGET_PROPERTIES(qgis_gui PROPERTIES
   PUBLIC_HEADER "${QGIS_GUI_HDRS};${QGIS_GUI_MOC_HDRS}"
@@ -267,6 +286,7 @@ ADD_DEPENDENCIES(qgis_gui ui)
 TARGET_LINK_LIBRARIES(qgis_gui
   qgis_core
   ${QT_QTUITOOLS_LIBRARY}
+  #${QT_QTTEST_LIBRARY}  # for ModelTest
 )
 
 IF (NOT WITH_INTERNAL_SPATIALITE)

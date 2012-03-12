@@ -6,6 +6,7 @@
 %Import QtNetwork/QtNetworkmod.sip
 
 %Include conversions.sip
+%Include qgsexception.sip
 
 // TODO: more files to wrap
 
@@ -91,3 +92,9 @@
 %Include qgsnetworkaccessmanager.sip
 
 %Include symbology-ng-core.sip
+
+%Include qgsgpsconnection.sip
+%Include qgsgpsconnectionregistry.sip
+%Include qgsgpsdconnection.sip
+%Include qgsnmeaconnection.sip
+%Include qgsgpsdetector.sip

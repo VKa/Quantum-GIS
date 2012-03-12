@@ -58,15 +58,13 @@ QgsOptions::QgsOptions( QWidget *parent, Qt::WFlags fl ) :
   connect( cmbTheme, SIGNAL( highlighted( const QString& ) ), this, SLOT( themeChanged( const QString& ) ) );
   connect( cmbTheme, SIGNAL( textChanged( const QString& ) ), this, SLOT( themeChanged( const QString& ) ) );
 
-  connect( cmbSize, SIGNAL( activated( const QString& ) ), this, SLOT( iconSizeChanged( const QString& ) ) );
-  connect( cmbSize, SIGNAL( highlighted( const QString& ) ), this, SLOT( iconSizeChanged( const QString& ) ) );
-  connect( cmbSize, SIGNAL( textChanged( const QString& ) ), this, SLOT( iconSizeChanged( const QString& ) ) );
+  connect( cmbIconSize, SIGNAL( activated( const QString& ) ), this, SLOT( iconSizeChanged( const QString& ) ) );
+  connect( cmbIconSize, SIGNAL( highlighted( const QString& ) ), this, SLOT( iconSizeChanged( const QString& ) ) );
+  connect( cmbIconSize, SIGNAL( textChanged( const QString& ) ), this, SLOT( iconSizeChanged( const QString& ) ) );
+
+  connect( spinFontSize, SIGNAL( valueChanged( const QString& ) ), this, SLOT( fontSizeChanged( const QString& ) ) );
 
   connect( this, SIGNAL( accepted() ), this, SLOT( saveOptions() ) );
-
-  cmbSize->addItem( "16" );
-  cmbSize->addItem( "24" );
-  cmbSize->addItem( "32" );
 
   QStringList styles = QStyleFactory::keys();
   foreach( QString style, styles )
@@ -186,6 +184,18 @@ QgsOptions::QgsOptions( QWidget *parent, Qt::WFlags fl ) :
 
   spinBoxAttrTableRowCache->setValue( settings.value( "/qgis/attributeTableRowCache", 10000 ).toInt() );
 
+  // set the prompt for raster sublayers
+  // 0 = Always -> always ask (if there are existing sublayers)
+  // 1 = If needed -> ask if layer has no bands, but has sublayers
+  // 2 = Never -> never prompt, will not load anything
+  // 4 = Load all -> never prompt, but load all sublayers
+  cmbPromptRasterSublayers->clear();
+  cmbPromptRasterSublayers->addItem( tr( "Always" ) );
+  cmbPromptRasterSublayers->addItem( tr( "If needed" ) ); //this means, prompt if there are sublayers but no band in the main dataset
+  cmbPromptRasterSublayers->addItem( tr( "Never" ) );
+  cmbPromptRasterSublayers->addItem( tr( "Load all" ) );
+  cmbPromptRasterSublayers->setCurrentIndex( settings.value( "/qgis/promptForRasterSublayers", 0 ).toInt() );
+
   // set the display update threshold
   spinBoxUpdateThreshold->setValue( settings.value( "/Map/updateThreshold" ).toInt() );
   //set the default projection behaviour radio buttongs
@@ -281,7 +291,8 @@ QgsOptions::QgsOptions( QWidget *parent, Qt::WFlags fl ) :
 
   // set the theme combo
   cmbTheme->setCurrentIndex( cmbTheme->findText( settings.value( "/Themes", "default" ).toString() ) );
-  cmbSize->setCurrentIndex( cmbSize->findText( settings.value( "/IconSize", 24 ).toString() ) );
+  cmbIconSize->setCurrentIndex( cmbIconSize->findText( settings.value( "/IconSize", QGIS_ICON_SIZE ).toString() ) );
+  spinFontSize->setValue( settings.value( "/fontPointSize", QGIS_DEFAULT_FONTSIZE ).toInt() );
   QString name = QApplication::style()->objectName();
   cmbStyle->setCurrentIndex( cmbStyle->findText( name, Qt::MatchFixedString ) );
   //set the state of the checkboxes
@@ -333,7 +344,7 @@ QgsOptions::QgsOptions( QWidget *parent, Qt::WFlags fl ) :
   chbAskToSaveProjectChanges->setChecked( settings.value( "qgis/askToSaveProjectChanges", QVariant( true ) ).toBool() );
   chbWarnOldProjectVersion->setChecked( settings.value( "/qgis/warnOldProjectVersion", QVariant( true ) ).toBool() );
 
-  cmbWheelAction->setCurrentIndex( settings.value( "/qgis/wheel_action", 0 ).toInt() );
+  cmbWheelAction->setCurrentIndex( settings.value( "/qgis/wheel_action", 2 ).toInt() );
   spinZoomFactor->setValue( settings.value( "/qgis/zoom_factor", 2 ).toDouble() );
 
   //
@@ -420,6 +431,14 @@ QgsOptions::QgsOptions( QWidget *parent, Qt::WFlags fl ) :
   chkReuseLastValues->setChecked( settings.value( "/qgis/digitizing/reuseLastValues", false ).toBool() );
   chkDisableAttributeValuesDlg->setChecked( settings.value( "/qgis/digitizing/disable_enter_attribute_values_dialog", false ).toBool() );
   mValidateGeometries->setCurrentIndex( settings.value( "/qgis/digitizing/validate_geometries", 1 ).toInt() );
+
+  mOffsetJoinStyleComboBox->addItem( tr( "Round" ), 0 );
+  mOffsetJoinStyleComboBox->addItem( tr( "Mitre" ), 1 );
+  mOffsetJoinStyleComboBox->addItem( tr( "Bevel" ), 2 );
+  mOffsetJoinStyleComboBox->setCurrentIndex( settings.value( "/qgis/digitizing/offset_join_style", 0 ).toInt() );
+  mOffsetQuadSegSpinBox->setValue( settings.value( "/qgis/digitizing/offset_quad_seg", 8 ).toInt() );
+  mCurveOffsetMiterLimitComboBox->setValue( settings.value( "/qgis/digitizine/offset_miter_limit", 5.0 ).toDouble() );
+
 
 #ifdef Q_WS_MAC //MH: disable incremental update on Mac for now to avoid problems with resizing
   groupBox_5->setEnabled( false );
@@ -513,15 +532,17 @@ void QgsOptions::on_mLineColorToolButton_clicked()
 void QgsOptions::themeChanged( const QString &newThemeName )
 {
   // Slot to change the theme as user scrolls through the choices
-  QString newt = newThemeName;
-  QgisApp::instance()->setTheme( newt );
+  QgisApp::instance()->setTheme( newThemeName );
 }
 
 void QgsOptions::iconSizeChanged( const QString &iconSize )
 {
-  int icon = iconSize.toInt();
-  QgisApp::instance()->setIconSizes( icon );
+  QgisApp::instance()->setIconSizes( iconSize.toInt() );
+}
 
+void QgsOptions::fontSizeChanged( const QString &fontSize )
+{
+  QgisApp::instance()->setFontSize( fontSize.toInt() );
 }
 
 QString QgsOptions::theme()
@@ -547,6 +568,7 @@ void QgsOptions::saveOptions()
   settings.setValue( "plugins/searchPathsForPlugins", myPaths );
 
   //search directories for svgs
+  myPaths.clear();
   for ( int i = 0; i < mListSVGPaths->count(); ++i )
   {
     if ( i != 0 )
@@ -598,6 +620,7 @@ void QgsOptions::saveOptions()
   settings.setValue( "/qgis/dockAttributeTable", cbxAttributeTableDocked->isChecked() );
   settings.setValue( "/qgis/attributeTableBehaviour", cmbAttrTableBehaviour->currentIndex() );
   settings.setValue( "/qgis/attributeTableRowCache", spinBoxAttrTableRowCache->value() );
+  settings.setValue( "/qgis/promptForRasterSublayers", cmbPromptRasterSublayers->currentIndex() );
   settings.setValue( "/qgis/dockIdentifyResults", cbxIdentifyResultsDocked->isChecked() );
   settings.setValue( "/qgis/dockSnapping", cbxSnappingOptionsDocked->isChecked() );
   settings.setValue( "/qgis/addPostgisDC", cbxAddPostgisDC->isChecked() );
@@ -647,7 +670,8 @@ void QgsOptions::saveOptions()
     settings.setValue( "/Themes", cmbTheme->currentText() );
   }
 
-  settings.setValue( "/IconSize", cmbSize->currentText() );
+  settings.setValue( "/IconSize", cmbIconSize->currentText() );
+  settings.setValue( "/fontPointSize", spinFontSize->value() );
 
   settings.setValue( "/Map/updateThreshold", spinBoxUpdateThreshold->value() );
   //check behaviour so default projection when new layer is added with no
@@ -769,6 +793,10 @@ void QgsOptions::saveOptions()
   settings.setValue( "/qgis/digitizing/reuseLastValues", chkReuseLastValues->isChecked() );
   settings.setValue( "/qgis/digitizing/disable_enter_attribute_values_dialog", chkDisableAttributeValuesDlg->isChecked() );
   settings.setValue( "/qgis/digitizing/validate_geometries", mValidateGeometries->currentIndex() );
+
+  settings.setValue( "/qgis/digitizing/offset_join_style", mOffsetJoinStyleComboBox->itemData( mOffsetJoinStyleComboBox->currentIndex() ).toInt() );
+  settings.setValue( "/qgis/digitizing/offset_quad_seg", mOffsetQuadSegSpinBox->value() );
+  settings.setValue( "/qgis/digitizine/offset_miter_limit", mCurveOffsetMiterLimitComboBox->value() );
 
   //
   // Locale settings

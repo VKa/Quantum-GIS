@@ -1074,6 +1074,7 @@ QgsComposition* QgsProjectParser::initComposition( const QString& composerTempla
     {
       QgsComposerMap* map = new QgsComposerMap( composition );
       map->readXML( currentElem, *mXMLDoc );
+      map->setPreviewMode( QgsComposerMap::Rectangle );
       composition->addItem( map );
       mapList.push_back( map );
     }
@@ -1448,7 +1449,7 @@ void QgsProjectParser::setSelectionColor()
     }
   }
 
-  QgsRenderer::setSelectionColor( QColor( red, green, blue, alpha ) );
+  mSelectionColor = QColor( red, green, blue, alpha );
 }
 
 const QgsCoordinateReferenceSystem& QgsProjectParser::projectCRS() const

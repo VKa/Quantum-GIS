@@ -74,6 +74,10 @@ typedef SInt32 SRefCon;
 #include "qgsrectangle.h"
 #include "qgslogger.h"
 
+#if defined(linux) && ! defined(ANDROID)
+#include <execinfo.h>
+#endif
+
 // (if Windows/Mac, use icon from resource)
 #if ! defined(Q_WS_WIN) && ! defined(Q_WS_MAC)
 #include "../../images/themes/default/qgis.xpm" // Linux
@@ -169,6 +173,14 @@ void myMessageOutput( QtMsgType type, const char *msg )
            || 0 == strncmp( msg, "QWidget::", 9 )
            || 0 == strncmp( msg, "QPainter::", 10 ) )
       {
+#if 0
+#if defined(linux) && ! defined(ANDROID)
+        fprintf( stderr, "Stacktrace (run through c++filt):\n" );
+        void *buffer[256];
+        int nptrs = backtrace( buffer, sizeof( buffer ) / sizeof( *buffer ) );
+        backtrace_symbols_fd( buffer, nptrs, STDERR_FILENO );
+#endif
+#endif
         QgsMessageLog::logMessage( msg, "Qt" );
       }
 #endif
@@ -182,11 +194,18 @@ void myMessageOutput( QtMsgType type, const char *msg )
 
       break;
     case QtFatalMsg:
+    {
       fprintf( stderr, "Fatal: %s\n", msg );
+#if defined(linux) && ! defined(ANDROID)
+      fprintf( stderr, "Stacktrace (run through c++filt):\n" );
+      void *buffer[256];
+      int nptrs = backtrace( buffer, sizeof( buffer ) / sizeof( *buffer ) );
+      backtrace_symbols_fd( buffer, nptrs, STDERR_FILENO );
+#endif
       abort();                    // deliberately core dump
+    }
   }
 }
-
 
 int main( int argc, char *argv[] )
 {

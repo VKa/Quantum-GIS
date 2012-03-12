@@ -3,15 +3,16 @@ ADD_SUBDIRECTORY(plugins)
 SET (PYTHON_OUTPUT_DIRECTORY ${QGIS_OUTPUT_DIRECTORY}/python)
 SET (QGIS_PYTHON_OUTPUT_DIRECTORY ${PYTHON_OUTPUT_DIRECTORY}/qgis)
 
-IF (WITH_INTERNAL_SPATIALITE)
+IF (WITH_PYSPATIALITE)
   ADD_SUBDIRECTORY(pyspatialite)
+ENDIF (WITH_PYSPATIALITE)
 
+IF (WITH_INTERNAL_SPATIALITE)
   INCLUDE_DIRECTORIES(
     ../src/core/spatialite/headers
     ../src/core/spatialite/headers/spatialite
   )
 ENDIF (WITH_INTERNAL_SPATIALITE)
-
 
 SET (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${QGIS_PYTHON_OUTPUT_DIRECTORY})
 SET (CMAKE_LIBRARY_OUTPUT_DIRECTORY ${QGIS_PYTHON_OUTPUT_DIRECTORY})
@@ -29,6 +30,8 @@ INCLUDE_DIRECTORIES(
 
     ../src/core
     ../src/core/composer
+    ../src/core/gps
+    ../src/core/gps/qextserialport
     ../src/core/raster
     ../src/core/renderer
     ../src/core/spatialindex

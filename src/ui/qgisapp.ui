@@ -17,7 +17,7 @@
      <x>0</x>
      <y>0</y>
      <width>1052</width>
-     <height>28</height>
+     <height>20</height>
     </rect>
    </property>
    <widget class="QMenu" name="mEditMenu">
@@ -41,6 +41,7 @@
     <addaction name="mActionDeleteRing"/>
     <addaction name="mActionDeletePart"/>
     <addaction name="mActionReshapeFeatures"/>
+    <addaction name="mActionOffsetCurve"/>
     <addaction name="mActionSplitFeatures"/>
     <addaction name="mActionMergeFeatures"/>
     <addaction name="mActionMergeFeatureAttributes"/>
@@ -107,6 +108,7 @@
      <addaction name="mActionDecorationScaleBar"/>
     </widget>
     <addaction name="mActionPan"/>
+    <addaction name="mActionPanToSelected"/>
     <addaction name="mActionZoomIn"/>
     <addaction name="mActionZoomOut"/>
     <addaction name="separator"/>
@@ -291,6 +293,7 @@
    <addaction name="mActionDeleteRing"/>
    <addaction name="mActionDeletePart"/>
    <addaction name="mActionReshapeFeatures"/>
+   <addaction name="mActionOffsetCurve"/>
    <addaction name="mActionSplitFeatures"/>
    <addaction name="mActionMergeFeatures"/>
    <addaction name="mActionMergeFeatureAttributes"/>
@@ -307,6 +310,7 @@
     <bool>false</bool>
    </attribute>
    <addaction name="mActionPan"/>
+   <addaction name="mActionPanToSelected"/>
    <addaction name="mActionZoomIn"/>
    <addaction name="mActionZoomOut"/>
    <addaction name="mActionZoomActualSize"/>
@@ -493,7 +497,7 @@
      <normaloff>:/images/themes/default/mActionComposerManager.png</normaloff>:/images/themes/default/mActionComposerManager.png</iconset>
    </property>
    <property name="text">
-    <string>Composer manager...</string>
+    <string>Composer Manager...</string>
    </property>
   </action>
   <action name="mActionExit">
@@ -580,7 +584,7 @@
      <normaloff>:/images/themes/default/mActionAddFeature.png</normaloff>:/images/themes/default/mActionAddFeature.png</iconset>
    </property>
    <property name="text">
-    <string>Add feature</string>
+    <string>Add Feature</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+.</string>
@@ -697,7 +701,7 @@
      <normaloff>:/images/themes/default/mActionMergeFeatures.png</normaloff>:/images/themes/default/mActionMergeFeatures.png</iconset>
    </property>
    <property name="text">
-    <string>Merge selected features</string>
+    <string>Merge Selected Features</string>
    </property>
   </action>
   <action name="mActionMergeFeatureAttributes">
@@ -706,7 +710,7 @@
      <normaloff>:/images/themes/default/mActionMergeFeatureAttributes.png</normaloff>:/images/themes/default/mActionMergeFeatureAttributes.png</iconset>
    </property>
    <property name="text">
-    <string>Merge attributes of selected features</string>
+    <string>Merge Attributes of Selected Features</string>
    </property>
   </action>
   <action name="mActionNodeTool">
@@ -789,7 +793,7 @@
      <normaloff>:/images/themes/default/mActionSelect.png</normaloff>:/images/themes/default/mActionSelect.png</iconset>
    </property>
    <property name="text">
-    <string>Select single feature</string>
+    <string>Select Single Feature</string>
    </property>
   </action>
   <action name="mActionSelectRectangle">
@@ -801,7 +805,7 @@
      <normaloff>:/images/themes/default/mActionSelectRectangle.png</normaloff>:/images/themes/default/mActionSelectRectangle.png</iconset>
    </property>
    <property name="text">
-    <string>Select features by rectangle</string>
+    <string>Select Features by Rectangle</string>
    </property>
   </action>
   <action name="mActionSelectPolygon">
@@ -813,7 +817,7 @@
      <normaloff>:/images/themes/default/mActionSelectPolygon.png</normaloff>:/images/themes/default/mActionSelectPolygon.png</iconset>
    </property>
    <property name="text">
-    <string>Select features by polygon</string>
+    <string>Select Features by Polygon</string>
    </property>
   </action>
   <action name="mActionSelectFreehand">
@@ -825,7 +829,7 @@
      <normaloff>:/images/themes/default/mActionSelectFreehand.png</normaloff>:/images/themes/default/mActionSelectFreehand.png</iconset>
    </property>
    <property name="text">
-    <string>Select features by freehand</string>
+    <string>Select Features by Freehand</string>
    </property>
   </action>
   <action name="mActionSelectRadius">
@@ -837,7 +841,7 @@
      <normaloff>:/images/themes/default/mActionSelectRadius.png</normaloff>:/images/themes/default/mActionSelectRadius.png</iconset>
    </property>
    <property name="text">
-    <string>Select features by radius</string>
+    <string>Select Features by Radius</string>
    </property>
   </action>
   <action name="mActionDeselectAll">
@@ -846,7 +850,7 @@
      <normaloff>:/images/themes/default/mActionDeselectAll.png</normaloff>:/images/themes/default/mActionDeselectAll.png</iconset>
    </property>
    <property name="text">
-    <string>Deselect features from all layers</string>
+    <string>Deselect Features from All Layers</string>
    </property>
   </action>
   <action name="mActionIdentify">
@@ -1041,7 +1045,7 @@
      <normaloff>:/images/themes/default/mActionFormAnnotation.png</normaloff>:/images/themes/default/mActionFormAnnotation.png</iconset>
    </property>
    <property name="text">
-    <string>Form annotation</string>
+    <string>Form Annotation</string>
    </property>
   </action>
   <action name="mActionAnnotation">
@@ -1124,7 +1128,7 @@
      <normaloff>:/images/themes/default/mActionAddLayer.png</normaloff>:/images/themes/default/mActionAddLayer.png</iconset>
    </property>
    <property name="text">
-    <string>Add PostGIS Layer...</string>
+    <string>Add PostGIS Layers...</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+Shift+D</string>
@@ -1172,7 +1176,7 @@
      <normaloff>:/images/themes/default/mActionToggleEditing.png</normaloff>:/images/themes/default/mActionToggleEditing.png</iconset>
    </property>
    <property name="text">
-    <string>Toggle editing</string>
+    <string>Toggle Editing</string>
    </property>
    <property name="statusTip">
     <string>Toggles the editing state of the current layer</string>
@@ -1184,7 +1188,7 @@
      <normaloff>:/images/themes/default/mActionSaveEdits.png</normaloff>:/images/themes/default/mActionSaveEdits.png</iconset>
    </property>
    <property name="text">
-    <string>Save edits</string>
+    <string>Save Edits</string>
    </property>
    <property name="statusTip">
     <string>Save edits to current layer, but continue editing</string>
@@ -1192,12 +1196,12 @@
   </action>
   <action name="mActionLayerSaveAs">
    <property name="text">
-    <string>Save as...</string>
+    <string>Save As...</string>
    </property>
   </action>
   <action name="mActionLayerSelectionSaveAs">
    <property name="text">
-    <string>Save Selection as vector file...</string>
+    <string>Save Selection as Vector File...</string>
    </property>
   </action>
   <action name="mActionRemoveLayer">
@@ -1222,7 +1226,7 @@
   </action>
   <action name="mActionSetProjectCRSFromLayer">
    <property name="text">
-    <string>Set project CRS from layer</string>
+    <string>Set Project CRS from Layer</string>
    </property>
   </action>
   <action name="mActionTileScale">
@@ -1267,7 +1271,7 @@
      <normaloff>:/images/themes/default/mActionRemoveAllFromOverview.png</normaloff>:/images/themes/default/mActionRemoveAllFromOverview.png</iconset>
    </property>
    <property name="text">
-    <string>Remove All From Overview</string>
+    <string>Remove All from Overview</string>
    </property>
   </action>
   <action name="mActionShowAllLayers">
@@ -1465,7 +1469,7 @@
   </action>
   <action name="mActionStyleManagerV2">
    <property name="text">
-    <string>Style manager...</string>
+    <string>Style Manager...</string>
    </property>
   </action>
   <action name="mActionShowPythonDialog">
@@ -1482,7 +1486,7 @@
     <string>Full histogram stretch</string>
    </property>
    <property name="toolTip">
-    <string>Stretch histogram to full dataset</string>
+    <string>Stretch Histogram to Full Dataset</string>
    </property>
   </action>
   <action name="mActionAddLayerSeparator">
@@ -1521,7 +1525,7 @@
   </action>
   <action name="mActionEmbedLayers">
    <property name="text">
-    <string>Embed layers and groups...</string>
+    <string>Embed Layers and Groups...</string>
    </property>
    <property name="toolTip">
     <string>Embed layers and groups from other project files</string>
@@ -1573,6 +1577,45 @@
    </property>
    <property name="toolTip">
     <string>Add WFS Layer</string>
+   </property>
+  </action>
+  <action name="mActionFeatureAction">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="../../images/images.qrc">
+     <normaloff>:/images/themes/default/mAction.png</normaloff>:/images/themes/default/mAction.png</iconset>
+   </property>
+   <property name="text">
+    <string>Feature Action</string>
+   </property>
+   <property name="toolTip">
+    <string>Run Feature Action</string>
+   </property>
+  </action>
+  <action name="mActionPanToSelected">
+   <property name="icon">
+    <iconset resource="../../images/images.qrc">
+     <normaloff>:/images/themes/default/mActionPanToSelected.png</normaloff>:/images/themes/default/mActionPanToSelected.png</iconset>
+   </property>
+   <property name="text">
+    <string>Pan Map to Selection</string>
+   </property>
+   <property name="toolTip">
+    <string>Pan Map to Selection</string>
+   </property>
+  </action>
+  <action name="mActionOffsetCurve">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="../../images/images.qrc">
+     <normaloff>:/images/themes/default/mActionOffsetCurve.png</normaloff>:/images/themes/default/mActionOffsetCurve.png</iconset>
+   </property>
+   <property name="text">
+    <string>Offset Curve</string>
    </property>
   </action>
  </widget>

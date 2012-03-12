@@ -15,7 +15,7 @@
  *                                                                         *
  ***************************************************************************/
 #include "qgscoordinatetransform.h"
-#include "qgsmessageoutput.h"
+#include "qgsmessagelog.h"
 #include "qgslogger.h"
 
 //qt includes
@@ -494,7 +494,12 @@ QgsRectangle QgsCoordinateTransform::transformBoundingBox( const QgsRectangle re
       bb_rect.combineExtentWith( x[i], y[i] );
   }
 
-  QgsDebugMsg( "Projected extent: " + QString(( bb_rect.toString() ).toLocal8Bit().data() ) );
+  QgsDebugMsg( "Projected extent: " + bb_rect.toString() );
+
+  if ( bb_rect.isEmpty() )
+  {
+    QgsDebugMsg( "Original extent: " + rect.toString() );
+  }
 
   return bb_rect;
 }
@@ -504,17 +509,15 @@ void QgsCoordinateTransform::transformCoords( const int& numPoints, double *x, d
   // Refuse to transform the points if the srs's are invalid
   if ( !mSourceCRS.isValid() )
   {
-    QgsLogger::critical( tr( "The source spatial reference system (CRS) is not valid. " )
-                         + tr( "The coordinates can not be reprojected."
-                               " The CRS is: %1" )
-                         .arg( mSourceCRS.toProj4() ) );
+    QgsMessageLog::logMessage( tr( "The source spatial reference system (CRS) is not valid. "
+                                   "The coordinates can not be reprojected. The CRS is: %1" )
+                               .arg( mSourceCRS.toProj4() ), tr( "CRS" ) );
     return;
   }
   if ( !mDestCRS.isValid() )
   {
-    QgsLogger::critical( tr( "The destination spatial reference system (CRS) is not valid. " )
-                         + tr( "The coordinates can not be reprojected."
-                               " The CRS is: %1" ).arg( mDestCRS.toProj4() ) );
+    QgsMessageLog::logMessage( tr( "The destination spatial reference system (CRS) is not valid. "
+                                   "The coordinates can not be reprojected. The CRS is: %1" ).arg( mDestCRS.toProj4() ), tr( "CRS" ) );
     return;
   }
 
@@ -562,17 +565,21 @@ void QgsCoordinateTransform::transformCoords( const int& numPoints, double *x, d
     {
       if ( direction == ForwardTransform )
       {
-        points += QString( "(%1, %2)\n" ).arg( x[i] ).arg( y[i] );
+        points += QString( "(%1, %2)\n" ).arg( x[i], 0, 'f' ).arg( y[i], 0, 'f' );
       }
       else
       {
-        points += QString( "(%1, %2)\n" ).arg( x[i] * RAD_TO_DEG ).arg( y[i] * RAD_TO_DEG );
+        points += QString( "(%1, %2)\n" ).arg( x[i] * RAD_TO_DEG, 0, 'f' ).arg( y[i] * RAD_TO_DEG, 0, 'f' );
       }
     }
 
-    QString msg = tr( "%1 of\n%2\nfailed with error: %3\n" )
+    QString msg = tr( "%1 of\n"
+                      "%2"
+                      "PROJ.4: %3 +to %4\n"
+                      "Error: %5" )
                   .arg( dir )
                   .arg( points )
+                  .arg( mSourceCRS.toProj4() ).arg( mDestCRS.toProj4() )
                   .arg( QString::fromUtf8( pj_strerrno( projResult ) ) );
 
     QgsDebugMsg( "Projection failed emitting invalid transform signal: " + msg );

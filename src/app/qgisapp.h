@@ -24,7 +24,6 @@ class QCursor;
 class QFileInfo;
 class QKeyEvent;
 class QLabel;
-class QComboBox;
 class QMenu;
 class QPixmap;
 class QProgressBar;
@@ -76,11 +75,18 @@ class QgsDecorationScaleBar;
 
 class QgsMessageLogViewer;
 
+class QgsScaleComboBox;
+
 #include <QMainWindow>
 #include <QToolBar>
 #include <QAbstractSocket>
 #include <QPointer>
 #include <QSslError>
+
+#ifdef ANDROID
+#include <QGestureEvent>
+#include <QTapAndHoldGesture>
+#endif
 
 #include "qgsconfig.h"
 #include "qgsfeature.h"
@@ -161,6 +167,7 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
     void setTheme( QString themeName = "default" );
 
     void setIconSizes( int size );
+    void setFontSize( int size );
 
     //! Setup the toolbar popup menus for a given theme
     void setupToolbarPopups( QString themeName );
@@ -235,8 +242,10 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
     QAction *actionDeletePart() { return mActionDeletePart; }
     QAction *actionNodeTool() { return mActionNodeTool; }
     QAction *actionSnappingOptions() { return mActionSnappingOptions; }
+    QAction *actionOffsetCurve() { return mActionOffsetCurve; }
 
     QAction *actionPan() { return mActionPan; }
+    QAction *actionPanToSelected() { return mActionPanToSelected; }
     QAction *actionZoomIn() { return mActionZoomIn; }
     QAction *actionZoomOut() { return mActionZoomOut; }
     QAction *actionSelect() { return mActionSelect; }
@@ -245,6 +254,7 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
     QAction *actionSelectFreehand() { return mActionSelectFreehand; }
     QAction *actionSelectRadius() { return mActionSelectRadius; }
     QAction *actionIdentify() { return mActionIdentify; }
+    QAction *actionFeatureAction() { return mActionFeatureAction; }
     QAction *actionMeasure() { return mActionMeasure; }
     QAction *actionMeasureArea() { return mActionMeasureArea; }
     QAction *actionZoomFullExtent() { return mActionZoomFullExtent; }
@@ -371,6 +381,9 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
     void zoomToNext();
     //! Zoom to selected features
     void zoomToSelected();
+    //! Pan map to selected features
+    //! @note added in 2.0
+    void panToSelected();
 
     //! open the properties dialog for the currently selected layer
     void layerProperties();
@@ -409,9 +422,10 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
     void editPaste( QgsMapLayer * destinationLayer = 0 );
 
     void loadOGRSublayers( QString layertype, QString uri, QStringList list );
+    void loadGDALSublayers( QString uri, QStringList list );
 
     /**Deletes the selected attributes for the currently selected vector layer*/
-    void deleteSelected( QgsMapLayer *layer = 0 );
+    void deleteSelected( QgsMapLayer *layer = 0, QWidget* parent = 0 );
 
     //! project was written
     void writeProject( QDomDocument & );
@@ -661,6 +675,8 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
     void addFeature();
     //! activates the move feature tool
     void moveFeature();
+    //! activates the offset curve tool
+    void offsetCurve();
     //! activates the reshape features tool
     void reshapeFeatures();
     //! activates the split features tool
@@ -756,6 +772,13 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
     //! Measure angle
     void measureAngle();
 
+    //! Run the default feature action on the current layer
+    void doFeatureAction();
+    //! Set the default feature action for the current layer
+    void updateDefaultFeatureAction( QAction *action );
+    //! Refresh the list of feature actions of the current layer
+    void refreshFeatureActions();
+
     //annotations
     void addFormAnnotation();
     void addTextAnnotation();
@@ -842,9 +865,6 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
       */
     void newProject();
 
-    //! emitted when a new bookmark is added
-    void bookmarkAdded();
-
     /** Signal emitted when the current theme is changed so plugins
      * can change there tool button icons.
      * @note This was added in QGIS 1.1
@@ -866,6 +886,7 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
   private:
     /** This method will open a dialog so the user can select the sublayers to load
     */
+    bool shouldAskUserForGDALSublayers( QgsRasterLayer *layer );
     void askUserForOGRSublayers( QgsVectorLayer *layer );
     void askUserForGDALSublayers( QgsRasterLayer *layer );
     /** Add a raster layer to the map (passed in as a ptr).
@@ -968,11 +989,13 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
         QgsMapTool* mZoomOut;
         QgsMapTool* mPan;
         QgsMapTool* mIdentify;
+        QgsMapTool* mFeatureAction;
         QgsMapTool* mMeasureDist;
         QgsMapTool* mMeasureArea;
         QgsMapTool* mMeasureAngle;
         QgsMapTool* mAddFeature;
         QgsMapTool* mMoveFeature;
+        QgsMapTool* mOffsetCurve;
         QgsMapTool* mReshapeFeatures;
         QgsMapTool* mSplitFeatures;
         QgsMapTool* mSelect;
@@ -1003,7 +1026,7 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
     //! Widget that will live on the statusbar to display "scale 1:"
     QLabel * mScaleLabel;
     //! Widget that will live on the statusbar to display scale value
-    QComboBox * mScaleEdit;
+    QgsScaleComboBox * mScaleEdit;
     //! The validator for the mScaleEdit
     QValidator * mScaleEditValidator;
     //! Widget that will live on the statusbar to display "Coordinate / Extent"
@@ -1024,6 +1047,8 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
     QLabel * mOnTheFlyProjectionStatusLabel;
     //! Widget in status bar used to show status of on the fly projection
     QToolButton * mOnTheFlyProjectionStatusButton;
+    //! Menu that contains the list of actions of the selected vector layer
+    QMenu *mFeatureActionMenu;
     //! Popup menu
     QMenu * mPopupMenu;
     //! Top level database menu
@@ -1137,6 +1162,21 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
     void projectChanged( const QDomDocument & );
 
     bool cmpByText( QAction* a, QAction* b );
+
+    QString mOldScale;
+
+#ifdef ANDROID
+    bool gestureEvent( QGestureEvent *event );
+    void tapAndHoldTriggered( QTapAndHoldGesture *gesture );
+#endif
 };
+
+#ifdef ANDROID
+#define QGIS_ICON_SIZE 32
+#define QGIS_DEFAULT_FONTSIZE 8
+#else
+#define QGIS_ICON_SIZE 24
+#define QGIS_DEFAULT_FONTSIZE qApp->font().pointSize()
+#endif
 
 #endif

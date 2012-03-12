@@ -113,7 +113,6 @@ QgsRasterLayer* QgisAppInterface::addRasterLayer( const QString& url, const QStr
   return qgis->addRasterLayer( url, baseName, providerKey, layers, styles, format, crs );
 }
 
-
 bool QgisAppInterface::addProject( QString theProjectName )
 {
   return qgis->addProject( theProjectName );
@@ -413,6 +412,7 @@ QAction *QgisAppInterface::actionEditSeparator2() { return 0; }
 
 //! View menu actions
 QAction *QgisAppInterface::actionPan() { return qgis->actionPan(); }
+QAction *QgisAppInterface::actionPanToSelected() { return qgis->actionPanToSelected(); }
 QAction *QgisAppInterface::actionZoomIn() { return qgis->actionZoomIn(); }
 QAction *QgisAppInterface::actionZoomOut() { return qgis->actionZoomOut(); }
 QAction *QgisAppInterface::actionSelect() { return qgis->actionSelect(); }
@@ -421,6 +421,7 @@ QAction *QgisAppInterface::actionSelectPolygon() { return qgis->actionSelectPoly
 QAction *QgisAppInterface::actionSelectFreehand() { return qgis->actionSelectFreehand(); }
 QAction *QgisAppInterface::actionSelectRadius() { return qgis->actionSelectRadius(); }
 QAction *QgisAppInterface::actionIdentify() { return qgis->actionIdentify(); }
+QAction *QgisAppInterface::actionFeatureAction() { return qgis->actionFeatureAction(); }
 QAction *QgisAppInterface::actionMeasure() { return qgis->actionMeasure(); }
 QAction *QgisAppInterface::actionMeasureArea() { return qgis->actionMeasureArea(); }
 QAction *QgisAppInterface::actionViewSeparator1() { return 0; }

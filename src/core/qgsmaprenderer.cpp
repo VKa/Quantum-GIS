@@ -18,6 +18,7 @@
 
 #include "qgscoordinatetransform.h"
 #include "qgslogger.h"
+#include "qgsmessagelog.h"
 #include "qgsmaprenderer.h"
 #include "qgsscalecalculator.h"
 #include "qgsmaptopixel.h"
@@ -665,6 +666,7 @@ void QgsMapRenderer::setProjectionsEnabled( bool enabled )
     QgsDebugMsg( "Adjusting DistArea projection on/off" );
     mDistArea->setProjectionsEnabled( enabled );
     updateFullExtent();
+    mLastExtent.setMinimal();
     emit hasCrsTransformEnabled( enabled );
   }
 }
@@ -680,10 +682,24 @@ void QgsMapRenderer::setDestinationCrs( const QgsCoordinateReferenceSystem& crs 
   QgsDebugMsg( "* DestCRS.srsid() = " + QString::number( crs.srsid() ) );
   if ( *mDestCRS != crs )
   {
+    QgsRectangle rect;
+    if ( !mExtent.isEmpty() )
+    {
+      QgsCoordinateTransform transform( *mDestCRS, crs );
+      rect = transform.transformBoundingBox( mExtent );
+    }
+
+    invalidateCachedLayerCrs();
     QgsDebugMsg( "Setting DistArea CRS to " + QString::number( crs.srsid() ) );
     mDistArea->setSourceCrs( crs.srsid() );
     *mDestCRS = crs;
     updateFullExtent();
+
+    if ( !rect.isEmpty() )
+    {
+      setExtent( rect );
+    }
+
     emit destinationSrsChanged();
   }
 }
@@ -754,6 +770,9 @@ bool QgsMapRenderer::splitLayersExtent( QgsMapLayer* layer, QgsRectangle& extent
 
 QgsRectangle QgsMapRenderer::layerExtentToOutputExtent( QgsMapLayer* theLayer, QgsRectangle extent )
 {
+  QgsDebugMsg( QString( "sourceCrs = " + tr( theLayer )->sourceCrs().authid() ) );
+  QgsDebugMsg( QString( "destCRS = " + tr( theLayer )->destCRS().authid() ) );
+  QgsDebugMsg( QString( "extent = " + extent.toString() ) );
   if ( hasCrsTransformEnabled() )
   {
     try
@@ -762,14 +781,11 @@ QgsRectangle QgsMapRenderer::layerExtentToOutputExtent( QgsMapLayer* theLayer, Q
     }
     catch ( QgsCsException &cse )
     {
-      Q_UNUSED( cse );
-      QgsDebugMsg( QString( "Transform error caught: " ).arg( cse.what() ) );
+      QgsMessageLog::logMessage( tr( "Transform error caught: %1" ).arg( cse.what() ), tr( "CRS" ) );
     }
   }
-  else
-  {
-    // leave extent unchanged
-  }
+
+  QgsDebugMsg( QString( "proj extent = " + extent.toString() ) );
 
   return extent;
 }
@@ -1104,12 +1120,31 @@ QgsCoordinateTransform *QgsMapRenderer::tr( QgsMapLayer *layer )
 {
   if ( mCachedTrForLayer != layer )
   {
+    invalidateCachedLayerCrs();
+
     delete mCachedTr;
     mCachedTr = new QgsCoordinateTransform( layer->crs(), *mDestCRS );
     mCachedTrForLayer = layer;
+
+    connect( layer, SIGNAL( layerCrsChanged() ), this, SLOT( invalidateCachedLayerCrs() ) );
+    connect( layer, SIGNAL( destroyed() ), this, SLOT( cachedLayerDestroyed() ) );
   }
 
   return mCachedTr;
+}
+
+void QgsMapRenderer::cachedLayerDestroyed()
+{
+  if ( mCachedTrForLayer == sender() )
+    mCachedTrForLayer = 0;
+}
+
+void QgsMapRenderer::invalidateCachedLayerCrs()
+{
+  if ( mCachedTrForLayer )
+    disconnect( mCachedTrForLayer, SIGNAL( layerCrsChanged() ), this, SLOT( invalidateCachedLayerCrs() ) );
+
+  mCachedTrForLayer = 0;
 }
 
 bool QgsMapRenderer::mDrawing = false;

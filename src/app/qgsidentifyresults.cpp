@@ -40,7 +40,7 @@
 #include <QDockWidget>
 #include <QMenuBar>
 #include <QPushButton>
-#include <QTextBrowser>
+#include <QWebView>
 
 #include "qgslogger.h"
 
@@ -80,10 +80,10 @@ class QgsIdentifyResultsDock : public QDockWidget
 //     name value
 
 QgsIdentifyResults::QgsIdentifyResults( QgsMapCanvas *canvas, QWidget *parent, Qt::WFlags f )
-    : QDialog( parent, f ),
-    mActionPopup( 0 ),
-    mCanvas( canvas ),
-    mDock( NULL )
+    : QDialog( parent, f )
+    , mActionPopup( 0 )
+    , mCanvas( canvas )
+    , mDock( NULL )
 {
   setupUi( this );
   QSettings mySettings;
@@ -275,9 +275,9 @@ void QgsIdentifyResults::addFeature( QgsRasterLayer *layer,
     QTreeWidgetItem *attrItem = new QTreeWidgetItem( QStringList() << attributes.begin().key() << "" );
     featItem->addChild( attrItem );
 
-    QTextBrowser *tb = new QTextBrowser( attrItem->treeWidget() );
-    tb->setHtml( attributes.begin().value() );
-    attrItem->treeWidget()->setItemWidget( attrItem, 1, tb );
+    QWebView *wv = new QWebView( attrItem->treeWidget() );
+    wv->setHtml( attributes.begin().value() );
+    attrItem->treeWidget()->setItemWidget( attrItem, 1, wv );
   }
   else
   {
@@ -429,7 +429,7 @@ void QgsIdentifyResults::contextMenuEvent( QContextMenuEvent* event )
 
   mActionPopup = new QMenu();
 
-  int idx = 0;
+  int idx = -1;
   QTreeWidgetItem *featItem = featureItem( item );
   if ( featItem )
   {
@@ -549,9 +549,7 @@ void QgsIdentifyResults::deactivate()
 
 void QgsIdentifyResults::doAction( QTreeWidgetItem *item, int action )
 {
-  int idx;
-  QgsAttributeMap attributes;
-  QTreeWidgetItem *featItem = retrieveAttributes( item, attributes, idx );
+  QTreeWidgetItem *featItem = featureItem( item );
   if ( !featItem )
     return;
 
@@ -559,7 +557,7 @@ void QgsIdentifyResults::doAction( QTreeWidgetItem *item, int action )
   if ( !layer )
     return;
 
-  idx = -1;
+  int idx = -1;
   if ( item->parent() == featItem )
   {
     QString fieldName = item->data( 0, Qt::DisplayRole ).toString();
@@ -574,7 +572,8 @@ void QgsIdentifyResults::doAction( QTreeWidgetItem *item, int action )
     }
   }
 
-  layer->actions()->doAction( action, attributes, idx );
+  int featIdx = featItem->data( 0, Qt::UserRole + 1 ).toInt();
+  layer->actions()->doAction( action, mFeatures[ featIdx ], idx );
 }
 
 QTreeWidgetItem *QgsIdentifyResults::featureItem( QTreeWidgetItem *item )

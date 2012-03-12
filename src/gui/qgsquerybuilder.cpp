@@ -32,6 +32,9 @@ QgsQueryBuilder::QgsQueryBuilder( QgsVectorLayer *layer,
 {
   setupUi( this );
 
+  QSettings settings;
+  restoreGeometry( settings.value( "/Windows/QueryBuilder/geometry" ).toByteArray() );
+
   QPushButton *pbn = new QPushButton( tr( "&Test" ) );
   buttonBox->addButton( pbn, QDialogButtonBox::ActionRole );
   connect( pbn, SIGNAL( clicked() ), this, SLOT( test() ) );
@@ -52,6 +55,8 @@ QgsQueryBuilder::QgsQueryBuilder( QgsVectorLayer *layer,
 
 QgsQueryBuilder::~QgsQueryBuilder()
 {
+  QSettings settings;
+  settings.setValue( "/Windows/QueryBuilder/geometry", saveGeometry() );
 }
 
 void QgsQueryBuilder::populateFields()
@@ -280,7 +285,7 @@ void QgsQueryBuilder::on_lstValues_doubleClicked( const QModelIndex &index )
   else if ( value.type() == QVariant::Int || value.type() == QVariant::Double || value.type() == QVariant::LongLong )
     txtSQL->insertPlainText( value.toString() );
   else
-    txtSQL->insertPlainText( "'" + value.toString() + "'" );
+    txtSQL->insertPlainText( "'" + value.toString().replace( "'", "''" ) + "'" );
 }
 
 void QgsQueryBuilder::on_btnLessEqual_clicked()
