@@ -45,11 +45,13 @@ QgsAttributeActionDialog::QgsAttributeActionDialog( QgsAttributeAction* actions,
   connect( attributeActionTable, SIGNAL( itemSelectionChanged() ),
            this, SLOT( itemSelectionChanged() ) );
   connect( actionName, SIGNAL( textChanged( QString ) ), this, SLOT( updateButtons() ) );
-  connect( actionAction, SIGNAL( textChanged( QString ) ), this, SLOT( updateButtons() ) );
+  connect( actionAction, SIGNAL( textChanged() ), this, SLOT( updateButtons() ) );
 
   connect( moveUpButton, SIGNAL( clicked() ), this, SLOT( moveUp() ) );
   connect( moveDownButton, SIGNAL( clicked() ), this, SLOT( moveDown() ) );
   connect( removeButton, SIGNAL( clicked() ), this, SLOT( remove() ) );
+  connect( addDefaultActionsButton, SIGNAL( clicked() ), this, SLOT( addDefaultActions() ) );
+
   connect( browseButton, SIGNAL( clicked() ), this, SLOT( browse() ) );
   connect( insertButton, SIGNAL( clicked() ), this, SLOT( insert() ) );
   connect( updateButton, SIGNAL( clicked() ), this, SLOT( update() ) );
@@ -157,16 +159,16 @@ void QgsAttributeActionDialog::browse()
                      this, tr( "Select an action", "File dialog window title" ) );
 
   if ( !action.isNull() )
-    actionAction->insert( action );
+    actionAction->insertPlainText( action );
 }
 
 void QgsAttributeActionDialog::insertExpression()
 {
-  QString selText = actionAction->selectedText();
+  QString selText = actionAction->textCursor().selectedText();
 
   // edit the selected expression if there's one
   if ( selText.startsWith( "[%" ) && selText.endsWith( "%]" ) )
-    selText = selText.mid( 2, selText.size() - 3 );
+    selText = selText.mid( 2, selText.size() - 4 );
 
   // display the expression builder
   QgsExpressionBuilderDialog dlg( mActions->layer(), selText, this );
@@ -177,7 +179,7 @@ void QgsAttributeActionDialog::insertExpression()
     //Only add the expression if the user has entered some text.
     if ( !expression.isEmpty() )
     {
-      actionAction->insert( "[%" + expression + "%]" );
+      actionAction->insertPlainText( "[%" + expression + "%]" );
     }
   }
 }
@@ -212,7 +214,7 @@ void QgsAttributeActionDialog::insert( int pos )
   // Check to see if the action name and the action have been specified
   // before proceeding
 
-  if ( actionName->text().isEmpty() || actionAction->text().isEmpty() )
+  if ( actionName->text().isEmpty() || actionAction->toPlainText().isEmpty() )
   {
     QMessageBox::warning( this, tr( "Missing Information" ),
                           tr( "To create an attribute action, you must provide both a name and the action to perform." ) );
@@ -238,14 +240,14 @@ void QgsAttributeActionDialog::insert( int pos )
     if ( pos >= numRows )
     {
       // Expand the table to have a row with index pos
-      insertRow( pos, ( QgsAction::ActionType ) actionType->currentIndex(), name, actionAction->text(), captureCB->isChecked() );
+      insertRow( pos, ( QgsAction::ActionType ) actionType->currentIndex(), name, actionAction->toPlainText(), captureCB->isChecked() );
     }
     else
     {
       // Update existing row
       attributeActionTable->item( pos, 0 )->setText( actionType->currentText() );
       attributeActionTable->item( pos, 1 )->setText( name );
-      attributeActionTable->item( pos, 2 )->setText( actionAction->text() );
+      attributeActionTable->item( pos, 2 )->setText( actionAction->toPlainText() );
       attributeActionTable->item( pos, 3 )->setCheckState( captureCB->isChecked() ? Qt::Checked : Qt::Unchecked );
     }
   }
@@ -264,7 +266,7 @@ void QgsAttributeActionDialog::update()
 
 void QgsAttributeActionDialog::updateButtons()
 {
-  bool validNewAction = !actionName->text().isEmpty() && !actionAction->text().isEmpty();
+  bool validNewAction = !actionName->text().isEmpty() && !actionAction->toPlainText().isEmpty();
 
   QList<QTableWidgetItem *> selection = attributeActionTable->selectedItems();
   bool hasSelection = !selection.isEmpty();
@@ -297,7 +299,7 @@ void QgsAttributeActionDialog::insertField()
     QString field = "[% \"";
     field += fieldComboBox->currentText();
     field += "\" %]";
-    actionAction->insert( field );
+    actionAction->insertPlainText( field );
   }
 }
 
@@ -317,6 +319,18 @@ void QgsAttributeActionDialog::apply()
       mActions->addAction( type, name, action, item->checkState() == Qt::Checked );
     }
   }
+}
+
+void QgsAttributeActionDialog::addDefaultActions()
+{
+  int pos = 0;
+  insertRow( pos++, QgsAction::Generic, tr( "Echo attribute's value" ), "echo \"[% \"MY_FIELD\" %]\"", true );
+  insertRow( pos++, QgsAction::Generic, tr( "Run an application" ), "ogr2ogr -f \"ESRI Shapefile\" \"[% \"OUTPUT_PATH\" %]\" \"[% \"INPUT_FILE\" %]\"", true );
+  insertRow( pos++, QgsAction::GenericPython, tr( "Get feature id" ), "QtGui.QMessageBox.information(None, \"Feature id\", \"feature id is [% $id %]\")", false );
+  insertRow( pos++, QgsAction::GenericPython, tr( "Selected field's value (Identify features tool)" ), "QtGui.QMessageBox.information(None, \"Current field's value\", \"[% $currentfield %]\")", false );
+  insertRow( pos++, QgsAction::GenericPython, tr( "Clicked coordinates (Run feature actions tool)" ), "QtGui.QMessageBox.information(None, \"Clicked coords\", \"layer: [% $layerid %]\\ncoords: ([% $clickx %],[% $clickx %])\")", false );
+  insertRow( pos++, QgsAction::OpenUrl, tr( "Open file" ), "[% \"PATH\" %]", false );
+  insertRow( pos++, QgsAction::OpenUrl, tr( "Search on web based on attribute's value" ), "http://www.google.it/?q=[% \"ATTRIBUTE\" %]", false );
 }
 
 void QgsAttributeActionDialog::itemSelectionChanged()
@@ -344,7 +358,7 @@ void QgsAttributeActionDialog::rowSelected( int row )
     // Only if a populated row was selected
     actionType->setCurrentIndex( actionType->findText( attributeActionTable->item( row, 0 )->text() ) );
     actionName->setText( attributeActionTable->item( row, 1 )->text() );
-    actionAction->setText( attributeActionTable->item( row, 2 )->text() );
+    actionAction->setPlainText( attributeActionTable->item( row, 2 )->text() );
     captureCB->setChecked( attributeActionTable->item( row, 3 )->checkState() == Qt::Checked );
   }
 }

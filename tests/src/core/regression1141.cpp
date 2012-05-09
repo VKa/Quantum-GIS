@@ -18,7 +18,6 @@
 #include <QStringList>
 #include <QObject>
 #include <QPainter>
-#include <QSettings>
 #include <QTime>
 #include <iostream>
 
@@ -41,7 +40,7 @@
 /** \ingroup UnitTests
  * This is a regression test ticket 1141.
  * broken Polish characters support since r8592
- * https://trac.osgeo.org/qgis/ticket/1141
+ * http://hub.qgis.org/issues/1141
  *
  */
 class Regression1141: public QObject
@@ -71,11 +70,9 @@ void Regression1141::initTestCase()
   // Runs once before any tests are run
   //
   // init QGIS's paths - true means that all path will be inited from prefix
-  QString qgisPath = QCoreApplication::applicationDirPath();
-  QgsApplication::setPrefixPath( INSTALL_PREFIX, true );
+  QgsApplication::init();
+  QgsApplication::initQgis();
   QgsApplication::showSettings();
-  // Instantiate the plugin directory so that providers are loaded
-  QgsProviderRegistry::instance( QgsApplication::pluginPath() );
   // compute our test file name:
   QString myTmpDir = QDir::tempPath() + QDir::separator() ;
   mFileName = myTmpDir +  "ąęćń.shp";
@@ -97,7 +94,7 @@ void Regression1141::diacriticalTest()
   mEncoding = "UTF-8";
   QgsField myField( "ąęćń", QVariant::Int, "int", 10, 0, "Value on lon" );
   mFields.insert( 0, myField );
-  mCRS = QgsCoordinateReferenceSystem( GEOWkt );
+  mCRS = QgsCoordinateReferenceSystem( GEOWKT );
 
   qDebug( "Checking test dataset exists...\n%s", mFileName.toLocal8Bit().constData() );
 
@@ -149,6 +146,4 @@ void Regression1141::diacriticalTest()
 
 
 QTEST_MAIN( Regression1141 )
-
 #include "moc_regression1141.cxx"
-

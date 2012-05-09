@@ -36,8 +36,6 @@ static QPointF _rotatedOffset( const QPointF& offset, double angle )
 
 QgsSimpleMarkerSymbolLayerV2::QgsSimpleMarkerSymbolLayerV2( QString name, QColor color, QColor borderColor, double size, double angle )
 {
-  if ( name == "rectangle" )
-    name = "square";
   mName = name;
   mColor = color;
   mBorderColor = borderColor;
@@ -226,7 +224,7 @@ bool QgsSimpleMarkerSymbolLayerV2::prepareShape()
 {
   mPolygon.clear();
 
-  if ( mName == "square" )
+  if ( mName == "square" || mName == "rectangle" )
   {
     mPolygon = QPolygonF( QRectF( QPointF( -1, -1 ), QPointF( 1, 1 ) ) );
     return true;
@@ -461,7 +459,7 @@ QgsSymbolLayerV2* QgsSimpleMarkerSymbolLayerV2::createFromSld( QDomElement &elem
   QgsDebugMsg( "Entered." );
 
   QDomElement graphicElem = element.firstChildElement( "Graphic" );
-  if( graphicElem.isNull() )
+  if ( graphicElem.isNull() )
     return NULL;
 
   QString name = "square";
@@ -723,7 +721,7 @@ QgsSymbolLayerV2* QgsSvgMarkerSymbolLayerV2::createFromSld( QDomElement &element
   QgsDebugMsg( "Entered." );
 
   QDomElement graphicElem = element.firstChildElement( "Graphic" );
-  if( graphicElem.isNull() )
+  if ( graphicElem.isNull() )
     return NULL;
 
   QString path, mimeType;
@@ -994,7 +992,7 @@ QgsSymbolLayerV2* QgsFontMarkerSymbolLayerV2::createFromSld( QDomElement &elemen
   QgsDebugMsg( "Entered." );
 
   QDomElement graphicElem = element.firstChildElement( "Graphic" );
-  if( graphicElem.isNull() )
+  if ( graphicElem.isNull() )
     return NULL;
 
   QString name, format;

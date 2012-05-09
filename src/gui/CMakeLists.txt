@@ -80,6 +80,13 @@ qgsexpressionhighlighter.cpp
 qgsquerybuilder.cpp
 )
 
+IF (WITH_TOUCH)
+  SET(QGIS_GUI_SRCS
+      ${QGIS_GUI_SRCS}
+      qgsmaptooltouch.cpp
+  )
+ENDIF (WITH_TOUCH)
+
 SET(QGIS_GUI_MOC_HDRS
 
 symbology-ng/qgsdashspacedialog.h
@@ -184,6 +191,13 @@ attributetable/qgsattributetablefiltermodel.h
 attributetable/qgsattributetableidcolumnpair.h
 attributetable/qgsattributetabledelegate.h
 )
+
+IF (WITH_TOUCH)
+  SET(QGIS_GUI_HDRS
+      ${QGIS_GUI_HDRS}
+      qgsmaptooltouch.h
+  )
+ENDIF (WITH_TOUCH)
 
 SET(QGIS_GUI_UI_HDRS
 ${CMAKE_CURRENT_BINARY_DIR}/../ui/ui_qgsdetaileditemwidgetbase.h
@@ -294,7 +308,7 @@ IF (NOT WITH_INTERNAL_SPATIALITE)
 ENDIF (NOT WITH_INTERNAL_SPATIALITE)
 
 IF (APPLE)
-  SET_TARGET_PROPERTIES(qgis_gui PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE )
+  SET_TARGET_PROPERTIES(qgis_gui PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
 ENDIF (APPLE)
 
 # install

@@ -34,7 +34,6 @@ INCLUDE_DIRECTORIES(
     ../src/core/gps/qextserialport
     ../src/core/raster
     ../src/core/renderer
-    ../src/core/spatialindex
     ../src/core/symbology
     ../src/core/symbology-ng
     ${CMAKE_BINARY_DIR}  # qgsconfig.h, qgsversion.h
@@ -63,6 +62,7 @@ ENDIF(NOT PYQT4_VERSION_NUM LESS 264194)
 # core module
 FILE(GLOB sip_files_core core/*.sip)
 SET(SIP_EXTRA_FILES_DEPEND ${sip_files_core})
+SET(SIP_EXTRA_OPTIONS ${PYQT4_SIP_FLAGS} -o -a ${CMAKE_BINARY_DIR}/python/qgis.core.api)
 ADD_SIP_PYTHON_MODULE(qgis.core core/core.sip qgis_core)
 
 # additional gui includes
@@ -77,6 +77,7 @@ INCLUDE_DIRECTORIES(
 # gui module
 FILE(GLOB sip_files_gui gui/*.sip)
 SET(SIP_EXTRA_FILES_DEPEND ${sip_files_core} ${sip_files_gui})
+SET(SIP_EXTRA_OPTIONS ${PYQT4_SIP_FLAGS} -o -a ${CMAKE_BINARY_DIR}/python/qgis.gui.api)
 ADD_SIP_PYTHON_MODULE(qgis.gui gui/gui.sip qgis_core qgis_gui)
 
 # additional analysis includes
@@ -90,11 +91,13 @@ INCLUDE_DIRECTORIES(
 # analysis module
 FILE(GLOB sip_files_analysis analysis/*.sip)
 SET(SIP_EXTRA_FILES_DEPEND ${sip_files_core} ${sip_files_analysis})
+SET(SIP_EXTRA_OPTIONS ${PYQT4_SIP_FLAGS} -o -a ${CMAKE_BINARY_DIR}/python/qgis.analysis.api)
 ADD_SIP_PYTHON_MODULE(qgis.analysis analysis/analysis.sip qgis_core qgis_analysis)
 
 # network-analysis module
 FILE(GLOB sip_files_network_analysis analysis/network/*.sip)
-SET(SIP_EXTRA_FILES_DEPEND ${sip_files_core} ${sip_files_network_analysis}) 
+SET(SIP_EXTRA_FILES_DEPEND ${sip_files_core} ${sip_files_network_analysis})
+SET(SIP_EXTRA_OPTIONS ${PYQT4_SIP_FLAGS} -o -a ${CMAKE_BINARY_DIR}/python/qgis.networkanalysis.api)
 ADD_SIP_PYTHON_MODULE(qgis.networkanalysis analysis/network/networkanalysis.sip qgis_core qgis_networkanalysis)
 
 SET (QGIS_PYTHON_DIR ${PYTHON_SITE_PACKAGES_DIR}/qgis)

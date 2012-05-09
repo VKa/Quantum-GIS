@@ -10,8 +10,8 @@
 # kill boolean warnings
 CMAKE_POLICY (SET CMP0012 NEW)
 
-INCLUDE (@CMAKE_BINARY_DIR@/mac/0vars.cmake)
-INCLUDE (@CMAKE_SOURCE_DIR@/cmake/MacBundleMacros.cmake)
+INCLUDE ("@CMAKE_BINARY_DIR@/mac/0vars.cmake")
+INCLUDE ("@CMAKE_SOURCE_DIR@/cmake/MacBundleMacros.cmake")
 
 # Postgres
 
@@ -30,6 +30,15 @@ IF ("@POSTGRES_LIBRARY@" MATCHES ".*libpq.dylib")
         ENDIF (@OSX_HAVE_LOADERPATH@)
         INSTALLNAMETOOL_CHANGE ("${INTLLIB}" "${LIB_CHG_TO}" "${QLIBDIR}/libpq.dylib")
     ENDIF (INTLLIB)
+ENDIF ()
+
+# libspatialindex
+
+IF ("@SPATIALINDEX_LIBRARY@" MATCHES ".*libspatialindex.dylib")
+    MESSAGE (STATUS "Copying libspatialindex and updating library paths...")
+    EXECUTE_PROCESS (COMMAND ditto ${QARCHS} "@SPATIALINDEX_LIBRARY@" "${QLIBDIR}/libspatialindex.dylib")
+    GET_INSTALL_NAME ("@SPATIALINDEX_LIBRARY@" "libspatialindex" SPILIB)
+    UPDATEQGISPATHS (${SPILIB} libspatialindex.dylib)
 ENDIF ()
 
 # libfcgi (non-system)

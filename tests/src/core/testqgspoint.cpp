@@ -72,8 +72,7 @@ void TestQgsPoint::initTestCase()
   // Runs once before any tests are run
   //
   // init QGIS's paths - true means that all path will be inited from prefix
-  QString qgisPath = QCoreApplication::applicationDirPath();
-  QgsApplication::init( INSTALL_PREFIX );
+  QgsApplication::init();
   QgsApplication::showSettings();
   mReport += "<h1>Point Tests</h1>\n";
 }
@@ -113,12 +112,12 @@ void TestQgsPoint::toDegreesMinutesSeconds()
   mReport += "<p>" + mPoint3.toDegreesMinutesSeconds( 2 )  +  "</p>";
   mReport += "<p>" + mPoint4.toDegreesMinutesSeconds( 2 )  +  "</p>";
   qDebug() << mPoint4.toDegreesMinutesSeconds( 2 );
-  QString myControlString = QString( "80" ) + QChar( 176 ) + 
-    QString( "0'0.00" ) + 
-    QString( '"' ) + 
-    QString( "E,20" ) + QChar( 176 ) + 
-    QString( "0'0.00" ) + QString( '"' ) + 
-    QString( "N" );
+  QString myControlString = QString( "80" ) + QChar( 176 ) +
+                            QString( "0'0.00" ) +
+                            QString( '"' ) +
+                            QString( "E,20" ) + QChar( 176 ) +
+                            QString( "0'0.00" ) + QString( '"' ) +
+                            QString( "N" );
   qDebug() << myControlString;
   QVERIFY( mPoint4.toDegreesMinutesSeconds( 2 ) == myControlString );
 

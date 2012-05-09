@@ -6,6 +6,10 @@
 #include "qgslogger.h"
 #include "qgsdatasourceuri.h"
 
+#include <QMessageBox>
+
+QGISEXTERN bool deleteLayer( const QString& uri, QString& errCause );
+
 // ---------------------------------------------------------------------------
 QgsPGConnectionItem::QgsPGConnectionItem( QgsDataItem* parent, QString name, QString path )
     : QgsDataCollectionItem( parent, name, path )
@@ -101,8 +105,8 @@ void QgsPGConnectionItem::setLayerType( QgsPostgresLayerProperty layerProperty )
 
   for ( int i = 0 ; i < typeList.size(); i++ )
   {
-    QGis::GeometryType geomType = QgsPostgresConn::geomTypeFromPostgis( typeList[i] );
-    if ( geomType == QGis::UnknownGeometry )
+    QGis::WkbType wkbType = QgsPostgresConn::wkbTypeFromPostgis( typeList[i] );
+    if ( wkbType == QGis::WKBUnknown )
     {
       QgsDebugMsg( QString( "unsupported geometry type:%1" ).arg( typeList[i] ) );
       continue;
@@ -157,6 +161,70 @@ void QgsPGConnectionItem::deleteConnection()
   mParent->refresh();
 }
 
+bool QgsPGConnectionItem::handleDrop( const QMimeData * data, Qt::DropAction )
+{
+  if ( !QgsMimeDataUtils::isUriList( data ) )
+    return false;
+
+  // TODO: probably should show a GUI with settings etc
+  QgsDataSourceURI uri = QgsPostgresConn::connUri( mName );
+
+  qApp->setOverrideCursor( Qt::WaitCursor );
+
+  QStringList importResults;
+  bool hasError = false;
+  QgsMimeDataUtils::UriList lst = QgsMimeDataUtils::decodeUriList( data );
+  foreach( const QgsMimeDataUtils::Uri& u, lst )
+  {
+    if ( u.layerType != "vector" )
+    {
+      importResults.append( tr( "%1: Not a vector layer!" ).arg( u.name ) );
+      hasError = true; // only vectors can be imported
+      continue;
+    }
+
+    // open the source layer
+    QgsVectorLayer* srcLayer = new QgsVectorLayer( u.uri, u.name, u.providerKey );
+
+    if ( srcLayer->isValid() )
+    {
+      uri.setDataSource( QString(), u.name, "qgs_geometry" );
+      QgsDebugMsg( "URI " + uri.uri() );
+      QgsVectorLayerImport::ImportError err;
+      QString importError;
+      err = QgsVectorLayerImport::importLayer( srcLayer, uri.uri(), "postgres", &srcLayer->crs(), false, &importError );
+      if ( err == QgsVectorLayerImport::NoError )
+        importResults.append( tr( "%1: OK!" ).arg( u.name ) );
+      else
+      {
+        importResults.append( QString( "%1: %2" ).arg( u.name ).arg( importError ) );
+        hasError = true;
+      }
+    }
+    else
+    {
+      importResults.append( tr( "%1: OK!" ).arg( u.name ) );
+      hasError = true;
+    }
+
+    delete srcLayer;
+  }
+
+  qApp->restoreOverrideCursor();
+
+  if ( hasError )
+  {
+    QMessageBox::warning( 0, tr( "Import to PostGIS database" ), tr( "Failed to import some layers!\n\n" ) + importResults.join( "\n" ) );
+  }
+  else
+  {
+    QMessageBox::information( 0, tr( "Import to PostGIS database" ), tr( "Import was successful." ) );
+  }
+
+  refresh();
+
+  return true;
+}
 
 // ---------------------------------------------------------------------------
 QgsPGLayerItem::QgsPGLayerItem( QgsDataItem* parent, QString name, QString path, QgsLayerItem::LayerType layerType, QgsPostgresLayerProperty layerProperty )
@@ -169,6 +237,32 @@ QgsPGLayerItem::QgsPGLayerItem( QgsDataItem* parent, QString name, QString path,
 
 QgsPGLayerItem::~QgsPGLayerItem()
 {
+}
+
+QList<QAction*> QgsPGLayerItem::actions()
+{
+  QList<QAction*> lst;
+
+  QAction* actionDeleteLayer = new QAction( tr( "Delete layer" ), this );
+  connect( actionDeleteLayer, SIGNAL( triggered() ), this, SLOT( deleteLayer() ) );
+  lst.append( actionDeleteLayer );
+
+  return lst;
+}
+
+void QgsPGLayerItem::deleteLayer()
+{
+  QString errCause;
+  bool res = ::deleteLayer( mUri, errCause );
+  if ( !res )
+  {
+    QMessageBox::warning( 0, tr( "Delete layer" ), errCause );
+  }
+  else
+  {
+    QMessageBox::information( 0, tr( "Delete layer" ), tr( "Layer deleted successfully." ) );
+    mParent->refresh();
+  }
 }
 
 QString QgsPGLayerItem::createUri()
@@ -187,7 +281,7 @@ QString QgsPGLayerItem::createUri()
   QgsDataSourceURI uri( connItem->connection()->connInfo() );
   uri.setDataSource( mLayerProperty.schemaName, mLayerProperty.tableName, mLayerProperty.geometryColName, mLayerProperty.sql, pkColName );
   uri.setSrid( mLayerProperty.srid );
-  uri.setGeometryType( QgsPostgresConn::geomTypeFromPostgis( mLayerProperty.type ) );
+  uri.setWkbType( QgsPostgresConn::wkbTypeFromPostgis( mLayerProperty.type ) );
   QgsDebugMsg( QString( "layer uri: %1" ).arg( uri.uri() ) );
   return uri.uri();
 }
@@ -211,19 +305,28 @@ QgsPGSchemaItem::~QgsPGSchemaItem()
 
 void QgsPGSchemaItem::addLayer( QgsPostgresLayerProperty layerProperty )
 {
-  QGis::GeometryType geomType = QgsPostgresConn::geomTypeFromPostgis( layerProperty.type );
-  QString tip = tr( "%1 as %2 in %3" ).arg( layerProperty.geometryColName ).arg( QgsPostgresConn::displayStringForGeomType( geomType ) ).arg( layerProperty.srid );
+  QGis::WkbType wkbType = QgsPostgresConn::wkbTypeFromPostgis( layerProperty.type );
+  QString tip = tr( "%1 as %2 in %3" ).arg( layerProperty.geometryColName ).arg( QgsPostgresConn::displayStringForWkbType( wkbType ) ).arg( layerProperty.srid );
 
   QgsLayerItem::LayerType layerType;
-  switch ( geomType )
+  switch ( wkbType )
   {
-    case QGis::Point:
+    case QGis::WKBPoint:
+    case QGis::WKBPoint25D:
+    case QGis::WKBMultiPoint:
+    case QGis::WKBMultiPoint25D:
       layerType = QgsLayerItem::Point;
       break;
-    case QGis::Line:
+    case QGis::WKBLineString:
+    case QGis::WKBLineString25D:
+    case QGis::WKBMultiLineString:
+    case QGis::WKBMultiLineString25D:
       layerType = QgsLayerItem::Line;
       break;
-    case QGis::Polygon:
+    case QGis::WKBPolygon:
+    case QGis::WKBPolygon25D:
+    case QGis::WKBMultiPolygon:
+    case QGis::WKBMultiPolygon25D:
       layerType = QgsLayerItem::Polygon;
       break;
     default:

@@ -22,7 +22,6 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QPainter>
-#include <QSettings>
 #include <QTime>
 #include <QDesktopServices>
 
@@ -33,6 +32,7 @@
 #include <qgsmaplayerregistry.h>
 #include <qgsapplication.h>
 #include <qgsmaprenderer.h>
+#include <qgsproviderregistry.h>
 
 //qgis unit test includes
 #include <qgsrenderchecker.h>
@@ -62,11 +62,15 @@ class Regression992: public QObject
 //runs before all tests
 void Regression992::initTestCase()
 {
+  mpMapRenderer = 0;
+
   // init QGIS's paths - true means that all path will be inited from prefix
-  QString qgisPath = QCoreApplication::applicationDirPath();
-  QgsApplication::init( INSTALL_PREFIX );
-  QgsApplication::initQgis();
+  QgsApplication::init();
   QgsApplication::showSettings();
+  // QgsApplication::skipGdalDriver( "JP2ECW" );
+  // QgsApplication::skipGdalDriver( "JP2MrSID" );
+  QgsApplication::initQgis();
+
   //create some objects that will be used in all tests...
   //create a raster layer that will be used in all tests...
   mTestDataDir = QString( TEST_DATA_DIR ) + QDir::separator(); //defined in CMakeLists.txt
@@ -74,16 +78,27 @@ void Regression992::initTestCase()
   QFileInfo myRasterFileInfo( myFileName );
   mpRasterLayer = new QgsRasterLayer( myRasterFileInfo.filePath(),
                                       myRasterFileInfo.completeBaseName() );
+  if ( ! mpRasterLayer->isValid() )
+  {
+    QSKIP( "This test requires the JPEG2000 GDAL driver", SkipAll );
+  }
+  else
+  {
+    qDebug() << mpRasterLayer->dataProvider()->metadata();
+  }
+
   // Register the layer with the registry
-  QgsMapLayerRegistry::instance()->addMapLayer( mpRasterLayer );
+  QList<QgsMapLayer *> myList;
+  myList << mpRasterLayer;
+  QgsMapLayerRegistry::instance()->addMapLayers( myList );
   // add the test layer to the maprender
   mpMapRenderer = new QgsMapRenderer();
   QStringList myLayers;
   myLayers << mpRasterLayer->id();
   mpMapRenderer->setLayerSet( myLayers );
   mReport += "<h1>Regression 992 Test</h1>\n";
-  mReport += "<p>See <a href=\"https://trac.osgeo.org/qgis/ticket/992\">"
-             "trac ticket 992</a> for more details.</p>";
+  mReport += "<p>See <a href=\"http://hub.qgis.org/issues/992\">"
+             "redmine ticket 992</a> for more details.</p>";
 }
 //runs after all tests
 void Regression992::cleanupTestCase()
@@ -97,22 +112,22 @@ void Regression992::cleanupTestCase()
     myFile.close();
     //QDesktopServices::openUrl( "file:///" + myReportFile );
   }
+
+  delete mpRasterLayer;
+  delete mpMapRenderer;
 }
 
 void Regression992::regression992()
 {
-  QVERIFY( mpRasterLayer->isValid() );
   mpMapRenderer->setExtent( mpRasterLayer->extent() );
-  QString myDataDir( TEST_DATA_DIR ); //defined in CmakeLists.txt
-  QString myTestDataDir = myDataDir + QDir::separator();
   QgsRenderChecker myChecker;
-  myChecker.setExpectedImage( myTestDataDir + "expected_rgbwcmyk01_YeGeo.jp2.png" );
+  myChecker.setControlName( "expected_rgbwcmyk01_YeGeo.jp2" );
   myChecker.setMapRenderer( mpMapRenderer );
-  bool myResultFlag = myChecker.runTest( "regression992" );
+  // allow up to 300 mismatched pixels
+  bool myResultFlag = myChecker.runTest( "regression992", 300 );
   mReport += "\n\n\n" + myChecker.report();
   QVERIFY( myResultFlag );
 }
 
 QTEST_MAIN( Regression992 )
 #include "moc_regression992.cxx"
-

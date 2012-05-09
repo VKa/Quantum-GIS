@@ -66,19 +66,12 @@ void TestQgsRenderers::initTestCase()
 {
   mTestHasError = false;
   // init QGIS's paths - true means that all path will be inited from prefix
-  QString qgisPath = QCoreApplication::applicationDirPath();
-  QgsApplication::init( INSTALL_PREFIX );
-  QgsApplication::initQgis( );
+  QgsApplication::init();
+  QgsApplication::initQgis();
   QgsApplication::showSettings();
-  // Instantiate the plugin directory so that providers are loaded
-  QgsProviderRegistry::instance( QgsApplication::pluginPath() );
 
   //create some objects that will be used in all tests...
 
-  std::cout << "Prefix  PATH: " << QgsApplication::prefixPath().toLocal8Bit().data() << std::endl;
-  std::cout << "Plugin  PATH: " << QgsApplication::pluginPath().toLocal8Bit().data() << std::endl;
-  std::cout << "PkgData PATH: " << QgsApplication::pkgDataPath().toLocal8Bit().data() << std::endl;
-  std::cout << "User DB PATH: " << QgsApplication::qgisUserDbFilePath().toLocal8Bit().data() << std::endl;
 
   //
   //create a point layer that will be used in all tests...
@@ -90,7 +83,8 @@ void TestQgsRenderers::initTestCase()
   mpPointsLayer = new QgsVectorLayer( myPointFileInfo.filePath(),
                                       myPointFileInfo.completeBaseName(), "ogr" );
   // Register the layer with the registry
-  QgsMapLayerRegistry::instance()->addMapLayer( mpPointsLayer );
+  QgsMapLayerRegistry::instance()->addMapLayers(
+    QList<QgsMapLayer *>() << mpPointsLayer );
 
   //
   //create a poly layer that will be used in all tests...
@@ -100,7 +94,8 @@ void TestQgsRenderers::initTestCase()
   mpPolysLayer = new QgsVectorLayer( myPolyFileInfo.filePath(),
                                      myPolyFileInfo.completeBaseName(), "ogr" );
   // Register the layer with the registry
-  QgsMapLayerRegistry::instance()->addMapLayer( mpPolysLayer );
+  QgsMapLayerRegistry::instance()->addMapLayers(
+    QList<QgsMapLayer *>() << mpPolysLayer );
 
 
   //
@@ -111,7 +106,8 @@ void TestQgsRenderers::initTestCase()
   mpLinesLayer = new QgsVectorLayer( myLineFileInfo.filePath(),
                                      myLineFileInfo.completeBaseName(), "ogr" );
   // Register the layer with the registry
-  QgsMapLayerRegistry::instance()->addMapLayer( mpLinesLayer );
+  QgsMapLayerRegistry::instance()->addMapLayers(
+    QList<QgsMapLayer *>() << mpLinesLayer );
   //
   // We only need maprender instead of mapcanvas
   // since maprender does not require a qui
@@ -212,9 +208,8 @@ bool TestQgsRenderers::imageCheck( QString theTestType )
   //use the QgsRenderChecker test utility class to
   //ensure the rendered output matches our control image
   mpMapRenderer->setExtent( mpPointsLayer->extent() );
-  QString myExpectedImage = mTestDataDir + "expected_" + theTestType + ".png";
   QgsRenderChecker myChecker;
-  myChecker.setExpectedImage( myExpectedImage );
+  myChecker.setControlName( "expected_" + theTestType );
   myChecker.setMapRenderer( mpMapRenderer );
   bool myResultFlag = myChecker.runTest( theTestType );
   mReport += myChecker.report();
@@ -223,4 +218,3 @@ bool TestQgsRenderers::imageCheck( QString theTestType )
 
 QTEST_MAIN( TestQgsRenderers )
 #include "moc_testqgsrenderers.cxx"
-

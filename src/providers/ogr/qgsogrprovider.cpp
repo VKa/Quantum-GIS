@@ -35,6 +35,7 @@ email                : sherman at mrcc.com
 #include <QMap>
 #include <QString>
 #include <QTextCodec>
+#include <QSettings>
 
 #include "qgsapplication.h"
 #include "qgsdataitem.h"
@@ -259,15 +260,46 @@ QgsOgrProvider::QgsOgrProvider( QString const & uri )
     }
   }
 
+  bool openReadOnly = false;
+
+  // Try to open using VSIFileHandler
+  //   see http://trac.osgeo.org/gdal/wiki/UserDocs/ReadInZip
+  if ( mFilePath.endsWith( ".zip", Qt::CaseInsensitive ) )
+  {
+    // GDAL>=1.8.0 has write support for zip, but read and write operations
+    // cannot be interleaved, so for now just use read-only.
+    openReadOnly = true;
+    if ( !mFilePath.startsWith( "/vsizip/" ) )
+    {
+      mFilePath = "/vsizip/" + mFilePath;
+      setDataSourceUri( mFilePath );
+    }
+    QgsDebugMsg( QString( "Trying /vsizip syntax, mFilePath= %1" ).arg( mFilePath ) );
+  }
+  else if ( mFilePath.endsWith( ".gz", Qt::CaseInsensitive ) )
+  {
+    if ( !mFilePath.startsWith( "/vsigzip/" ) )
+    {
+      mFilePath = "/vsigzip/" + mFilePath;
+      setDataSourceUri( mFilePath );
+    }
+    QgsDebugMsg( QString( "Trying /vsigzip syntax, mFilePath= %1" ).arg( mFilePath ) );
+  }
+
   QgsDebugMsg( "mFilePath: " + mFilePath );
   QgsDebugMsg( "mLayerIndex: " + QString::number( mLayerIndex ) );
   QgsDebugMsg( "mLayerName: " + mLayerName );
   QgsDebugMsg( "mSubsetString: " + mSubsetString );
   CPLSetConfigOption( "OGR_ORGANIZE_POLYGONS", "ONLY_CCW" );  // "SKIP" returns MULTIPOLYGONs for multiringed POLYGONs
 
-  ogrDataSource = OGROpen( TO8F( mFilePath ), true, &ogrDriver );
+  // first try to open in update mode (unless specified otherwise)
+  if ( !openReadOnly )
+    ogrDataSource = OGROpen( TO8F( mFilePath ), true, &ogrDriver );
+
   if ( !ogrDataSource )
   {
+    QgsDebugMsg( "OGR failed to opened in update mode, trying in read-only mode" );
+
     // try to open read-only
     ogrDataSource = OGROpen( TO8F( mFilePath ), false, &ogrDriver );
 
@@ -278,9 +310,7 @@ QgsOgrProvider::QgsOgrProvider( QString const & uri )
 
   if ( ogrDataSource )
   {
-
-    QgsDebugMsg( "Data source is valid" );
-    QgsDebugMsg( "OGR Driver was " + QString( OGR_Dr_GetName( ogrDriver ) ) );
+    QgsDebugMsg( "OGR opened using Driver " + QString( OGR_Dr_GetName( ogrDriver ) ) );
 
     ogrDriverName = OGR_Dr_GetName( ogrDriver );
 
@@ -299,6 +329,11 @@ QgsOgrProvider::QgsOgrProvider( QString const & uri )
     if ( ogrLayer )
     {
       valid = setSubsetString( mSubsetString );
+      QgsDebugMsg( "Data source is valid" );
+    }
+    else
+    {
+      QgsMessageLog::logMessage( tr( "Data source is invalid, no layer found (%1)" ).arg( QString::fromUtf8( CPLGetLastErrorMsg() ) ), tr( "OGR" ) );
     }
   }
   else
@@ -309,7 +344,7 @@ QgsOgrProvider::QgsOgrProvider( QString const & uri )
   // FIXME: sync with app/qgsnewvectorlayerdialog.cpp
   mNativeTypes
   << QgsVectorDataProvider::NativeType( tr( "Whole number (integer)" ), "integer", QVariant::Int, 1, 10 )
-  << QgsVectorDataProvider::NativeType( tr( "Decimal number (real)" ), "double", QVariant::Double, 1, 20, 0, 5 )
+  << QgsVectorDataProvider::NativeType( tr( "Decimal number (real)" ), "double", QVariant::Double, 1, 20, 0, 15 )
   << QgsVectorDataProvider::NativeType( tr( "Text (string)" ), "string", QVariant::String, 1, 255 )
   ;
 }
@@ -1579,6 +1614,10 @@ QString createFilters( QString type )
       {
         myProtocolDrivers += "DODS/OPeNDAP,DODS;";
       }
+      else if ( driverName.startsWith( "FileGDB" ) )
+      {
+        myDirectoryDrivers += QObject::tr( "ESRI FileGDB" ) + ",FileGDB;";
+      }
       else if ( driverName.startsWith( "PGeo" ) )
       {
         myDatabaseDrivers += QObject::tr( "ESRI Personal GeoDatabase" ) + ",PGeo;";
@@ -1742,7 +1781,23 @@ QString createFilters( QString type )
         QgsDebugMsg( QString( "Unknown driver %1 for file filters." ).arg( driverName ) );
       }
 
-    }                           // each loaded GDAL driver
+    }                          // each loaded OGR driver
+
+    // VSIFileHandler (.zip and .gz files)
+    //   see http://trac.osgeo.org/gdal/wiki/UserDocs/ReadInZip
+    // Requires GDAL>=1.6.0 with libz support, let's assume we have it.
+    // For .zip this works only if there is one file (or dataset) in the root of the zip.
+    // Only tested with tiff, shape (zip) and spatialite (zip and gz).
+    // This does not work for some file types, see VSIFileHandler doc.
+    // Ideally we should also add support for /vsitar/ (requires cpl_vsil_tar.cpp).
+#if defined(GDAL_VERSION_NUM) && GDAL_VERSION_NUM >= 1600
+    QSettings settings;
+    if ( settings.value( "/qgis/scanZipInBrowser", 2 ).toInt() != 0 )
+    {
+      myFileFilters += createFileFilter_( QObject::tr( "GDAL/OGR VSIFileHandler" ), "*.zip *.gz" );
+      myExtensions << "zip" << "gz";
+    }
+#endif
 
     // can't forget the default case
 
@@ -1897,6 +1952,7 @@ QGISEXTERN bool createEmptyDataSource( const QString &uri,
   {
     if ( !uri.endsWith( ".shp", Qt::CaseInsensitive ) )
     {
+      QgsDebugMsg( QString( "uri %1 doesn't end with .shp" ).arg( uri ) );
       return false;
     }
 
@@ -1925,6 +1981,7 @@ QGISEXTERN bool createEmptyDataSource( const QString &uri,
   dataSource = OGR_Dr_CreateDataSource( driver, TO8F( uri ), NULL );
   if ( !dataSource )
   {
+    QgsMessageLog::logMessage( QObject::tr( "Creating the data source %1 failed: %2" ).arg( uri ).arg( QString::fromUtf8( CPLGetLastErrorMsg() ) ), QObject::tr( "OGR" ) );
     return false;
   }
 
@@ -1982,6 +2039,7 @@ QGISEXTERN bool createEmptyDataSource( const QString &uri,
   layer = OGR_DS_CreateLayer( dataSource, TO8F( QFileInfo( uri ).completeBaseName() ), reference, OGRvectortype, NULL );
   if ( !layer )
   {
+    QgsMessageLog::logMessage( QObject::tr( "Creation of OGR data source %1 failed: %2" ).arg( uri ).arg( QString::fromUtf8( CPLGetLastErrorMsg() ) ), QObject::tr( "OGR" ) );
     return false;
   }
 
@@ -1994,7 +2052,6 @@ QGISEXTERN bool createEmptyDataSource( const QString &uri,
     codec = QTextCodec::codecForLocale();
     Q_ASSERT( codec );
   }
-
 
   for ( std::list<std::pair<QString, QString> >::const_iterator it = attributes.begin(); it != attributes.end(); ++it )
   {

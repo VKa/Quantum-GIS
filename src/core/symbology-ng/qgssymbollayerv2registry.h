@@ -19,6 +19,8 @@ class CORE_EXPORT QgsSymbolLayerV2AbstractMetadata
     QgsSymbolLayerV2AbstractMetadata( QString name, QString visibleName, QgsSymbolV2::SymbolType type )
         : mName( name ), mVisibleName( visibleName ), mType( type ) {}
 
+    virtual ~QgsSymbolLayerV2AbstractMetadata() {}
+
     QString name() const { return mName; }
     QString visibleName() const { return mVisibleName; }
     QgsSymbolV2::SymbolType type() const { return mType; }
@@ -51,16 +53,22 @@ class CORE_EXPORT QgsSymbolLayerV2Metadata : public QgsSymbolLayerV2AbstractMeta
                               QgsSymbolV2::SymbolType type,
                               QgsSymbolLayerV2CreateFunc pfCreate,
                               QgsSymbolLayerV2WidgetFunc pfWidget = NULL )
-        : QgsSymbolLayerV2AbstractMetadata( name, visibleName, type ),
-          mCreateFunc( pfCreate ), mWidgetFunc( pfWidget ), mCreateFromSldFunc( NULL ) {}
+        : QgsSymbolLayerV2AbstractMetadata( name, visibleName, type )
+        , mCreateFunc( pfCreate )
+        , mWidgetFunc( pfWidget )
+        , mCreateFromSldFunc( NULL )
+    {}
 
     QgsSymbolLayerV2Metadata( QString name, QString visibleName,
                               QgsSymbolV2::SymbolType type,
                               QgsSymbolLayerV2CreateFunc pfCreate,
                               QgsSymbolLayerV2CreateFromSldFunc pfCreateFromSld,
                               QgsSymbolLayerV2WidgetFunc pfWidget = NULL )
-        : QgsSymbolLayerV2AbstractMetadata( name, visibleName, type ),
-          mCreateFunc( pfCreate ), mWidgetFunc ( pfWidget ), mCreateFromSldFunc( pfCreateFromSld ) {}
+        : QgsSymbolLayerV2AbstractMetadata( name, visibleName, type )
+        , mCreateFunc( pfCreate )
+        , mWidgetFunc( pfWidget )
+        , mCreateFromSldFunc( pfCreateFromSld )
+    {}
 
     QgsSymbolLayerV2CreateFunc createFunction() const { return mCreateFunc; }
     QgsSymbolLayerV2WidgetFunc widgetFunction() const { return mWidgetFunc; }

@@ -83,7 +83,7 @@ class QgsScaleComboBox;
 #include <QPointer>
 #include <QSslError>
 
-#ifdef ANDROID
+#ifdef HAVE_TOUCH
 #include <QGestureEvent>
 #include <QTapAndHoldGesture>
 #endif
@@ -244,6 +244,10 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
     QAction *actionSnappingOptions() { return mActionSnappingOptions; }
     QAction *actionOffsetCurve() { return mActionOffsetCurve; }
 
+#ifdef HAVE_TOUCH
+    QAction *actionTouch() { return mActionTouch; }
+#endif
+
     QAction *actionPan() { return mActionPan; }
     QAction *actionPanToSelected() { return mActionPanToSelected; }
     QAction *actionZoomIn() { return mActionZoomIn; }
@@ -372,6 +376,8 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
     //! @note added in 1.6
     void completeInitialization();
 
+    void emitCustomSrsValidation( QgsCoordinateReferenceSystem *crs );
+
   public slots:
     //! Zoom to full extent
     void zoomFull();
@@ -394,11 +400,13 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
     //! mark project dirty
     void markDirty();
 
-    //! layer was added
-    void layerWasAdded( QgsMapLayer * );
+    /* changed from layerWasAdded in 1.8 */
+    void layersWereAdded( QList<QgsMapLayer *> );
 
-    //! layer will be removed
-    void removingLayer( QString );
+    /* layer will be removed - changed from removingLayer to removingLayers
+       in 1.8.
+    */
+    void removingLayers( QStringList );
 
     void updateUndoActions();
 
@@ -421,6 +429,17 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
      */
     void editPaste( QgsMapLayer * destinationLayer = 0 );
 
+    /**
+       \param sourceLayer  The layer where the style will be taken from
+                                        (defaults to the active layer on the legend)
+     */
+    void copyStyle( QgsMapLayer * sourceLayer = 0 );
+    //! copies style on the clipboard to the active layer
+    /**
+       \param destinatioLayer  The layer that the clipboard will be pasted to
+                                (defaults to the active layer on the legend)
+     */
+    void pasteStyle( QgsMapLayer * destinationLayer = 0 );
     void loadOGRSublayers( QString layertype, QString uri, QStringList list );
     void loadGDALSublayers( QString uri, QStringList list );
 
@@ -486,6 +505,9 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
 #endif
 
   private slots:
+    //! validate a SRS
+    void validateSrs( QgsCoordinateReferenceSystem *crs );
+
     //! QGis Sponsors
     void sponsors();
     //! About QGis
@@ -501,6 +523,10 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
     //#ifdef HAVE_SPATIALITE
     //! Add a SpatiaLite layer to the map
     void addSpatiaLiteLayer();
+    //#endif
+    //#ifdef HAVE_MSSQL
+    //! Add a SpatiaLite layer to the map
+    void addMssqlLayer();
     //#endif
     /** toggles whether the current selected layer is in overview or not */
     void isInOverview();
@@ -763,6 +789,10 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
     void zoomIn();
     //! Set map tool to pan
     void pan();
+#ifdef HAVE_TOUCH
+    //! Set map tool to touch
+    void touch();
+#endif
     //! Identify feature(s) on the currently selected layer
     void identify();
     //! Measure distance
@@ -883,6 +913,8 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
      @note added in version 1.6*/
     void initializationCompleted();
 
+    void customSrsValidation( QgsCoordinateReferenceSystem *crs );
+
   private:
     /** This method will open a dialog so the user can select the sublayers to load
     */
@@ -988,6 +1020,9 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
         QgsMapTool* mZoomIn;
         QgsMapTool* mZoomOut;
         QgsMapTool* mPan;
+#ifdef HAVE_TOUCH
+        QgsMapTool* mTouch;
+#endif
         QgsMapTool* mIdentify;
         QgsMapTool* mFeatureAction;
         QgsMapTool* mMeasureDist;
@@ -1165,7 +1200,7 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
 
     QString mOldScale;
 
-#ifdef ANDROID
+#ifdef HAVE_TOUCH
     bool gestureEvent( QGestureEvent *event );
     void tapAndHoldTriggered( QTapAndHoldGesture *gesture );
 #endif
@@ -1173,6 +1208,7 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
 
 #ifdef ANDROID
 #define QGIS_ICON_SIZE 32
+//TODO find a better default fontsize maybe using DPI detection or so
 #define QGIS_DEFAULT_FONTSIZE 8
 #else
 #define QGIS_ICON_SIZE 24

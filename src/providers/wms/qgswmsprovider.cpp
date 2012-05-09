@@ -415,13 +415,13 @@ QImage *QgsWmsProvider::draw( QgsRectangle  const &viewExtent, int pixelWidth, i
     cacheReply = 0;
   }
 
-  //according to the WMS spec for 1.3, the order of x - and y - coordinates is inverted for geographical CRS
+  //according to the WMS spec for 1.3, some CRS have inverted axis
   bool changeXY = false;
   if ( mCapabilities.version == "1.3.0" || mCapabilities.version == "1.3" )
   {
     //create CRS from string
     QgsCoordinateReferenceSystem theSrs;
-    if ( theSrs.createFromOgcWmsCrs( imageCrs ) && theSrs.geographicFlag() )
+    if ( theSrs.createFromOgcWmsCrs( imageCrs ) && theSrs.axisInverted() )
     {
       changeXY = true;
     }
@@ -801,10 +801,10 @@ void QgsWmsProvider::tileReplyFinished()
 
     QString contentType = reply->header( QNetworkRequest::ContentTypeHeader ).toString();
     QgsDebugMsg( "contentType: " + contentType );
-    if ( !contentType.startsWith( "image/" ) )
+    if ( !contentType.startsWith( "image/", Qt::CaseInsensitive ) )
     {
       QByteArray text = reply->readAll();
-      if ( contentType == "text/xml" && parseServiceExceptionReportDom( text ) )
+      if ( contentType.toLower() == "text/xml" && parseServiceExceptionReportDom( text ) )
       {
         showMessageBox( mErrorCaption, mError );
       }
@@ -909,7 +909,7 @@ void QgsWmsProvider::cacheReplyFinished()
 
     QString contentType = cacheReply->header( QNetworkRequest::ContentTypeHeader ).toString();
     QgsDebugMsg( "contentType: " + contentType );
-    if ( contentType.startsWith( "image/" ) )
+    if ( contentType.startsWith( "image/", Qt::CaseInsensitive ) )
     {
       QImage myLocalImage = QImage::fromData( cacheReply->readAll() );
       if ( !myLocalImage.isNull() )
@@ -925,7 +925,7 @@ void QgsWmsProvider::cacheReplyFinished()
     else
     {
       QByteArray text = cacheReply->readAll();
-      if ( contentType == "text/xml" && parseServiceExceptionReportDom( text ) )
+      if ( contentType.toLower() == "text/xml" && parseServiceExceptionReportDom( text ) )
       {
         showMessageBox( mErrorCaption, mError );
       }
@@ -2908,7 +2908,7 @@ QStringList QgsWmsProvider::identifyAs( const QgsPoint& point, QString format )
   {
     //create CRS from string
     QgsCoordinateReferenceSystem theSrs;
-    if ( theSrs.createFromOgcWmsCrs( imageCrs ) && theSrs.geographicFlag() )
+    if ( theSrs.createFromOgcWmsCrs( imageCrs ) && theSrs.axisInverted() )
     {
       changeXY = true;
     }

@@ -35,15 +35,14 @@ void QgsBrowserModel::addRootItems()
   mRootItems << item;
 
   // add favourite directories
-  QSettings settings;
-  QStringList favDirs = settings.value( "/browser/favourites", QVariant() ).toStringList();
-  foreach( QString favDir, favDirs )
+  QgsFavouritesItem *favitem = new QgsFavouritesItem( NULL, tr( "Favourites" ) );
+  if ( favitem )
   {
-    QgsDirectoryItem *item = new QgsDirectoryItem( NULL, favDir, favDir );
-    connectItem( item );
-    mRootItems << item;
+    connectItem( favitem );
+    mRootItems << favitem;
   }
 
+  // add drives
   foreach( QFileInfo drive, QDir::drives() )
   {
     QString path = drive.absolutePath();
@@ -54,7 +53,9 @@ void QgsBrowserModel::addRootItems()
   }
 
   // Add non file top level items
-  foreach( QString key, QgsProviderRegistry::instance()->providerList() )
+  QStringList providersList = QgsProviderRegistry::instance()->providerList();
+  providersList.sort();
+  foreach( QString key, providersList )
   {
     QLibrary *library = QgsProviderRegistry::instance()->providerLibrary( key );
     if ( !library )

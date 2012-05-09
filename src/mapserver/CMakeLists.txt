@@ -26,12 +26,11 @@ SET ( qgis_mapserv_SRCS
   qgspostrequesthandler.cpp
   qgssoaprequesthandler.cpp
   qgssldparser.cpp
-  qgssldrenderer.cpp
   qgswmsserver.cpp
+  qgswfsserver.cpp
   qgsmapserviceexception.cpp
   qgsmslayercache.cpp
   qgsfilter.cpp
-  qgssldrule.cpp
   qgsbetweenfilter.cpp
   qgscomparisonfilter.cpp
   qgslogicalfilter.cpp
@@ -101,7 +100,7 @@ INCLUDE_DIRECTORIES(
   ../analysis/interpolation
   ../plugins/diagram_overlay
   .
-  )
+)
 
 IF (WITH_INTERNAL_SPATIALITE)
   INCLUDE_DIRECTORIES(BEFORE ../core/spatialite/headers/spatialite)

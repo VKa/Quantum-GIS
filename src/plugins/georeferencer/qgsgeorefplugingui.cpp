@@ -70,16 +70,6 @@ QgsGeorefDockWidget::QgsGeorefDockWidget( const QString & title, QWidget * paren
   setObjectName( "GeorefDockWidget" ); // set object name so the position can be saved
 }
 
-void QgsGeorefDockWidget::closeEvent( QCloseEvent * ev )
-{
-  if ( widget() && !widget()->close() )
-  {
-    ev->ignore();
-    return;
-  }
-  deleteLater();
-}
-
 QgsGeorefPluginGui::QgsGeorefPluginGui( QgisInterface* theQgisInterface, QWidget* parent, Qt::WFlags fl )
     : QMainWindow( parent, fl )
     , mTransformParam( QgsGeorefTransform::InvalidTransform )
@@ -110,6 +100,8 @@ QgsGeorefPluginGui::QgsGeorefPluginGui( QgisInterface* theQgisInterface, QWidget
   mActionLinkQGisToGeoref->setEnabled( false );
 
   mCanvas->clearExtentHistory(); // reset zoomnext/zoomlast
+
+  connect( mIface, SIGNAL( currentThemeChanged( QString ) ), this, SLOT( updateIconTheme( QString ) ) );
 
   QSettings s;
   if ( s.value( "/Plugin-GeoReferencer/Config/ShowDocked" ).toBool() )
@@ -143,11 +135,7 @@ QgsGeorefPluginGui::~QgsGeorefPluginGui()
 {
   clearGCPData();
 
-  // delete layer (and don't signal it as it's our private layer)
-  if ( mLayer )
-  {
-    QgsMapLayerRegistry::instance()->removeMapLayer( mLayer->id(), false );
-  }
+  removeOldLayer();
 
   delete mToolZoomIn;
   delete mToolZoomOut;
@@ -170,14 +158,23 @@ void QgsGeorefPluginGui::closeEvent( QCloseEvent *e )
       else
         saveGCPs();
       writeSettings();
+      clearGCPData();
+      removeOldLayer();
+      mRasterFileName = "";
       e->accept();
       return;
     case QgsGeorefPluginGui::GCPSILENTSAVE:
       if ( !mGCPpointsFileName.isEmpty() )
         saveGCPs();
+      clearGCPData();
+      removeOldLayer();
+      mRasterFileName = "";
       return;
     case QgsGeorefPluginGui::GCPDISCARD:
       writeSettings();
+      clearGCPData();
+      removeOldLayer();
+      mRasterFileName = "";
       e->accept();
       return;
     case QgsGeorefPluginGui::GCPCANCEL:
@@ -250,8 +247,7 @@ void QgsGeorefPluginGui::openRaster()
   clearGCPData();
 
   //delete any old rasterlayers
-  if ( mLayer )
-    QgsMapLayerRegistry::instance()->removeMapLayer( mLayer->id(), false );
+  removeOldLayer();
 
   // Add raster
   addRaster( mRasterFileName );
@@ -803,10 +799,10 @@ void QgsGeorefPluginGui::createActions()
   connect( mActionTransformSettings, SIGNAL( triggered() ), this, SLOT( getTransformSettings() ) );
 
   // Edit actions
-  mActionAddPoint->setIcon( getThemeIcon( "/mActionCapturePoint.png" ) );
+  mActionAddPoint->setIcon( getThemeIcon( "/mActionAddGCPPoint.png" ) );
   connect( mActionAddPoint, SIGNAL( triggered() ), this, SLOT( setAddPointTool() ) );
 
-  mActionDeletePoint->setIcon( getThemeIcon( "/mActionDeleteSelected.png" ) );
+  mActionDeletePoint->setIcon( getThemeIcon( "/mActionDeleteGCPPoint.png" ) );
   connect( mActionDeletePoint, SIGNAL( triggered() ), this, SLOT( setDeletePointTool() ) );
 
   mActionMoveGCPPoint->setIcon( getThemeIcon( "/mActionMoveGCPPoint.png" ) );
@@ -1030,7 +1026,51 @@ void QgsGeorefPluginGui::setupConnections()
 
   // Connect extents changed - Use for need add again Raster
   connect( mCanvas, SIGNAL( extentsChanged() ), this, SLOT( extentsChanged() ) );
+}
 
+void QgsGeorefPluginGui::removeOldLayer()
+{
+    // delete layer (and don't signal it as it's our private layer)
+    if ( mLayer )
+    {
+      QgsMapLayerRegistry::instance()->removeMapLayers(
+        ( QStringList() << mLayer->id() ), false );
+      mLayer = NULL;
+    }
+    mCanvas->refresh();
+}
+
+void QgsGeorefPluginGui::updateIconTheme( QString theme )
+{
+  Q_UNUSED(theme);
+  // File actions
+  mActionOpenRaster->setIcon( getThemeIcon( "/mActionOpenRaster.png" ) );
+  mActionStartGeoref->setIcon( getThemeIcon( "/mActionStartGeoref.png" ) );
+  mActionGDALScript->setIcon( getThemeIcon( "/mActionGDALScript.png" ) );
+  mActionLoadGCPpoints->setIcon( getThemeIcon( "/mActionLoadGCPpoints.png" ) );
+  mActionSaveGCPpoints->setIcon( getThemeIcon( "/mActionSaveGCPpointsAs.png" ) );
+  mActionTransformSettings->setIcon( getThemeIcon( "/mActionTransformSettings.png" ) );
+
+  // Edit actions
+  mActionAddPoint->setIcon( getThemeIcon( "/mActionAddGCPPoint.png" ) );
+  mActionDeletePoint->setIcon( getThemeIcon( "/mActionDeleteGCPPoint.png" ) );
+  mActionMoveGCPPoint->setIcon( getThemeIcon( "/mActionMoveGCPPoint.png" ) );
+
+  // View actions
+  mActionPan->setIcon( getThemeIcon( "/mActionPan.png" ) );
+  mActionZoomIn->setIcon( getThemeIcon( "/mActionZoomIn.png" ) );
+  mActionZoomOut->setIcon( getThemeIcon( "/mActionZoomOut.png" ) );
+  mActionZoomToLayer->setIcon( getThemeIcon( "/mActionZoomToLayer.png" ) );
+  mActionZoomLast->setIcon( getThemeIcon( "/mActionZoomLast.png" ) );
+  mActionZoomNext->setIcon( getThemeIcon( "/mActionZoomNext.png" ) );
+  mActionLinkGeorefToQGis->setIcon( getThemeIcon( "/mActionLinkGeorefToQGis.png" ) );
+  mActionLinkQGisToGeoref->setIcon( getThemeIcon( "/mActionLinkQGisToGeoref.png" ) );
+
+  // Settings actions
+  mActionRasterProperties->setIcon( getThemeIcon( "/mActionRasterProperties.png" ) );
+  mActionGeorefConfig->setIcon( getThemeIcon( "/mActionGeorefConfig.png" ) );
+
+  mActionQuit->setIcon( getThemeIcon( "/mActionQuit.png" ) );
 }
 
 // Mapcanvas Plugin
@@ -1039,7 +1079,8 @@ void QgsGeorefPluginGui::addRaster( QString file )
   mLayer = new QgsRasterLayer( file, "Raster" );
 
   // so layer is not added to legend
-  QgsMapLayerRegistry::instance()->addMapLayer( mLayer, false );
+  QgsMapLayerRegistry::instance()->addMapLayers(
+    QList<QgsMapLayer *>() << mLayer, false );
 
   // add layer to map canvas
   QList<QgsMapCanvasLayer> layers;
@@ -1448,8 +1489,6 @@ bool QgsGeorefPluginGui::writePDFMapFile( const QString& fileName, const QgsGeor
   return true;
 }
 
-
-
 bool QgsGeorefPluginGui::writePDFReportFile( const QString& fileName, const QgsGeorefTransform& transform )
 {
   if ( !mCanvas )
@@ -1494,7 +1533,7 @@ bool QgsGeorefPluginGui::writePDFReportFile( const QString& fileName, const QgsG
   titleLabel->setText( rasterFi.fileName() );
   composition->addItem( titleLabel );
   titleLabel->setSceneRect( QRectF( leftMargin, 5, contentWidth, 8 ) );
-  titleLabel->setFrame( false );
+  titleLabel->setFrameEnabled( false );
 
   //composer map
   QgsRectangle canvasExtent = mCanvas->extent();
@@ -1549,7 +1588,7 @@ bool QgsGeorefPluginGui::writePDFReportFile( const QString& fileName, const QgsG
     parameterLabel->adjustSizeToText();
     composition->addItem( parameterLabel );
     parameterLabel->setSceneRect( QRectF( leftMargin, composerMap->rect().bottom() + composerMap->transform().dy() + 5, contentWidth, 8 ) );
-    parameterLabel->setFrame( false );
+    parameterLabel->setFrameEnabled( false );
 
     //calculate mean error
     double meanError = 0;
@@ -1581,7 +1620,7 @@ bool QgsGeorefPluginGui::writePDFReportFile( const QString& fileName, const QgsG
   residualLabel->setText( tr( "Residuals" ) );
   composition->addItem( residualLabel );
   residualLabel->setSceneRect( QRectF( leftMargin, previousItem->rect().bottom() + previousItem->transform().dy() + 5, contentWidth, 6 ) );
-  residualLabel->setFrame( false );
+  residualLabel->setFrameEnabled( false );
 
   //residual plot
   QgsResidualPlotItem* resPlotItem = new QgsResidualPlotItem( composition );
@@ -1982,7 +2021,16 @@ QIcon QgsGeorefPluginGui::getThemeIcon( const QString &theName )
   }
   else
   {
-    return QIcon( ":/icons" + theName );
+    QSettings settings;
+    QString themePath = ":/icons/" + settings.value( "/Themes" ).toString() + theName;
+    if ( QFile::exists( themePath ) )
+    {
+      return QIcon( themePath );
+    }
+    else
+    {
+      return QIcon( ":/icons/default" + theName );
+    }
   }
 }
 

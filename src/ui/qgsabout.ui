@@ -180,13 +180,29 @@ p, li { white-space: pre-wrap; }
        <string>Developers</string>
       </attribute>
       <layout class="QGridLayout">
-       <item row="0" column="0">
+       <item row="1" column="0">
         <widget class="QListWidget" name="lstDevelopers">
          <property name="alternatingRowColors">
           <bool>true</bool>
          </property>
          <property name="isWrapping" stdset="0">
           <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="0">
+        <widget class="QLabel" name="label_3">
+         <property name="text">
+          <string/>
+         </property>
+         <property name="pixmap">
+          <pixmap resource="../../images/images.qrc">:/images/developers/lyon-2012.jpg</pixmap>
+         </property>
+         <property name="scaledContents">
+          <bool>false</bool>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
          </property>
         </widget>
        </item>
@@ -212,7 +228,13 @@ p, li { white-space: pre-wrap; }
       </attribute>
       <layout class="QGridLayout">
        <item row="0" column="0">
-        <widget class="QTextBrowser" name="txtTranslators"/>
+        <widget class="QWebView" name="txtTranslators">
+         <property name="url">
+          <url>
+           <string>about:blank</string>
+          </url>
+         </property>
+        </widget>
        </item>
       </layout>
      </widget>
@@ -238,19 +260,24 @@ p, li { white-space: pre-wrap; }
   </layout>
  </widget>
  <layoutdefault spacing="6" margin="11"/>
+ <customwidgets>
+  <customwidget>
+   <class>QWebView</class>
+   <extends>QWidget</extends>
+   <header>QtWebKit/QWebView</header>
+  </customwidget>
+ </customwidgets>
  <tabstops>
   <tabstop>tabWidget</tabstop>
   <tabstop>btnQgisHome</tabstop>
   <tabstop>btnQgisUser</tabstop>
   <tabstop>txtProviders</tabstop>
   <tabstop>lstDevelopers</tabstop>
-  <tabstop>txtTranslators</tabstop>
   <tabstop>buttonBox</tabstop>
   <tabstop>txtDonors</tabstop>
   <tabstop>lstContributors</tabstop>
  </tabstops>
  <resources>
-  <include location="../../images/images.qrc"/>
   <include location="../../images/images.qrc"/>
  </resources>
  <connections>

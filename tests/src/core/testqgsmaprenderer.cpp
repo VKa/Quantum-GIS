@@ -18,7 +18,6 @@
 #include <QStringList>
 #include <QObject>
 #include <QPainter>
-#include <QSettings>
 #include <QTime>
 #include <iostream>
 
@@ -26,7 +25,7 @@
 #include <QDesktopServices>
 
 //qgis includes...
-#include <qgsvectorlayer.h> //defines QgsFieldMap 
+#include <qgsvectorlayer.h> //defines QgsFieldMap
 #include <qgsvectorfilewriter.h> //logic for writing shpfiles
 #include <qgsfeature.h> //we will need to pass a bunch of these for each rec
 #include <qgsgeometry.h> //each feature needs a geometry
@@ -77,19 +76,15 @@ void TestQgsMapRenderer::initTestCase()
   //
   // Runs once before any tests are run
   //
-  // init QGIS's paths - true means that all path will be inited from prefix
-  QString qgisPath = QCoreApplication::applicationDirPath();
-  QgsApplication::setPrefixPath( INSTALL_PREFIX, true );
+  QgsApplication::init();
+  QgsApplication::initQgis();
   QgsApplication::showSettings();
-  // Instantiate the plugin directory so that providers are loaded
-  QgsProviderRegistry::instance( QgsApplication::pluginPath() );
-
 
   //create some objects that will be used in all tests...
   mEncoding = "UTF-8";
   QgsField myField1( "Value", QVariant::Int, "int", 10, 0, "Value on lon" );
   mFields.insert( 0, myField1 );
-  mCRS = QgsCoordinateReferenceSystem( GEOWkt );
+  mCRS = QgsCoordinateReferenceSystem( GEOWKT );
   //
   // Create the test dataset if it doesnt exist
   //
@@ -99,7 +94,8 @@ void TestQgsMapRenderer::initTestCase()
   QString myFileName = myTmpDir +  "maprender_testdata.shp";
   //copy over the default qml for our generated layer
   QString myQmlFileName = myTestDataDir +  "maprender_testdata.qml";
-  QFile::copy( myQmlFileName, myTmpDir + "maprender_testdata.qml" );
+  QFile::remove( myTmpDir + "maprender_testdata.qml" );
+  QVERIFY( QFile::copy( myQmlFileName, myTmpDir + "maprender_testdata.qml" ) );
   qDebug( "Checking test dataset exists...\n%s", myFileName.toLocal8Bit().constData() );
   if ( !QFile::exists( myFileName ) )
   {
@@ -165,16 +161,14 @@ void TestQgsMapRenderer::initTestCase()
   QFileInfo myPolyFileInfo( myFileName );
   mpPolysLayer = new QgsVectorLayer( myPolyFileInfo.filePath(),
                                      myPolyFileInfo.completeBaseName(), "ogr" );
+  QVERIFY( mpPolysLayer->isValid() );
   // Register the layer with the registry
-  QgsMapLayerRegistry::instance()->addMapLayer( mpPolysLayer );
+  QgsMapLayerRegistry::instance()->addMapLayers( QList<QgsMapLayer *>() << mpPolysLayer );
   // add the test layer to the maprender
   mpMapRenderer = new QgsMapRenderer();
-  QStringList myLayers;
-  myLayers << mpPolysLayer->id();
-  mpMapRenderer->setLayerSet( myLayers );
+  mpMapRenderer->setLayerSet( QStringList( mpPolysLayer->id() ) );
   mReport += "<h1>Map Render Tests</h1>\n";
 }
-
 
 void TestQgsMapRenderer::cleanupTestCase()
 {
@@ -187,24 +181,18 @@ void TestQgsMapRenderer::cleanupTestCase()
     myFile.close();
     //QDesktopServices::openUrl( "file:///" + myReportFile );
   }
-
 }
-
-
 
 void TestQgsMapRenderer::performanceTest()
 {
   mpMapRenderer->setExtent( mpPolysLayer->extent() );
-  QString myDataDir( TEST_DATA_DIR ); //defined in CmakeLists.txt
-  QString myTestDataDir = myDataDir + QDir::separator();
   QgsRenderChecker myChecker;
-  myChecker.setExpectedImage( myTestDataDir + "expected_maprender.png" );
+  myChecker.setControlName( "expected_maprender" );
   myChecker.setMapRenderer( mpMapRenderer );
   bool myResultFlag = myChecker.runTest( "maprender" );
   mReport += myChecker.report();
   QVERIFY( myResultFlag );
 }
-
 
 QTEST_MAIN( TestQgsMapRenderer )
 #include "moc_testqgsmaprenderer.cxx"

@@ -119,7 +119,13 @@ QgsVectorLayer::QgsVectorLayer( QString vectorLayerPath,
 
     QSettings settings;
     //Changed to default to true as of QGIS 1.7
-    if ( settings.value( "/qgis/use_symbology_ng", true ).toBool() && hasGeometryType() )
+    //TODO: remove hack when http://hub.qgis.org/issues/5170 is fixed
+#ifdef ANDROID
+    bool use_symbology_ng_default = false;
+#else
+    bool use_symbology_ng_default = true;
+#endif
+    if ( settings.value( "/qgis/use_symbology_ng", use_symbology_ng_default ).toBool() && hasGeometryType() )
     {
       // using symbology-ng!
       setUsingRendererV2( true );
@@ -2838,6 +2844,13 @@ bool QgsVectorLayer::setDataProvider( QString const & provider )
         // make sure that the "observer" has been removed from URI to avoid crashes
         mDataSource = mDataProvider->dataSourceUri();
       }
+      else if ( provider == "ogr" )
+      {
+        // make sure that the /vsigzip or /vsizip is added to uri, if applicable
+        mDataSource = mDataProvider->dataSourceUri();
+        if ( mDataSource.right( 10 ) == "|layerid=0" )
+          mDataSource.chop( 10 );
+      }
 
       // label
       mLabel = new QgsLabel( mDataProvider->fields() );
@@ -4012,7 +4025,7 @@ QgsFeatureList QgsVectorLayer::selectedFeatures()
   foreach( QgsFeatureId fid, mSelectedFeatureIds )
   {
     features.push_back( QgsFeature() );
-    featureAtId( fid, features.back(), true, true );
+    featureAtId( fid, features.back(), geometryType() != QGis::NoGeometry, true );
   }
 
   return features;

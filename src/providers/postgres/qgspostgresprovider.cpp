@@ -44,8 +44,8 @@ QgsPostgresProvider::QgsPostgresProvider( QString const & uri )
     , mFetching( false )
     , mValid( false )
     , mPrimaryKeyType( pktUnknown )
-    , mDetectedGeomType( QGis::UnknownGeometry )
-    , mRequestedGeomType( QGis::UnknownGeometry )
+    , mDetectedGeomType( QGis::WKBUnknown )
+    , mRequestedGeomType( QGis::WKBUnknown )
     , mFeatureQueueSize( sFeatureQueueSize )
     , mUseEstimatedMetadata( false )
     , mSelectAtIdDisabled( false )
@@ -65,7 +65,7 @@ QgsPostgresProvider::QgsPostgresProvider( QString const & uri )
   mGeometryColumn = mUri.geometryColumn();
   mSqlWhereClause = mUri.sql();
   mRequestedSrid = mUri.srid();
-  mRequestedGeomType = mUri.geometryType();
+  mRequestedGeomType = mUri.wkbType();
   mIsGeography = false;
 
   if ( mSchemaName.isEmpty() &&
@@ -541,10 +541,10 @@ void QgsPostgresProvider::select( QgsAttributeList fetchAttributes, QgsRectangle
       else
       {
         qBox = QString( "st_makeenvelope(%1,%2,%3,%4,%5)" )
-               .arg( rect.xMinimum() )
-               .arg( rect.yMinimum() )
-               .arg( rect.xMaximum() )
-               .arg( rect.yMaximum() )
+               .arg( rect.xMinimum(), 0, 'f', 16 )
+               .arg( rect.yMinimum(), 0, 'f', 16 )
+               .arg( rect.xMaximum(), 0, 'f', 16 )
+               .arg( rect.yMaximum(), 0, 'f', 16 )
                .arg( mRequestedSrid.isEmpty() ? mDetectedSrid : mRequestedSrid );
       }
 
@@ -568,7 +568,7 @@ void QgsPostgresProvider::select( QgsAttributeList fetchAttributes, QgsRectangle
                      .arg( mRequestedSrid );
     }
 
-    if ( mRequestedGeomType != QGis::UnknownGeometry && mRequestedGeomType != mDetectedGeomType )
+    if ( mRequestedGeomType != QGis::WKBUnknown && mRequestedGeomType != mDetectedGeomType )
     {
       whereClause += QString( " AND %1" ).arg( QgsPostgresConn::postgisTypeFilter( mGeometryColumn, mRequestedGeomType, mIsGeography ) );
     }
@@ -906,9 +906,7 @@ void QgsPostgresProvider::setExtent( QgsRectangle& newExtent )
  */
 QGis::WkbType QgsPostgresProvider::geometryType() const
 {
-  return mRequestedGeomType != QGis::UnknownGeometry
-         ? QgsPostgresConn::wkbTypeFromGeomType( mRequestedGeomType )
-         : QgsPostgresConn::wkbTypeFromGeomType( mDetectedGeomType );
+  return mRequestedGeomType != QGis::WKBUnknown ? mRequestedGeomType : mDetectedGeomType;
 }
 
 const QgsField &QgsPostgresProvider::field( int index ) const
@@ -1162,7 +1160,7 @@ bool QgsPostgresProvider::loadFields()
     }
     else
     {
-      QgsMessageLog::logMessage( tr( "Field %1 ignored, because of unsupported type type %2" ).arg( fieldName ).arg( fieldTType ), tr( "PostGIS" ) );
+      QgsMessageLog::logMessage( tr( "Field %1 ignored, because of unsupported type %2" ).arg( fieldName ).arg( fieldTType ), tr( "PostGIS" ) );
       continue;
     }
 
@@ -1798,6 +1796,54 @@ QString QgsPostgresProvider::paramValue( QString fieldValue, const QString &defa
   return fieldValue;
 }
 
+QString QgsPostgresProvider::geomParam( int offset ) const
+{
+  QString geometry;
+
+  bool forceMulti;
+  switch ( geometryType() )
+  {
+    case QGis::WKBPoint:
+    case QGis::WKBLineString:
+    case QGis::WKBPolygon:
+    case QGis::WKBPoint25D:
+    case QGis::WKBLineString25D:
+    case QGis::WKBPolygon25D:
+    case QGis::WKBUnknown:
+    case QGis::WKBNoGeometry:
+      forceMulti = false;
+      break;
+
+    case QGis::WKBMultiPoint:
+    case QGis::WKBMultiLineString:
+    case QGis::WKBMultiPolygon:
+    case QGis::WKBMultiPoint25D:
+    case QGis::WKBMultiLineString25D:
+    case QGis::WKBMultiPolygon25D:
+      forceMulti = true;
+      break;
+  }
+
+
+  if ( forceMulti )
+  {
+    geometry += mConnectionRO->majorVersion() < 2 ? "multi(" : "st_multi(";
+  }
+
+  geometry += QString( "%1($%2%3,%4)" )
+              .arg( mConnectionRO->majorVersion() < 2 ? "geomfromwkb" : "st_geomfromwkb" )
+              .arg( offset )
+              .arg( mConnectionRW->useWkbHex() ? "" : "::bytea" )
+              .arg( mRequestedSrid.isEmpty() ? mDetectedSrid : mRequestedSrid );
+
+  if ( forceMulti )
+  {
+    geometry += ")";
+  }
+
+  return geometry;
+}
+
 bool QgsPostgresProvider::addFeatures( QgsFeatureList &flist )
 {
   if ( flist.size() == 0 )
@@ -1827,11 +1873,9 @@ bool QgsPostgresProvider::addFeatures( QgsFeatureList &flist )
     if ( !mGeometryColumn.isNull() )
     {
       insert += quotedIdentifier( mGeometryColumn );
-      values += QString( "%1($%2%3,%4)" )
-                .arg( mConnectionRO->majorVersion() < 2 ? "geomfromwkb" : "st_geomfromwkb" )
-                .arg( offset++ )
-                .arg( mConnectionRW->useWkbHex() ? "" : "::bytea" )
-                .arg( mRequestedSrid.isEmpty() ? mDetectedSrid : mRequestedSrid );
+
+      values += geomParam( offset++ );
+
       delim = ",";
     }
 
@@ -2332,12 +2376,10 @@ bool QgsPostgresProvider::changeGeometryValues( QgsGeometryMap & geometry_map )
     // Start the PostGIS transaction
     mConnectionRW->PQexecNR( "BEGIN" );
 
-    QString update = QString( "UPDATE %1 SET %2=%3($1%4,%5) WHERE %6" )
+    QString update = QString( "UPDATE %1 SET %2=%3 WHERE %4" )
                      .arg( mQuery )
                      .arg( quotedIdentifier( mGeometryColumn ) )
-                     .arg( mConnectionRW->majorVersion() < 2 ? "geomfromwkb" : "st_geomfromwkb" )
-                     .arg( mConnectionRW->useWkbHex() ? "" : "::bytea" )
-                     .arg( mRequestedSrid.isEmpty() ? mDetectedSrid : mRequestedSrid )
+                     .arg( geomParam( 1 ) )
                      .arg( pkParamWhereClause( 2 ) );
 
     QgsDebugMsg( "updating: " + update );
@@ -2601,7 +2643,7 @@ bool QgsPostgresProvider::getGeometryDetails()
 {
   if ( mGeometryColumn.isNull() )
   {
-    mDetectedGeomType = QGis::NoGeometry;
+    mDetectedGeomType = QGis::WKBNoGeometry;
     mValid = true;
     return true;
   }
@@ -2712,7 +2754,7 @@ bool QgsPostgresProvider::getGeometryDetails()
     }
   }
 
-  if ( QgsPostgresConn::geomTypeFromPostgis( detectedType ) == QGis::UnknownGeometry )
+  if ( QgsPostgresConn::wkbTypeFromPostgis( detectedType ) == QGis::WKBUnknown )
   {
     QgsPostgresLayerProperty layerProperty;
     layerProperty.schemaName = schemaName;
@@ -2737,7 +2779,7 @@ bool QgsPostgresProvider::getGeometryDetails()
     if ( typeList.size() == 0 )
     {
       // no data - so take what's requested
-      if ( mRequestedGeomType == QGis::UnknownGeometry || mRequestedSrid.isEmpty() )
+      if ( mRequestedGeomType == QGis::WKBUnknown || mRequestedSrid.isEmpty() )
       {
         QgsMessageLog::logMessage( tr( "Geometry type and srid for empty column %1 of %2 undefined." ).arg( mGeometryColumn ).arg( mQuery ) );
       }
@@ -2750,9 +2792,9 @@ bool QgsPostgresProvider::getGeometryDetails()
       int i;
       for ( i = 0; i < typeList.size(); i++ )
       {
-        QGis::GeometryType geomType = QgsPostgresConn::geomTypeFromPostgis( typeList.at( i ) );
+        QGis::WkbType wkbType = QgsPostgresConn::wkbTypeFromPostgis( typeList.at( i ) );
 
-        if (( geomType != QGis::UnknownGeometry && ( mRequestedGeomType == QGis::UnknownGeometry || mRequestedGeomType == geomType ) ) &&
+        if (( wkbType != QGis::WKBUnknown && ( mRequestedGeomType == QGis::WKBUnknown || mRequestedGeomType == wkbType ) ) &&
             ( mRequestedSrid.isEmpty() || sridList.at( i ) == mRequestedSrid ) )
           break;
       }
@@ -2783,7 +2825,7 @@ bool QgsPostgresProvider::getGeometryDetails()
     }
   }
 
-  mDetectedGeomType = QgsPostgresConn::geomTypeFromPostgis( detectedType );
+  mDetectedGeomType = QgsPostgresConn::wkbTypeFromPostgis( detectedType );
   mDetectedSrid     = detectedSrid;
 
   QgsDebugMsg( QString( "Detected SRID is %1" ).arg( mDetectedSrid ) );
@@ -2791,7 +2833,7 @@ bool QgsPostgresProvider::getGeometryDetails()
   QgsDebugMsg( QString( "Detected type is %1" ).arg( mDetectedGeomType ) );
   QgsDebugMsg( QString( "Requested type is %1" ).arg( mRequestedGeomType ) );
 
-  mValid = ( mDetectedGeomType != QGis::UnknownGeometry || mRequestedGeomType != QGis::UnknownGeometry )
+  mValid = ( mDetectedGeomType != QGis::WKBUnknown || mRequestedGeomType != QGis::WKBUnknown )
            && ( !mDetectedSrid.isEmpty() || !mRequestedSrid.isEmpty() );
 
   if ( !mValid )
@@ -2892,9 +2934,9 @@ QgsVectorLayerImport::ImportError QgsPostgresProvider::createEmptyLayer(
   }
   schemaTableName += quotedIdentifier( tableName );
 
-  QgsDebugMsg( QString( "Connection info is " ).arg( dsUri.connectionInfo() ) );
-  QgsDebugMsg( QString( "Geometry column is: " ).arg( geometryColumn ) );
-  QgsDebugMsg( QString( "Schema is: " ).arg( schemaName ) );
+  QgsDebugMsg( QString( "Connection info is: %1" ).arg( dsUri.connectionInfo() ) );
+  QgsDebugMsg( QString( "Geometry column is: %1" ).arg( geometryColumn ) );
+  QgsDebugMsg( QString( "Schema is: %1" ).arg( schemaName ) );
   QgsDebugMsg( QString( "Table name is: %1" ).arg( tableName ) );
 
   // create the table
@@ -3205,4 +3247,77 @@ QGISEXTERN QgsVectorLayerImport::ImportError createEmptyLayer(
            uri, fields, wkbType, srs, overwrite,
            oldToNewAttrIdxMap, errorMessage, options
          );
+}
+
+QGISEXTERN bool deleteLayer( const QString& uri, QString& errCause )
+{
+  QgsDebugMsg( "deleting layer " + uri );
+
+  QgsDataSourceURI dsUri( uri );
+  QString schemaName = dsUri.schema();
+  QString tableName = dsUri.table();
+  QString geometryCol = dsUri.geometryColumn();
+
+  QString schemaTableName;
+  if ( !schemaName.isEmpty() )
+  {
+    schemaTableName = QgsPostgresConn::quotedIdentifier( schemaName ) + ".";
+  }
+  schemaTableName += QgsPostgresConn::quotedIdentifier( tableName );
+
+  QgsPostgresConn* conn = QgsPostgresConn::connectDb( dsUri.connectionInfo(), false );
+  if ( !conn )
+  {
+    errCause = QObject::tr( "Connection to database failed" );
+    return false;
+  }
+
+  // check the geometry column count
+  QString sql = QString( "SELECT count(*) "
+                         "FROM geometry_columns, pg_class, pg_namespace "
+                         "WHERE f_table_name=relname AND f_table_schema=nspname "
+                         "AND pg_class.relnamespace=pg_namespace.oid "
+                         "AND f_table_schema=%1 AND f_table_name=%2" )
+                .arg( QgsPostgresConn::quotedValue( schemaName ) )
+                .arg( QgsPostgresConn::quotedValue( tableName ) );
+  QgsPostgresResult result = conn->PQexec( sql );
+  if ( result.PQresultStatus() != PGRES_TUPLES_OK )
+  {
+    errCause = QObject::tr( "Unable to delete layer %1: \n%2" )
+               .arg( schemaTableName )
+               .arg( result.PQresultErrorMessage() );
+    conn->disconnect();
+    return false;
+  }
+
+  int count = result.PQgetvalue( 0, 0 ).toInt();
+
+  if ( !geometryCol.isEmpty() && count > 1 )
+  {
+    // the table has more geometry columns, drop just the geometry column
+    sql = QString( "SELECT DropGeometryColumn(%1,%2,%3)" )
+          .arg( QgsPostgresConn::quotedValue( schemaName ) )
+          .arg( QgsPostgresConn::quotedValue( tableName ) )
+          .arg( QgsPostgresConn::quotedValue( geometryCol ) );
+  }
+  else
+  {
+    // drop the table
+    sql = QString( "SELECT DropGeometryTable(%1,%2)" )
+          .arg( QgsPostgresConn::quotedValue( schemaName ) )
+          .arg( QgsPostgresConn::quotedValue( tableName ) );
+  }
+
+  result = conn->PQexec( sql );
+  if ( result.PQresultStatus() != PGRES_TUPLES_OK )
+  {
+    errCause = QObject::tr( "Unable to delete layer %1: \n%2" )
+               .arg( schemaTableName )
+               .arg( result.PQresultErrorMessage() );
+    conn->disconnect();
+    return false;
+  }
+
+  conn->disconnect();
+  return true;
 }

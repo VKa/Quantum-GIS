@@ -46,6 +46,8 @@
 #include <gdal.h>
 #include <geos_c.h>
 
+#include "qgsconfig.h"
+
 /**
  * \class QgsOptions - Set user options and preferences
  * Constructor
@@ -63,6 +65,8 @@ QgsOptions::QgsOptions( QWidget *parent, Qt::WFlags fl ) :
   connect( cmbIconSize, SIGNAL( textChanged( const QString& ) ), this, SLOT( iconSizeChanged( const QString& ) ) );
 
   connect( spinFontSize, SIGNAL( valueChanged( const QString& ) ), this, SLOT( fontSizeChanged( const QString& ) ) );
+
+  connect( chkUseStandardDeviation, SIGNAL( stateChanged( int ) ), this, SLOT( toggleStandardDeviation( int ) ) );
 
   connect( this, SIGNAL( accepted() ), this, SLOT( saveOptions() ) );
 
@@ -196,6 +200,20 @@ QgsOptions::QgsOptions( QWidget *parent, Qt::WFlags fl ) :
   cmbPromptRasterSublayers->addItem( tr( "Load all" ) );
   cmbPromptRasterSublayers->setCurrentIndex( settings.value( "/qgis/promptForRasterSublayers", 0 ).toInt() );
 
+  // Scan for valid items in the browser dock
+  cmbScanItemsInBrowser->clear();
+  cmbScanItemsInBrowser->addItem( tr( "Check file contents" ) ); // 0
+  cmbScanItemsInBrowser->addItem( tr( "Check extension" ) );     // 1
+  cmbScanItemsInBrowser->setCurrentIndex( settings.value( "/qgis/scanItemsInBrowser", 1 ).toInt() );
+
+  // Scan for contents of compressed files (.zip) in browser dock
+  cmbScanZipInBrowser->clear();
+  cmbScanZipInBrowser->addItem( tr( "No" ) );           // 0
+  cmbScanZipInBrowser->addItem( tr( "Passthru" ) );     // 1
+  cmbScanZipInBrowser->addItem( tr( "Basic scan" ) );   // 2
+  cmbScanZipInBrowser->addItem( tr( "Full scan" ) );    // 3
+  cmbScanZipInBrowser->setCurrentIndex( settings.value( "/qgis/scanZipInBrowser", 2 ).toInt() );
+
   // set the display update threshold
   spinBoxUpdateThreshold->setValue( settings.value( "/Map/updateThreshold" ).toInt() );
   //set the default projection behaviour radio buttongs
@@ -301,7 +319,13 @@ QgsOptions::QgsOptions( QWidget *parent, Qt::WFlags fl ) :
   chkUseRenderCaching->setChecked( settings.value( "/qgis/enable_render_caching", false ).toBool() );
 
   //Changed to default to true as of QGIS 1.7
-  chkUseSymbologyNG->setChecked( settings.value( "/qgis/use_symbology_ng", true ).toBool() );
+  //TODO: remove hack when http://hub.qgis.org/issues/5170 is fixed
+#ifdef ANDROID
+  bool use_symbology_ng_default = false;
+#else
+  bool use_symbology_ng_default = true;
+#endif
+  chkUseSymbologyNG->setChecked( settings.value( "/qgis/use_symbology_ng", use_symbology_ng_default ).toBool() );
 
   // Slightly awkard here at the settings value is true to use QImage,
   // but the checkbox is true to use QPixmap
@@ -316,9 +340,45 @@ QgsOptions::QgsOptions( QWidget *parent, Qt::WFlags fl ) :
   cbxAddPostgisDC->setChecked( settings.value( "/qgis/addPostgisDC", false ).toBool() );
   cbxAddNewLayersToCurrentGroup->setChecked( settings.value( "/qgis/addNewLayersToCurrentGroup", false ).toBool() );
   cbxCreateRasterLegendIcons->setChecked( settings.value( "/qgis/createRasterLegendIcons", true ).toBool() );
+  cbxCopyWKTGeomFromTable->setChecked( settings.value( "/qgis/copyGeometryAsWKT", true ).toBool() );
   leNullValue->setText( settings.value( "qgis/nullValue", "NULL" ).toString() );
 
   cmbLegendDoubleClickAction->setCurrentIndex( settings.value( "/qgis/legendDoubleClickAction", 0 ).toInt() );
+
+  //
+  // Raster properties
+  //
+  spnRed->setValue( settings.value( "/Raster/defaultRedBand", 1 ).toInt() );
+  spnGreen->setValue( settings.value( "/Raster/defaultGreenBand", 2 ).toInt() );
+  spnBlue->setValue( settings.value( "/Raster/defaultBlueBand", 3 ).toInt() );
+
+  //add items to the color enhanceContrast combo box
+  cboxContrastEnhancementAlgorithm->addItem( tr( "No Stretch" ) );
+  cboxContrastEnhancementAlgorithm->addItem( tr( "Stretch To MinMax" ) );
+  cboxContrastEnhancementAlgorithm->addItem( tr( "Stretch And Clip To MinMax" ) );
+  cboxContrastEnhancementAlgorithm->addItem( tr( "Clip To MinMax" ) );
+
+  QString contrastEnchacement = settings.value( "/Raster/defaultContrastEnhancementAlgorithm", "NoEnhancement" ).toString();
+  if ( contrastEnchacement == "NoEnhancement" )
+  {
+    cboxContrastEnhancementAlgorithm->setCurrentIndex( cboxContrastEnhancementAlgorithm->findText( tr( "No Stretch" ) ) );
+  }
+  if ( contrastEnchacement == "StretchToMinimumMaximum" )
+  {
+    cboxContrastEnhancementAlgorithm->setCurrentIndex( cboxContrastEnhancementAlgorithm->findText( tr( "Stretch To MinMax" ) ) );
+  }
+  else if ( contrastEnchacement == "StretchAndClipToMinimumMaximum" )
+  {
+    cboxContrastEnhancementAlgorithm->setCurrentIndex( cboxContrastEnhancementAlgorithm->findText( tr( "Stretch And Clip To MinMax" ) ) );
+  }
+  else if ( contrastEnchacement == "ClipToMinimumMaximum" )
+  {
+    cboxContrastEnhancementAlgorithm->setCurrentIndex( cboxContrastEnhancementAlgorithm->findText( tr( "Clip To MinMax" ) ) );
+  }
+
+  chkUseStandardDeviation->setChecked( settings.value( "/Raster/useStandardDeviation", false ).toBool() );
+  spnThreeBandStdDev->setValue( settings.value( "/Raster/defaultStandardDeviation", 2.0 ).toDouble() );
+  toggleStandardDeviation( chkUseStandardDeviation->checkState() );
 
   //set the color for selections
   int myRed = settings.value( "/qgis/default_selection_color_red", 255 ).toInt();
@@ -354,7 +414,14 @@ QgsOptions::QgsOptions( QWidget *parent, Qt::WFlags fl ) :
   lblSystemLocale->setText( tr( "Detected active locale on your system: %1" ).arg( mySystemLocale ) );
   QString myUserLocale = settings.value( "locale/userLocale", "" ).toString();
   QStringList myI18nList = i18nList();
-  cboLocale->addItems( myI18nList );
+  foreach( QString l, myI18nList )
+  {
+#if QT_VERSION >= 0x040800
+    cboLocale->addItem( QIcon( QString( ":/images/flags/%1.png" ).arg( l ) ), QLocale( l ).nativeLanguageName() );
+#else
+    cboLocale->addItem( QIcon( QString( ":/images/flags/%1.png" ).arg( l ) ), l );
+#endif
+  }
   if ( myI18nList.contains( myUserLocale ) )
   {
     cboLocale->setCurrentIndex( myI18nList.indexOf( myUserLocale ) );
@@ -545,6 +612,18 @@ void QgsOptions::fontSizeChanged( const QString &fontSize )
   QgisApp::instance()->setFontSize( fontSize.toInt() );
 }
 
+void QgsOptions::toggleStandardDeviation( int state )
+{
+  if ( Qt::Checked == state )
+  {
+    spnThreeBandStdDev->setEnabled( true );
+  }
+  else
+  {
+    spnThreeBandStdDev->setEnabled( false );
+  }
+}
+
 QString QgsOptions::theme()
 {
   // returns the current theme (as selected in the cmbTheme combo box)
@@ -621,11 +700,14 @@ void QgsOptions::saveOptions()
   settings.setValue( "/qgis/attributeTableBehaviour", cmbAttrTableBehaviour->currentIndex() );
   settings.setValue( "/qgis/attributeTableRowCache", spinBoxAttrTableRowCache->value() );
   settings.setValue( "/qgis/promptForRasterSublayers", cmbPromptRasterSublayers->currentIndex() );
+  settings.setValue( "/qgis/scanItemsInBrowser", cmbScanItemsInBrowser->currentIndex() );
+  settings.setValue( "/qgis/scanZipInBrowser", cmbScanZipInBrowser->currentIndex() );
   settings.setValue( "/qgis/dockIdentifyResults", cbxIdentifyResultsDocked->isChecked() );
   settings.setValue( "/qgis/dockSnapping", cbxSnappingOptionsDocked->isChecked() );
   settings.setValue( "/qgis/addPostgisDC", cbxAddPostgisDC->isChecked() );
   settings.setValue( "/qgis/addNewLayersToCurrentGroup", cbxAddNewLayersToCurrentGroup->isChecked() );
   settings.setValue( "/qgis/createRasterLegendIcons", cbxCreateRasterLegendIcons->isChecked() );
+  settings.setValue( "/qgis/copyGeometryAsWKT", cbxCopyWKTGeomFromTable->isChecked() );
   settings.setValue( "/qgis/new_layers_visible", chkAddedVisibility->isChecked() );
   settings.setValue( "/qgis/enable_anti_aliasing", chkAntiAliasing->isChecked() );
   settings.setValue( "/qgis/enable_render_caching", chkUseRenderCaching->isChecked() );
@@ -672,6 +754,32 @@ void QgsOptions::saveOptions()
 
   settings.setValue( "/IconSize", cmbIconSize->currentText() );
   settings.setValue( "/fontPointSize", spinFontSize->value() );
+
+  // rasters settings
+  settings.setValue( "/Raster/defaultRedBand", spnRed->value() );
+  settings.setValue( "/Raster/defaultGreenBand", spnGreen->value() );
+  settings.setValue( "/Raster/defaultBlueBand", spnBlue->value() );
+
+  if ( cboxContrastEnhancementAlgorithm->currentText() == tr( "No Stretch" ) )
+  {
+    settings.setValue( "/Raster/defaultContrastEnhancementAlgorithm", "NoEnhancement" );
+  }
+  else if ( cboxContrastEnhancementAlgorithm->currentText() == tr( "Stretch To MinMax" ) )
+  {
+    settings.setValue( "/Raster/defaultContrastEnhancementAlgorithm", "StretchToMinimumMaximum" );
+  }
+  else if ( cboxContrastEnhancementAlgorithm->currentText() == tr( "Stretch And Clip To MinMax" ) )
+  {
+    settings.setValue( "/Raster/defaultContrastEnhancementAlgorithm", "StretchAndClipToMinimumMaximum" );
+  }
+  else if ( cboxContrastEnhancementAlgorithm->currentText() == tr( "Clip To MinMax" ) )
+  {
+    settings.setValue( "/Raster/defaultContrastEnhancementAlgorithm", "ClipToMinimumMaximum" );
+  }
+
+  settings.setValue( "/Raster/useStandardDeviation", chkUseStandardDeviation->isChecked() );
+  settings.setValue( "/Raster/defaultStandardDeviation", spnThreeBandStdDev->value() );
+
 
   settings.setValue( "/Map/updateThreshold", spinBoxUpdateThreshold->value() );
   //check behaviour so default projection when new layer is added with no

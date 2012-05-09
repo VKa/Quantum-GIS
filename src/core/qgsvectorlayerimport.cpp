@@ -153,9 +153,14 @@ bool QgsVectorLayerImport::flushBuffer()
 
   if ( !mProvider->addFeatures( mFeatureBuffer ) )
   {
-    mErrorMessage = QObject::tr( "Creation error for features from #%1 to #%2" )
+    QStringList errors = mProvider->errors();
+    mProvider->clearErrors();
+
+    mErrorMessage = QObject::tr( "Creation error for features from #%1 to #%2. Provider errors was: \n%3" )
                     .arg( mFeatureBuffer.first().id() )
-                    .arg( mFeatureBuffer.last().id() );
+                    .arg( mFeatureBuffer.last().id() )
+                    .arg( errors.join( "\n" ) );
+
     mError = ErrFeatureWriteFailed;
     mErrorCount += mFeatureBuffer.count();
 
@@ -210,8 +215,14 @@ QgsVectorLayerImport::importLayer( QgsVectorLayer* layer,
     }
   }
 
+  bool overwrite = false;
+  if ( options )
+  {
+    overwrite = options->take( "overwrite" ).toBool();
+  }
+
   QgsVectorLayerImport * writer =
-    new QgsVectorLayerImport( uri, providerKey, fields, layer->wkbType(), outputCRS, false, options );
+    new QgsVectorLayerImport( uri, providerKey, fields, layer->wkbType(), outputCRS, overwrite, options );
 
   // check whether file creation was successful
   ImportError err = writer->hasError();
@@ -257,6 +268,15 @@ QgsVectorLayerImport::importLayer( QgsVectorLayer* layer,
   // write all features
   while ( layer->nextFeature( fet ) )
   {
+    if ( writer->errorCount() > 1000 )
+    {
+      if ( errorMessage )
+      {
+        *errorMessage += "\n" + QObject::tr( "Stopping after %1 errors" ).arg( writer->errorCount() );
+      }
+      break;
+    }
+
     if ( onlySelected && !ids.contains( fet.id() ) )
       continue;
 
@@ -293,17 +313,6 @@ QgsVectorLayerImport::importLayer( QgsVectorLayer* layer,
       {
         *errorMessage += "\n" + writer->errorMessage();
       }
-
-      if ( writer->errorCount() > 1000 )
-      {
-        if ( errorMessage )
-        {
-          *errorMessage += "\n" + QObject::tr( "Stopping after %1 errors" ).arg( writer->errorCount() );
-        }
-
-        n = -1;
-        break;
-      }
     }
     n++;
   }
@@ -327,7 +336,7 @@ QgsVectorLayerImport::importLayer( QgsVectorLayer* layer,
 
   if ( errorMessage )
   {
-    if ( n > 0 && errors > 0 )
+    if ( errors > 0 )
     {
       *errorMessage += "\n" + QObject::tr( "Only %1 of %2 features written." ).arg( n - errors ).arg( n );
     }

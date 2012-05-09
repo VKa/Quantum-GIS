@@ -22,7 +22,6 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QPainter>
-#include <QSettings>
 #include <QTime>
 #include <QDesktopServices>
 
@@ -86,12 +85,16 @@ void TestQgsRasterLayer::initTestCase()
   QFileInfo myRasterFileInfo( myFileName );
   mpRasterLayer = new QgsRasterLayer( myRasterFileInfo.filePath(),
                                       myRasterFileInfo.completeBaseName() );
+  qDebug() << "tenbyteraster metadata: " << mpRasterLayer->dataProvider()->metadata();
   QFileInfo myLandsatRasterFileInfo( myLandsatFileName );
   mpLandsatRasterLayer = new QgsRasterLayer( myLandsatRasterFileInfo.filePath(),
       myLandsatRasterFileInfo.completeBaseName() );
+  qDebug() << "landsat metadata: " << mpLandsatRasterLayer->dataProvider()->metadata();
   // Register the layer with the registry
-  QgsMapLayerRegistry::instance()->addMapLayer( mpRasterLayer );
-  QgsMapLayerRegistry::instance()->addMapLayer( mpLandsatRasterLayer );
+  QgsMapLayerRegistry::instance()->addMapLayers(
+    QList<QgsMapLayer *>() << mpRasterLayer );
+  QgsMapLayerRegistry::instance()->addMapLayers(
+    QList<QgsMapLayer *>() << mpLandsatRasterLayer );
   // add the test layer to the maprender
   mpMapRenderer = new QgsMapRenderer();
   QStringList myLayers;
@@ -183,11 +186,13 @@ void TestQgsRasterLayer::buildExternalOverviews()
   //and make a copy of the landsat raster into the temp dir
   QString myTempPath = QDir::tempPath() + QDir::separator();
   QFile::remove( myTempPath + "landsat.tif.ovr" );
-  QFile::copy( mTestDataDir + "landsat.tif", myTempPath + "landsat.tif" );
+  QFile::remove( myTempPath + "landsat.tif" );
+  QVERIFY( QFile::copy( mTestDataDir + "landsat.tif", myTempPath + "landsat.tif" ) );
   QFileInfo myRasterFileInfo( myTempPath + "landsat.tif" );
   QgsRasterLayer * mypLayer = new QgsRasterLayer( myRasterFileInfo.filePath(),
       myRasterFileInfo.completeBaseName() );
 
+  QVERIFY( mypLayer->isValid() );
 
   //
   // Ok now we can go on to test
@@ -232,15 +237,17 @@ void TestQgsRasterLayer::registry()
 {
   QString myTempPath = QDir::tempPath() + QDir::separator();
   QFile::remove( myTempPath + "landsat.tif.ovr" );
-  QFile::copy( mTestDataDir + "landsat.tif", myTempPath + "landsat.tif" );
+  QFile::remove( myTempPath + "landsat.tif" );
+  QVERIFY( QFile::copy( mTestDataDir + "landsat.tif", myTempPath + "landsat.tif" ) );
   QFileInfo myRasterFileInfo( myTempPath + "landsat.tif" );
   QgsRasterLayer * mypLayer = new QgsRasterLayer( myRasterFileInfo.filePath(),
       myRasterFileInfo.completeBaseName() );
+  QVERIFY( mypLayer->isValid() );
 
-  QgsMapLayerRegistry::instance()->addMapLayer( mypLayer, false );
-  QgsMapLayerRegistry::instance()->removeMapLayer( mypLayer->id() );
-  //cleanup
-  //delete mypLayer;
+  QgsMapLayerRegistry::instance()->addMapLayers(
+    QList<QgsMapLayer *>() << mypLayer, false );
+  QgsMapLayerRegistry::instance()->removeMapLayers(
+    QStringList() << mypLayer->id() );
 }
 
 //
@@ -251,10 +258,8 @@ void TestQgsRasterLayer::registry()
 bool TestQgsRasterLayer::render( QString theTestType )
 {
   mReport += "<h2>" + theTestType + "</h2>\n";
-  QString myDataDir( TEST_DATA_DIR ); //defined in CmakeLists.txt
-  QString myTestDataDir = myDataDir + QDir::separator();
   QgsRenderChecker myChecker;
-  myChecker.setExpectedImage( myTestDataDir + "expected_" + theTestType + ".png" );
+  myChecker.setControlName( "expected_" + theTestType );
   myChecker.setMapRenderer( mpMapRenderer );
   bool myResultFlag = myChecker.runTest( theTestType );
   mReport += "\n\n\n" + myChecker.report();
@@ -283,4 +288,3 @@ bool TestQgsRasterLayer::setQml( QString theType )
 
 QTEST_MAIN( TestQgsRasterLayer )
 #include "moc_testqgsrasterlayer.cxx"
-

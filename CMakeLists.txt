@@ -1,8 +1,8 @@
 SET(CPACK_PACKAGE_VERSION_MAJOR "1")
-SET(CPACK_PACKAGE_VERSION_MINOR "9")
-SET(CPACK_PACKAGE_VERSION_PATCH "90")
+SET(CPACK_PACKAGE_VERSION_MINOR "8")
+SET(CPACK_PACKAGE_VERSION_PATCH "0")
 SET(COMPLETE_VERSION ${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH})
-SET(RELEASE_NAME "Alpha")
+SET(RELEASE_NAME "Lisboa")
 SET(PROJECT_VERSION ${COMPLETE_VERSION})
 PROJECT(qgis${PROJECT_VERSION})
 IF (APPLE)
@@ -55,13 +55,10 @@ ENDIF (WITH_POSTGRESQL)
 
 SET (WITH_INTERNAL_QWTPOLAR TRUE CACHE BOOL "Use internal build of QwtPolar")
 
-SET (WITH_INTERNAL_SPATIALINDEX TRUE CACHE BOOL "Use internal build of Spatialindex")
-
 SET (WITH_SPATIALITE TRUE CACHE BOOL "Determines whether SPATIALITE support should be built")
-
 IF (WITH_SPATIALITE)
-  SET (WITH_INTERNAL_SPATIALITE TRUE CACHE BOOL "Determines whether SPATIALITE support should be built internally")
-  SET (WITH_PYSPATIALITE TRUE CACHE BOOL "Determines whether PYSPATIALITE should be built")
+  SET (WITH_INTERNAL_SPATIALITE FALSE CACHE BOOL "Determines whether SPATIALITE support should be built internally")
+  SET (WITH_PYSPATIALITE FALSE CACHE BOOL "Determines whether PYSPATIALITE should be built")
   IF(WITH_INTERNAL_SPATIALITE)
     SET(SPATIALITE_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/src/core/spatialite/headers)
     SET(HAVE_SPATIALITE TRUE)
@@ -87,10 +84,29 @@ IF (ANDROID)
 ELSE (ANDROID)
     SET (DEFAULT_WITH_QTMOBILITY FALSE)
 ENDIF (ANDROID)
-SET (WITH_QTMOBILITY ${DEFAULT_WITH_QTMOBILITY} CACHE BOOL "Determines QtMobility related code should be build (for example internal GPS)")
+SET (WITH_QTMOBILITY ${DEFAULT_WITH_QTMOBILITY} CACHE BOOL "Determines if QtMobility related code should be build (for example internal GPS)")
 IF (WITH_QTMOBILITY)
     FIND_PACKAGE(QtMobility 1.1.0)
 ENDIF (WITH_QTMOBILITY)
+
+IF (ANDROID)
+    SET (DEFAULT_WITH_TOUCH TRUE)
+ELSE (ANDROID)
+    SET (DEFAULT_WITH_TOUCH FALSE)
+ENDIF (ANDROID)
+#Add a touch mode if Qt has Qt Gestures (starting from 4.6)
+IF ( (QT_VERSION_MAJOR EQUAL 4 AND QT_VERSION_MINOR GREATER 5) OR QT_VERSION_MAJOR GREATER 4 )
+    SET (WITH_TOUCH ${DEFAULT_WITH_TOUCH} CACHE BOOL "Determines if touch interface related code should be build")
+ELSE ( (QT_VERSION_MAJOR EQUAL 4 AND QT_VERSION_MINOR GREATER 5) OR QT_VERSION_MAJOR GREATER 4 )
+    SET (WITH_TOUCH FALSE)
+ENDIF ( (QT_VERSION_MAJOR EQUAL 4 AND QT_VERSION_MINOR GREATER 5) OR QT_VERSION_MAJOR GREATER 4 )
+IF (WITH_TOUCH)
+    ADD_DEFINITIONS(-DHAVE_TOUCH)
+    MESSAGE (STATUS "Touch support enabled")
+ELSE (WITH_TOUCH)
+    MESSAGE (STATUS "Touch support disabled")
+ENDIF (WITH_TOUCH)
+
 
 SET (WITH_GLOBE FALSE CACHE BOOL "Determines whether Globe plugin should be built")
 IF (WITH_GLOBE)
@@ -151,10 +167,7 @@ FIND_PACKAGE(Proj)
 FIND_PACKAGE(GEOS)
 FIND_PACKAGE(GDAL)
 FIND_PACKAGE(Expat)
-
-IF (NOT WITH_INTERNAL_SPATIALINDEX)
-  FIND_PACKAGE(Spatialindex REQUIRED)
-ENDIF(NOT WITH_INTERNAL_SPATIALINDEX)
+FIND_PACKAGE(Spatialindex REQUIRED)
 
 FIND_PACKAGE(Qwt REQUIRED)
 IF (NOT WITH_INTERNAL_QWTPOLAR)
@@ -191,6 +204,9 @@ IF (SPATIALITE_FOUND)
   SET (HAVE_SPATIALITE TRUE)
 ENDIF (SPATIALITE_FOUND)
 
+# following variable is used in qgsconfig.h
+SET (HAVE_MSSQL TRUE)
+
 #############################################################
 # search for Qt4
 SET(QT_MIN_VERSION 4.4.0)
@@ -215,8 +231,18 @@ ENDIF(WITH_DESKTOP)
 IF (ENABLE_TESTS)
   SET( QT_USE_QTTEST  TRUE )
   ENABLE_TESTING()
+  # Adds some testing specific build targets e.g. make Experimental
+  INCLUDE(Dart)
   # Define "make check" as alias for "make test" - thanks geos :-)
-  add_custom_target(check COMMAND ctest)
+  add_custom_target(check COMMAND ctest --output-on-failure)
+  # Additional test configuration options e.g. max upload size of test report
+  CONFIGURE_FILE(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake_templates/CTestCustom.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/CTestCustom.cmake"
+    IMMEDIATE @ONLY)
+  # For server side testing we have no X, we can use xfvb as a fake x
+  # sudo apt-get install xfvb
+  add_custom_target(check-no-x COMMAND xvfb-run --server-args="-screen 10,1024x768x24" ctest --output-on-failure)
 ENDIF (ENABLE_TESTS)
 
 
@@ -345,6 +371,9 @@ ELSE (WIN32)
     SET (DEFAULT_INCLUDE_SUBDIR  include/qgis)
     # path for framework references
     SET (CMAKE_INSTALL_NAME_DIR @executable_path/${QGIS_FW_SUBDIR})
+    IF (WITH_GLOBE)
+        SET (OSG_PLUGINS_PATH "" CACHE PATH "Path to OSG plugins for bundling")
+    ENDIF (WITH_GLOBE)
 
   ELSE (APPLE)
     # UNIX
@@ -377,6 +406,12 @@ IF (WIN32)
   SET(DLLIMPORT "__declspec(dllimport)")
   SET(DLLEXPORT "__declspec(dllexport)")
 ELSE (WIN32)
+  IF(PEDANTIC AND NOT APPLE)
+    SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--no-undefined")
+    SET(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,--no-undefined")
+    SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--no-undefined")
+  ENDIF(PEDANTIC AND NOT APPLE)
+
   SET(DLLIMPORT "")
   SET(DLLEXPORT "")
 ENDIF(WIN32)
@@ -469,23 +504,21 @@ LINK_DIRECTORIES(${CMAKE_BINARY_DIR}/src/core ${CMAKE_BINARY_DIR}/src/gui)
 
 #############################################################
 # create qgsversion.h
-
 FIND_FILE(GIT_MARKER index PATHS ${CMAKE_SOURCE_DIR}/.git)
-
 IF (GIT_MARKER)
-  FIND_PROGRAM(GIT git PATHS c:/cygwin/bin)
-  IF(GIT)
+  FIND_PROGRAM(GITCOMMAND git PATHS c:/cygwin/bin)
+  IF(GITCOMMAND)
     IF(MSVC)
       ADD_CUSTOM_COMMAND(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/qgsversion.h
-        COMMAND for /f \"usebackq tokens=1\" %%a in "(`\"${GIT}\" log -n1 --oneline`)" do echo \#define QGSVERSION \"%%a\" >${CMAKE_CURRENT_BINARY_DIR}/qgsversion.h
+        COMMAND for /f \"usebackq tokens=1\" %%a in "(`\"${GITCOMMAND}\" log -n1 --oneline`)" do echo \#define QGSVERSION \"%%a\" >${CMAKE_CURRENT_BINARY_DIR}/qgsversion.h
         MAIN_DEPENDENCY ${GIT_MARKER}
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
       )
     ELSE(MSVC)
       EXECUTE_PROCESS(
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        COMMAND ${GIT} log -n1 --pretty=%h OUTPUT_VARIABLE REVISION
+        COMMAND ${GITCOMMAND} log -n1 --pretty=%h OUTPUT_VARIABLE REVISION
       )
       STRING(STRIP "${REVISION}" REVISION)
       ADD_CUSTOM_COMMAND(
@@ -495,11 +528,11 @@ IF (GIT_MARKER)
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
       )
     ENDIF(MSVC)
-  ELSE(GIT)
+  ELSE(GITCOMMAND)
     MESSAGE(STATUS "git marker, but no git found - version will be unknown")
     SET(REVISION "unknown")
     FILE(WRITE ${CMAKE_CURRENT_BINARY_DIR}/qgsversion.h "#define QGSVERSION \"unknown\"")
-  ENDIF(GIT)
+  ENDIF(GITCOMMAND)
 ELSE (GIT_MARKER)
   SET(REVISION "exported")
   FILE(WRITE ${CMAKE_CURRENT_BINARY_DIR}/qgsversion.h "#define QGSVERSION \"exported\"")

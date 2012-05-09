@@ -92,15 +92,14 @@ void TestQgsVectorFileWriter::initTestCase()
           "(the ERROR comes from OGR and is not very intuitive)\n"
           "******************\n" );
   // init QGIS's paths - true means that all path will be inited from prefix
-  QString qgisPath = QCoreApplication::applicationDirPath();
-  QgsApplication::setPrefixPath( INSTALL_PREFIX, true );
+  QgsApplication::init();
   QgsApplication::showSettings();
   //create some objects that will be used in all tests...
 
   mEncoding = "UTF-8";
   QgsField myField1( "Field1", QVariant::String, "String", 10, 0, "Field 1 comment" );
   mFields.insert( 0, myField1 );
-  mCRS = QgsCoordinateReferenceSystem( GEOWkt );
+  mCRS = QgsCoordinateReferenceSystem( GEOWKT );
   mPoint1 = QgsPoint( 10.0, 10.0 );
   mPoint2 = QgsPoint( 15.0, 10.0 );
   mPoint3 = QgsPoint( 15.0, 12.0 );

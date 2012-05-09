@@ -155,6 +155,14 @@ QgsRasterLayer::QgsRasterLayer( int dummy,
   bool loadDefaultStyleFlag = false ; // ???
   setDataProvider( providerKey, layers, styles, format, crs, loadDefaultStyleFlag );
 
+  // load default style if provider is gdal and if no style was given
+  // this should be an argument like in the other constructor
+  if ( mValid && providerKey == "gdal" && layers.isEmpty() && styles.isEmpty() )
+  {
+    bool defaultLoadedFlag = false;
+    loadDefaultStyle( defaultLoadedFlag );
+  }
+
   // Default for the popup menu
   // TODO: popMenu = 0;
 
@@ -2270,6 +2278,12 @@ void QgsRasterLayer::setDataProvider( QString const & provider,
     return;
   }
 
+  if ( provider == "gdal" )
+  {
+    // make sure that the /vsigzip or /vsizip is added to uri, if applicable
+    mDataSource = mDataProvider->dataSourceUri();
+  }
+
   mDataProvider->addLayers( layers, styles );
   mDataProvider->setImageEncoding( format );
   mDataProvider->setImageCrs( theCrs );
@@ -2443,9 +2457,10 @@ void QgsRasterLayer::setDataProvider( QString const & provider,
     mDrawingStyle = MultiBandColor;  //sensible default
 
     // read standard deviations
-    if ( mContrastEnhancementAlgorithm == QgsContrastEnhancement::StretchToMinimumMaximum )
+    if ( mContrastEnhancementAlgorithm == QgsContrastEnhancement::StretchToMinimumMaximum &&
+         myQSettings.value( "/Raster/useStandardDeviation", false ).toBool() )
     {
-      setStandardDeviations( myQSettings.value( "/Raster/defaultStandardDeviation", 2.0 ).toInt() );
+      setStandardDeviations( myQSettings.value( "/Raster/defaultStandardDeviation", 2.0 ).toDouble() );
     }
   }
   else                        //GrayOrUndefined
@@ -2466,9 +2481,10 @@ void QgsRasterLayer::setDataProvider( QString const & provider,
     }
 
     // read standard deviations
-    if ( mContrastEnhancementAlgorithm == QgsContrastEnhancement::StretchToMinimumMaximum )
+    if ( mContrastEnhancementAlgorithm == QgsContrastEnhancement::StretchToMinimumMaximum &&
+         myQSettings.value( "/Raster/useStandardDeviation", false ).toBool() )
     {
-      setStandardDeviations( myQSettings.value( "/Raster/defaultStandardDeviation", 2.0 ).toInt() );
+      setStandardDeviations( myQSettings.value( "/Raster/defaultStandardDeviation", 2.0 ).toDouble() );
     }
   }
   // Debug
@@ -4580,7 +4596,11 @@ void *QgsRasterLayer::readData( int bandNo, QgsRasterViewPort *viewPort )
       viewPort->mDrawnExtent.xMaximum(),
       viewPort->mDrawnExtent.yMaximum()
     );
-    mDataProvider->readBlock( bandNo, partExtent, viewPort->drawableAreaXDim, viewPort->drawableAreaYDim, viewPort->mSrcCRS, viewPort->mDestCRS, data );
+    mDataProvider->readBlock( bandNo, partExtent,
+                              viewPort->drawableAreaXDim,
+                              viewPort->drawableAreaYDim,
+                              viewPort->mSrcCRS,
+                              viewPort->mDestCRS, data );
   }
   return data;
 }
@@ -4920,7 +4940,7 @@ bool QgsRasterImageBuffer::createNextPartImage()
   //create the QImage
   if ( mWritingEnabled )
   {
-    mCurrentImage = new QImage( xSize, ySize, QImage::Format_ARGB32 );
+    mCurrentImage = new QImage( xSize, rasterYSize, QImage::Format_ARGB32 );
     mCurrentImage->fill( qRgba( 255, 255, 255, 0 ) );
   }
   else

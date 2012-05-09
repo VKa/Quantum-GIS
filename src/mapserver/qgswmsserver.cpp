@@ -297,8 +297,26 @@ QImage* QgsWMSServer::getLegendGraphics()
     return 0;
   }
 
+  //scale
+  double scaleDenominator = -1;
+  QMap<QString, QString>::const_iterator scaleIt = mParameterMap.find( "SCALE" );
+  if ( scaleIt != mParameterMap.constEnd() )
+  {
+    bool conversionSuccess;
+    double scaleValue = scaleIt.value().toDouble( &conversionSuccess );
+    if ( conversionSuccess )
+    {
+      scaleDenominator = scaleValue;
+    }
+  }
+
   QgsCoordinateReferenceSystem dummyCRS;
-  QStringList layerIds = layerSet( layersList, stylesList, dummyCRS );
+  QStringList layerIds = layerSet( layersList, stylesList, dummyCRS, scaleDenominator );
+  if ( layerIds.size() < 1 )
+  {
+    return 0;
+  }
+
   QgsLegendModel legendModel;
   legendModel.setLayerSet( layerIds );
 
@@ -669,6 +687,10 @@ QImage* QgsWMSServer::printCompositionToImage( QgsComposition* c ) const
 
 QImage* QgsWMSServer::getMap()
 {
+  if ( !checkMaximumWidthHeight() )
+  {
+    throw QgsMapServiceException( "Size error", "The requested map size is too large" );
+  }
   QStringList layersList, stylesList, layerIdList;
   QImage* theImage = initializeRendering( layersList, stylesList, layerIdList );
 
@@ -1120,9 +1142,9 @@ int QgsWMSServer::configureMapRender( const QPaintDevice* paintDevice ) const
   }
   mMapRenderer->setMapUnits( mapUnits );
 
-  // Change x- and y- of BBOX for WMS 1.3.0 and geographic coordinate systems
+  // Change x- and y- of BBOX for WMS 1.3.0 if axis inverted
   QString version = mParameterMap.value( "VERSION", "1.3.0" );
-  if ( version == "1.3.0" && outputCRS.geographicFlag() )
+  if ( version == "1.3.0" && outputCRS.axisInverted() )
   {
     //switch coordinates of extent
     double tmp;
@@ -1313,7 +1335,11 @@ int QgsWMSServer::featureInfoFromVectorLayer( QgsVectorLayer* layer,
       QMap<int, QString>::const_iterator aliasIt = aliasMap.find( it.key() );
       if ( aliasIt != aliasMap.constEnd() )
       {
-        attributeName = aliasIt.value();
+        QString aliasName = aliasIt.value();
+        if ( !aliasName.isEmpty() )
+        {
+          attributeName = aliasName;
+        }
       }
 
       QDomElement attributeElement = infoDocument.createElement( "Attribute" );
@@ -1386,7 +1412,7 @@ int QgsWMSServer::featureInfoFromRasterLayer( QgsRasterLayer* layer,
 
 QStringList QgsWMSServer::layerSet( const QStringList &layersList,
                                     const QStringList &stylesList,
-                                    const QgsCoordinateReferenceSystem &destCRS ) const
+                                    const QgsCoordinateReferenceSystem &destCRS, double scaleDenominator ) const
 {
   Q_UNUSED( destCRS );
   QStringList layerKeys;
@@ -1422,8 +1448,15 @@ QStringList QgsWMSServer::layerSet( const QStringList &layersList,
       QgsDebugMsg( QString( "Checking layer: %1" ).arg( theMapLayer->name() ) );
       if ( theMapLayer )
       {
-        layerKeys.push_front( theMapLayer->id() );
-        QgsMapLayerRegistry::instance()->addMapLayer( theMapLayer, false );
+        //test if layer is visible in requested scale
+        bool useScaleConstraint = ( scaleDenominator > 0 && theMapLayer->hasScaleBasedVisibility() );
+        if ( !useScaleConstraint ||
+             ( theMapLayer->minimumScale() <= scaleDenominator && theMapLayer->maximumScale() >= scaleDenominator ) )
+        {
+          layerKeys.push_front( theMapLayer->id() );
+          QgsMapLayerRegistry::instance()->addMapLayers(
+            QList<QgsMapLayer *>() << theMapLayer, false );
+        }
       }
       else
       {
@@ -1993,4 +2026,32 @@ void QgsWMSServer::clearFeatureSelections( const QStringList& layerIds ) const
   }
 
   return;
+}
+
+bool QgsWMSServer::checkMaximumWidthHeight() const
+{
+  //test if maxWidth / maxHeight set and WIDTH / HEIGHT parameter is in the range
+  if ( mConfigParser->maxWidth() != -1 )
+  {
+    QMap<QString, QString>::const_iterator widthIt = mParameterMap.find( "WIDTH" );
+    if ( widthIt != mParameterMap.constEnd() )
+    {
+      if ( widthIt->toInt() > mConfigParser->maxWidth() )
+      {
+        return false;
+      }
+    }
+  }
+  if ( mConfigParser->maxHeight() != -1 )
+  {
+    QMap<QString, QString>::const_iterator heightIt = mParameterMap.find( "HEIGHT" );
+    if ( heightIt != mParameterMap.constEnd() )
+    {
+      if ( heightIt->toInt() > mConfigParser->maxHeight() )
+      {
+        return false;
+      }
+    }
+  }
+  return true;
 }

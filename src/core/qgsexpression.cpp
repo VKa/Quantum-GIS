@@ -333,12 +333,26 @@ static QVariant fcnFeatureId( const QVariantList& , QgsFeature* f, QgsExpression
 static QVariant fcnX( const QVariantList& , QgsFeature* f, QgsExpression* )
 {
   ENSURE_GEOM_TYPE( f, g, QGis::Point );
-  return g->asPoint().x();
+  if ( g->isMultipart() )
+  {
+    return g->asMultiPoint()[ 0 ].x();
+  }
+  else
+  {
+    return g->asPoint().x();
+  }
 }
 static QVariant fcnY( const QVariantList& , QgsFeature* f, QgsExpression* )
 {
   ENSURE_GEOM_TYPE( f, g, QGis::Point );
-  return g->asPoint().y();
+  if ( g->isMultipart() )
+  {
+    return g->asMultiPoint()[ 0 ].y();
+  }
+  else
+  {
+    return g->asPoint().y();
+  }
 }
 
 static QVariant pointAt( const QVariantList& values, QgsFeature* f, QgsExpression* parent ) // helper function
@@ -664,11 +678,11 @@ QgsExpression::Node* QgsExpression::Node::createFromOgcFilter( QDomElement &elem
   {
     return QgsExpression::NodeLiteral::createFromOgcFilter( element, errorMessage );
   }
-  else if ( element.localName() == "Function")
+  else if ( element.localName() == "Function" )
   {
     return QgsExpression::NodeFunction::createFromOgcFilter( element, errorMessage );
   }
-  else if ( element.localName() == "PropertyName")
+  else if ( element.localName() == "PropertyName" )
   {
     return QgsExpression::NodeColumnRef::createFromOgcFilter( element, errorMessage );
   }
@@ -826,11 +840,11 @@ QgsExpression::Node* QgsExpression::NodeUnaryOperator::createFromOgcFilter( QDom
     if ( !operand )
     {
       if ( errorMessage.isEmpty() )
-       errorMessage = QString( "invalid operand for '%1' unary operator" ).arg( ogcOperatorName );
+        errorMessage = QString( "invalid operand for '%1' unary operator" ).arg( ogcOperatorName );
       return NULL;
     }
 
-    return new QgsExpression::NodeUnaryOperator( ( UnaryOperator ) i, operand );
+    return new QgsExpression::NodeUnaryOperator(( UnaryOperator ) i, operand );
   }
 
   errorMessage = QString( "%1 unary operator not supported." ).arg( element.tagName() );
@@ -975,10 +989,10 @@ QVariant QgsExpression::NodeBinaryOperator::eval( QgsExpression* parent, QgsFeat
           matches = QRegExp( regexp ).indexIn( str ) != -1;
         }
 
-	if( mOp == boNotLike || mOp == boNotILike )
-	{
-	  matches = !matches;
-	}
+        if ( mOp == boNotLike || mOp == boNotILike )
+        {
+          matches = !matches;
+        }
 
         return matches ? TVL_True : TVL_False;
       }
@@ -1085,8 +1099,8 @@ void QgsExpression::NodeBinaryOperator::toOgcFilter( QDomDocument &doc, QDomElem
 
       element.appendChild( eqElem );
     }
-    else if ( ( opLeftLiteral && opLeftLiteral->value().isNull() ) ||
-              ( opRightLiteral && opRightLiteral->value().isNull() ) )
+    else if (( opLeftLiteral && opLeftLiteral->value().isNull() ) ||
+             ( opRightLiteral && opRightLiteral->value().isNull() ) )
     {
       // at least one operand is NULL, use <ogc:PropertyIsNull> element
       QDomElement isNullElem = doc.createElement( "ogc:PropertyIsNull" );
@@ -1186,7 +1200,7 @@ QgsExpression::Node* QgsExpression::NodeBinaryOperator::createFromOgcFilter( QDo
     if ( !opLeft )
     {
       if ( errorMessage.isEmpty() )
-       errorMessage = QString( "invalid left operand for '%1' binary operator" ).arg( ogcOperatorName );
+        errorMessage = QString( "invalid left operand for '%1' binary operator" ).arg( ogcOperatorName );
       break;
     }
 
@@ -1195,11 +1209,11 @@ QgsExpression::Node* QgsExpression::NodeBinaryOperator::createFromOgcFilter( QDo
     if ( !opRight )
     {
       if ( errorMessage.isEmpty() )
-       errorMessage = QString( "invalid right operand for '%1' binary operator" ).arg( ogcOperatorName );
+        errorMessage = QString( "invalid right operand for '%1' binary operator" ).arg( ogcOperatorName );
       break;
     }
 
-    return new QgsExpression::NodeBinaryOperator( ( BinaryOperator ) i, opLeft, opRight );
+    return new QgsExpression::NodeBinaryOperator(( BinaryOperator ) i, opLeft, opRight );
   }
 
   if ( !opLeft && !opRight )

@@ -34,6 +34,11 @@
 #include "qgsdataprovider.h"
 #include "qgslogger.h"
 #include "qgsproviderregistry.h"
+#include "qgsconfig.h"
+
+// use GDAL VSI mechanism
+#include "cpl_vsi.h"
+#include "cpl_string.h"
 
 // shared icons
 const QIcon &QgsLayerItem::iconPoint()
@@ -122,6 +127,28 @@ const QIcon &QgsDataCollectionItem::iconDir()
   return icon;
 }
 
+const QIcon &QgsFavouritesItem::iconFavourites()
+{
+  static QIcon icon;
+
+  if ( icon.isNull() )
+    icon = QIcon( getThemePixmap( "/mIconFavourites.png" ) );
+
+  return icon;
+}
+
+const QIcon &QgsZipItem::iconZip()
+{
+  static QIcon icon;
+
+  if ( icon.isNull() )
+    icon = QIcon( getThemePixmap( "/mIconZip.png" ) );
+// icon from http://www.softicons.com/free-icons/application-icons/mega-pack-icons-1-by-nikolay-verin/winzip-folder-icon
+
+  return icon;
+}
+
+
 QgsDataItem::QgsDataItem( QgsDataItem::Type type, QgsDataItem* parent, QString name, QString path )
     : QObject( parent ), mType( type ), mParent( parent ), mPopulated( false ), mName( name ), mPath( path )
 {
@@ -133,8 +160,10 @@ QPixmap QgsDataItem::getThemePixmap( const QString theName )
 {
   QString myPreferredPath = QgsApplication::activeThemePath()  + QDir::separator() + theName;
   QString myDefaultPath = QgsApplication::defaultThemePath()  + QDir::separator() + theName;
-  //QgsDebugMsg( "myPreferredPath = " + myPreferredPath );
-  //QgsDebugMsg( "myDefaultPath = " + myDefaultPath );
+
+  // QgsDebugMsg( "theName = " + theName );
+  // QgsDebugMsg( "myPreferredPath = " + myPreferredPath );
+  // QgsDebugMsg( "myDefaultPath = " + myDefaultPath );
   if ( QFile::exists( myPreferredPath ) )
   {
     return QPixmap( myPreferredPath );
@@ -172,6 +201,13 @@ QVector<QgsDataItem*> QgsDataItem::createChildren( )
 
 void QgsDataItem::populate()
 {
+  if ( mPopulated )
+    return;
+
+  QgsDebugMsg( "mPath = " + mPath );
+
+  QApplication::setOverrideCursor( Qt::WaitCursor );
+
   QVector<QgsDataItem*> children = createChildren( );
   foreach( QgsDataItem *child, children )
   {
@@ -179,6 +215,8 @@ void QgsDataItem::populate()
     addChildItem( child );
   }
   mPopulated = true;
+
+  QApplication::restoreOverrideCursor();
 }
 
 int QgsDataItem::rowCount()
@@ -194,13 +232,26 @@ bool QgsDataItem::hasChildren()
 
 void QgsDataItem::addChildItem( QgsDataItem * child, bool refresh )
 {
-  QgsDebugMsg( QString( "add child #%1 - %2" ).arg( mChildren.size() ).arg( child->mName ) );
+  QgsDebugMsg( QString( "add child #%1 - %2 - %3" ).arg( mChildren.size() ).arg( child->mName ).arg( child->mType ) );
 
   int i;
-  for ( i = 0; i < mChildren.size(); i++ )
+  if ( type() == Directory )
   {
-    if ( mChildren[i]->mName.localeAwareCompare( child->mName ) >= 0 )
-      break;
+    for ( i = 0; i < mChildren.size(); i++ )
+    {
+      // sort items by type, so directories are before data items
+      if ( mChildren[i]->mType == child->mType &&
+           mChildren[i]->mName.localeAwareCompare( child->mName ) >= 0 )
+        break;
+    }
+  }
+  else
+  {
+    for ( i = 0; i < mChildren.size(); i++ )
+    {
+      if ( mChildren[i]->mName.localeAwareCompare( child->mName ) >= 0 )
+        break;
+    }
   }
 
   if ( refresh )
@@ -246,6 +297,8 @@ void QgsDataItem::refresh()
 {
   QgsDebugMsg( "mPath = " + mPath );
 
+  QApplication::setOverrideCursor( Qt::WaitCursor );
+
   QVector<QgsDataItem*> items = createChildren( );
 
   // Remove no more present items
@@ -272,6 +325,8 @@ void QgsDataItem::refresh()
     }
     addChildItem( item, true );
   }
+
+  QApplication::restoreOverrideCursor();
 }
 
 bool QgsDataItem::equal( const QgsDataItem *other )
@@ -297,6 +352,8 @@ QgsLayerItem::QgsLayerItem( QgsDataItem* parent, QString name, QString path, QSt
     case Point:      mIcon = iconPoint(); break;
     case Line:       mIcon = iconLine(); break;
     case Polygon:    mIcon = iconPolygon(); break;
+      // TODO add a new icon for generic Vector layers
+    case Vector :    mIcon = iconPolygon(); break;
     case TableLayer: mIcon = iconTable(); break;
     case Raster:     mIcon = iconRaster(); break;
     default:         mIcon = iconDefault(); break;
@@ -336,7 +393,7 @@ QgsDataCollectionItem::~QgsDataCollectionItem()
 }
 
 //-----------------------------------------------------------------------
-QVector<QgsDataProvider*> QgsDirectoryItem::mProviders = QVector<QgsDataProvider*>();
+// QVector<QgsDataProvider*> QgsDirectoryItem::mProviders = QVector<QgsDataProvider*>();
 QVector<QLibrary*> QgsDirectoryItem::mLibraries = QVector<QLibrary*>();
 
 
@@ -369,6 +426,7 @@ QgsDirectoryItem::QgsDirectoryItem( QgsDataItem* parent, QString name, QString p
           QgsDebugMsg( library->fileName() + " has NoDataCapabilities" );
           continue;
         }
+
         QgsDebugMsg( QString( "%1 dataCapabilities : %2" ).arg( library->fileName() ).arg( dataCapabilities() ) );
         mLibraries.append( library );
       }
@@ -388,11 +446,14 @@ QVector<QgsDataItem*> QgsDirectoryItem::createChildren( )
 {
   QVector<QgsDataItem*> children;
   QDir dir( mPath );
+  QSettings settings;
+  bool scanZip = ( settings.value( "/qgis/scanZipInBrowser", 2 ).toInt() != 0 );
+
   QStringList entries = dir.entryList( QDir::AllDirs | QDir::NoDotAndDotDot, QDir::Name | QDir::IgnoreCase );
   foreach( QString subdir, entries )
   {
     QString subdirPath = dir.absoluteFilePath( subdir );
-    qDebug( "creating subdir: %s", subdirPath.toAscii().data() );
+    QgsDebugMsg( QString( "creating subdir: %1" ).arg( subdirPath ) );
 
     QgsDirectoryItem *item = new QgsDirectoryItem( this, subdir, subdirPath );
     // propagate signals up to top
@@ -405,6 +466,18 @@ QVector<QgsDataItem*> QgsDirectoryItem::createChildren( )
   {
     QString path = dir.absoluteFilePath( name );
     QFileInfo fileInfo( path );
+
+    // vsizip support was added to GDAL/OGR 1.6 but GDAL_VERSION_NUM not available here
+    if ( fileInfo.suffix() == "zip" && scanZip )
+    {
+      QgsDataItem * item = QgsZipItem::itemFromPath( this, path, name );
+      if ( item )
+      {
+        children.append( item );
+        continue;
+      }
+    }
+
     foreach( QLibrary *library, mLibraries )
     {
       // we could/should create separate list of providers for each purpose
@@ -438,6 +511,7 @@ QVector<QgsDataItem*> QgsDirectoryItem::createChildren( )
       }
     }
   }
+
   return children;
 }
 
@@ -600,4 +674,340 @@ QgsErrorItem::QgsErrorItem( QgsDataItem* parent, QString error, QString path )
 
 QgsErrorItem::~QgsErrorItem()
 {
+}
+
+QgsFavouritesItem::QgsFavouritesItem( QgsDataItem* parent, QString name, QString path )
+    : QgsDataCollectionItem( parent, name, path )
+{
+  mType = Favourites;
+  mIcon = iconFavourites();
+}
+
+QgsFavouritesItem::~QgsFavouritesItem()
+{
+}
+
+QVector<QgsDataItem*> QgsFavouritesItem::createChildren( )
+{
+  QVector<QgsDataItem*> children;
+  QgsDataItem* item;
+
+  QSettings settings;
+  QStringList favDirs = settings.value( "/browser/favourites", QVariant() ).toStringList();
+
+  foreach( QString favDir, favDirs )
+  {
+    item = new QgsDirectoryItem( this, favDir, favDir );
+    if ( item )
+    {
+      children.append( item );
+    }
+  }
+
+  return children;
+}
+
+//-----------------------------------------------------------------------
+QStringList QgsZipItem::mProviderNames = QStringList();
+QVector<dataItem_t *> QgsZipItem::mDataItemPtr = QVector<dataItem_t*>();
+
+
+QgsZipItem::QgsZipItem( QgsDataItem* parent, QString name, QString path )
+    : QgsDataCollectionItem( parent, name, path )
+{
+  mType = Collection; //Zip??
+  mIcon = iconZip();
+
+  if ( mProviderNames.size() == 0 )
+  {
+    // QStringList keys = QgsProviderRegistry::instance()->providerList();
+    // only use GDAL and OGR providers as we use the VSIFILE mechanism
+    QStringList keys;
+    // keys << "ogr" << "gdal";
+    keys << "gdal" << "ogr";
+
+    QStringList::const_iterator i;
+    for ( i = keys.begin(); i != keys.end(); ++i )
+    {
+      QString k( *i );
+      QgsDebugMsg( "provider " + k );
+      // some providers hangs with empty uri (Postgis) etc...
+      // -> using libraries directly
+      QLibrary *library = QgsProviderRegistry::instance()->providerLibrary( k );
+      if ( library )
+      {
+        dataCapabilities_t * dataCapabilities = ( dataCapabilities_t * ) cast_to_fptr( library->resolve( "dataCapabilities" ) );
+        if ( !dataCapabilities )
+        {
+          QgsDebugMsg( library->fileName() + " does not have dataCapabilities" );
+          continue;
+        }
+        if ( dataCapabilities() == QgsDataProvider::NoDataCapabilities )
+        {
+          QgsDebugMsg( library->fileName() + " has NoDataCapabilities" );
+          continue;
+        }
+        QgsDebugMsg( QString( "%1 dataCapabilities : %2" ).arg( library->fileName() ).arg( dataCapabilities() ) );
+
+        dataItem_t * dataItem = ( dataItem_t * ) cast_to_fptr( library->resolve( "dataItem" ) );
+        if ( ! dataItem )
+        {
+          QgsDebugMsg( library->fileName() + " does not have dataItem" );
+          continue;
+        }
+
+        // mLibraries.append( library );
+        mDataItemPtr.append( dataItem );
+        mProviderNames.append( k );
+      }
+      else
+      {
+        //QgsDebugMsg ( "Cannot get provider " + k );
+      }
+    }
+  }
+
+}
+
+QgsZipItem::~QgsZipItem()
+{
+}
+
+// internal function to scan a vsidir (zip or tar file) recursively
+// hopefully this will make it to GDAL
+char **VSIReadDirRecursive1( const char *pszPath )
+{
+  char **papszFiles = NULL;
+  char **papszFiles1 = NULL;
+  char **papszFiles2 = NULL;
+  VSIStatBufL psStatBuf;
+  char szTemp1[1096];
+  char szTemp2[1096];
+
+  // get listing
+  papszFiles1 = VSIReadDir( pszPath );
+  if ( ! papszFiles1 )
+    return NULL;
+
+  // get files and directories inside listing
+  for ( int i = 0; i < CSLCount( papszFiles1 ); i++ )
+  {
+    // build complete file name for stat
+    strcpy( szTemp1, pszPath );
+    strcat( szTemp1, ( char* )"/" ); // this might not be ok on windows
+    strcat( szTemp1, papszFiles1[i] );
+    // if is file, add it
+    if ( VSIStatL( szTemp1, &psStatBuf ) == 0 &&
+         VSI_ISREG( psStatBuf.st_mode ) )
+    {
+      papszFiles = CSLAddString( papszFiles, papszFiles1[i] );
+    }
+    else if ( VSIStatL( szTemp1, &psStatBuf ) == 0 &&
+              VSI_ISDIR( psStatBuf.st_mode ) )
+    {
+      // add directory entry
+      strcpy( szTemp2, papszFiles1[i] );
+      strcat( szTemp2, ( char* )"/" ); // this might not be ok on windows
+      papszFiles = CSLAddString( papszFiles, szTemp2 );
+      // recursively add files inside directory
+      papszFiles2 = VSIReadDirRecursive1( szTemp1 );
+      if ( papszFiles2 )
+      {
+        for ( int j = 0; j < CSLCount( papszFiles2 ); j++ )
+        {
+          strcpy( szTemp2, papszFiles1[i] );
+          strcat( szTemp2, ( char* )"/" ); // this might not be ok on windows
+          strcat( szTemp2, papszFiles2[j] );
+          papszFiles = CSLAddString( papszFiles, szTemp2 );
+        }
+        CSLDestroy( papszFiles2 );
+      }
+    }
+  }
+  CSLDestroy( papszFiles1 );
+
+  return papszFiles;
+}
+
+QVector<QgsDataItem*> QgsZipItem::createChildren( )
+{
+  QVector<QgsDataItem*> children;
+  QString tmpPath;
+  QString childPath;
+
+  QSettings settings;
+  int scanZipSetting = settings.value( "/qgis/scanZipInBrowser", 2 ).toInt();
+
+  mZipFileList.clear();
+
+  QgsDebugMsg( QString( "path = %1 name= %2 scanZipSetting= %3" ).arg( path() ).arg( name() ).arg( scanZipSetting ) );
+
+  // if scanZipBrowser == 0 (No): skip to the next file
+  if ( scanZipSetting == 0 )
+  {
+    return children;
+  }
+
+  // if scanZipBrowser == 1 (Passthru): do not scan zip and allow to open directly with /vsizip/
+  if ( scanZipSetting == 1 )
+  {
+    mPath = "/vsizip/" + path(); // should check for extension
+    QgsDebugMsg( "set path to " + path() );
+    return children;
+  }
+
+  // get list of files inside zip file
+  QgsDebugMsg( QString( "Open file %1 with gdal vsi" ).arg( path() ) );
+  char **papszSiblingFiles = VSIReadDirRecursive1( QString( "/vsizip/" + path() ).toLocal8Bit().constData() );
+  if ( papszSiblingFiles )
+  {
+    for ( int i = 0; i < CSLCount( papszSiblingFiles ); i++ )
+    {
+      tmpPath = papszSiblingFiles[i];
+      QgsDebugMsg( QString( "Read file %1" ).arg( tmpPath ) );
+      // skip directories (files ending with /)
+      if ( tmpPath.right( 1 ) != "/" )
+        mZipFileList << tmpPath;
+    }
+    CSLDestroy( papszSiblingFiles );
+  }
+  else
+  {
+    QgsDebugMsg( QString( "Error reading %1" ).arg( path() ) );
+  }
+
+  // loop over files inside zip
+  foreach( QString fileName, mZipFileList )
+  {
+    QFileInfo info( fileName );
+    tmpPath = "/vsizip/" + path() + "/" + fileName;
+    QgsDebugMsg( "tmpPath = " + tmpPath );
+
+    // foreach( dataItem_t *dataItem, mDataItemPtr )
+    for ( int i = 0; i < mProviderNames.size(); i++ )
+    {
+      // ugly hack to remove .dbf file if there is a .shp file
+      if ( mProviderNames[i] == "ogr" )
+      {
+        if ( info.suffix() == "dbf" )
+        {
+          if ( mZipFileList.indexOf( fileName.left( fileName.count() - 4 ) + ".shp" ) != -1 )
+            continue;
+        }
+        if ( info.completeSuffix().toLower() == "shp.xml" )
+        {
+          continue;
+        }
+      }
+
+      // try to get data item from provider
+      dataItem_t *dataItem = mDataItemPtr[i];
+      if ( dataItem )
+      {
+        QgsDebugMsg( QString( "trying to load item %1 with %2" ).arg( tmpPath ).arg( mProviderNames[i] ) );
+        QgsDataItem * item = dataItem( tmpPath, this );
+        if ( item )
+        {
+          QgsDebugMsg( "loaded item" );
+          childPath = tmpPath;
+          children.append( item );
+          break;
+        }
+        else
+        {
+          QgsDebugMsg( "not loaded item" );
+        }
+      }
+    }
+
+  }
+
+  if ( children.size() == 1 )
+  {
+    // save the name of the only child so we can get a normal data item from it
+    mPath = childPath;
+  }
+
+  return children;
+}
+
+
+
+QgsDataItem* QgsZipItem::itemFromPath( QgsDataItem* parent, QString path, QString name )
+{
+  QSettings settings;
+  int scanZipSetting = settings.value( "/qgis/scanZipInBrowser", 2 ).toInt();
+  QString vsizipPath = path;
+  int zipFileCount = 0;
+  QFileInfo fileInfo( path );
+  QgsZipItem * zipItem = 0;
+
+  QgsDebugMsg( QString( "path = %1 name= %2 scanZipSetting= %3" ).arg( path ).arg( name ).arg( scanZipSetting ) );
+
+  // if scanZipBrowser == 0 (No): skip to the next file
+  if ( scanZipSetting == 0 )
+  {
+    return 0;
+  }
+  // if scanZipBrowser == 1 (Passthru): do not scan zip and allow to open directly with /vsizip/
+  else if ( scanZipSetting == 1 )
+  {
+    vsizipPath = "/vsizip/" + path;
+    zipItem = 0;
+  }
+  else
+  {
+    zipItem = new QgsZipItem( parent, name, path );
+  }
+
+  if ( zipItem )
+  {
+    // force populate zipItem
+    zipItem->populate();
+    QgsDebugMsg( QString( "Got zipItem with %1 children, path=%2, name=%3" ).arg( zipItem->rowCount() ).arg( zipItem->path() ).arg( zipItem->name() ) );
+  }
+
+// only display if has children
+// other option would be to delay until item is opened, but we would be polluting the tree with empty items
+  if ( zipItem && zipItem->rowCount() > 1 )
+  {
+    QgsDebugMsg( "returning zipItem" );
+    return zipItem;
+  }
+// if 1 or 0 child found, create a single data item using the normal path or the full path given by QgsZipItem
+  else
+  {
+    if ( zipItem )
+    {
+      vsizipPath = zipItem->path();
+      zipFileCount = zipItem->getZipFileList().count();
+      delete zipItem;
+    }
+
+    QgsDebugMsg( QString( "will try to create a normal dataItem from path= %2 or %3" ).arg( path ).arg( vsizipPath ) );
+
+    // try to open using registered providers (gdal and ogr)
+    for ( int i = 0; i < mProviderNames.size(); i++ )
+    {
+      dataItem_t *dataItem = mDataItemPtr[i];
+      if ( dataItem )
+      {
+        QgsDataItem *item = 0;
+        // try first with normal path (Passthru)
+        // this is to simplify .qml handling, and without this some tests will fail
+        // (e.g. testZipItemVectorTransparency(), second test)
+        if (( scanZipSetting == 1 ) ||
+            ( mProviderNames[i] == "ogr" ) ||
+            ( mProviderNames[i] == "gdal" && zipFileCount == 1 ) )
+          item = dataItem( path, parent );
+        // try with /vsizip/
+        if ( ! item )
+          item = dataItem( vsizipPath, parent );
+        if ( item )
+          return item;
+      }
+    }
+  }
+
+  return 0;
 }

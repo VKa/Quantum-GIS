@@ -17,7 +17,7 @@
      <x>0</x>
      <y>0</y>
      <width>1052</width>
-     <height>20</height>
+     <height>28</height>
     </rect>
    </property>
    <widget class="QMenu" name="mEditMenu">
@@ -147,9 +147,13 @@
     <addaction name="mActionAddRasterLayer"/>
     <addaction name="mActionAddPgLayer"/>
     <addaction name="mActionAddSpatiaLiteLayer"/>
+    <addaction name="mActionAddMssqlLayer"/>
     <addaction name="mActionAddWmsLayer"/>
     <addaction name="mActionAddLayerSeparator"/>
     <addaction name="mActionAddWfsLayer"/>
+    <addaction name="separator"/>
+    <addaction name="mActionCopyStyle"/>
+    <addaction name="mActionPasteStyle"/>
     <addaction name="separator"/>
     <addaction name="mActionOpenTable"/>
     <addaction name="mActionSaveEdits"/>
@@ -250,6 +254,7 @@
    <addaction name="mActionAddRasterLayer"/>
    <addaction name="mActionAddPgLayer"/>
    <addaction name="mActionAddSpatiaLiteLayer"/>
+   <addaction name="mActionAddMssqlLayer"/>
    <addaction name="mActionAddWmsLayer"/>
    <addaction name="mActionAddWfsLayer"/>
    <addaction name="mActionNewVectorLayer"/>
@@ -309,6 +314,7 @@
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
+   <addaction name="mActionTouch"/>
    <addaction name="mActionPan"/>
    <addaction name="mActionPanToSelected"/>
    <addaction name="mActionZoomIn"/>
@@ -1094,6 +1100,10 @@
    </property>
   </action>
   <action name="mActionShowRasterCalculator">
+   <property name="icon">
+    <iconset resource="../../images/images.qrc">
+     <normaloff>:/images/themes/default/mActionShowRasterCalculator.png</normaloff>:/images/themes/default/mActionShowRasterCalculator.png</iconset>
+   </property>
    <property name="text">
     <string>Raster calculator ...</string>
    </property>
@@ -1144,6 +1154,18 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+Shift+L</string>
+   </property>
+  </action>
+  <action name="mActionAddMssqlLayer">
+   <property name="icon">
+    <iconset resource="../../images/images.qrc">
+     <normaloff>:/images/themes/default/mActionAddMssqlLayer.png</normaloff>:/images/themes/default/mActionAddMssqlLayer.png</iconset>
+   </property>
+   <property name="text">
+    <string>Add MSSQL Spatial Layer...</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+M</string>
    </property>
   </action>
   <action name="mActionAddWmsLayer">
@@ -1606,6 +1628,21 @@
     <string>Pan Map to Selection</string>
    </property>
   </action>
+  <action name="mActionTouch">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="../../images/images.qrc">
+     <normaloff>:/images/themes/gis/mActionTouch.png</normaloff>:/images/themes/gis/mActionTouch.png</iconset>
+   </property>
+   <property name="text">
+    <string>Touch zoom and pan</string>
+   </property>
+   <property name="toolTip">
+    <string>Touch zoom and pan</string>
+   </property>
+  </action>
   <action name="mActionOffsetCurve">
    <property name="checkable">
     <bool>true</bool>
@@ -1616,6 +1653,24 @@
    </property>
    <property name="text">
     <string>Offset Curve</string>
+   </property>
+  </action>
+  <action name="mActionCopyStyle">
+   <property name="icon">
+    <iconset resource="../../images/images.qrc">
+     <normaloff>:/images/themes/default/mActionEditCopy.png</normaloff>:/images/themes/default/mActionEditCopy.png</iconset>
+   </property>
+   <property name="text">
+    <string>Copy style</string>
+   </property>
+  </action>
+  <action name="mActionPasteStyle">
+   <property name="icon">
+    <iconset resource="../../images/images.qrc">
+     <normaloff>:/images/themes/default/mActionEditPaste.png</normaloff>:/images/themes/default/mActionEditPaste.png</iconset>
+   </property>
+   <property name="text">
+    <string>Paste style</string>
    </property>
   </action>
  </widget>

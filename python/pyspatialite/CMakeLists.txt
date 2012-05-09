@@ -46,6 +46,10 @@ ENDIF (NOT APPLE)
 
 TARGET_LINK_LIBRARIES(pyspatialite qgis_core)
 
+IF(NOT WITH_INTERNAL_SPATIALITE)
+  TARGET_LINK_LIBRARIES(pyspatialite ${SPATIALITE_LIBRARY})
+ENDIF(NOT WITH_INTERNAL_SPATIALITE)
+
 IF (APPLE)
   SET_TARGET_PROPERTIES(pyspatialite PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
 ENDIF (APPLE)
@@ -56,11 +60,7 @@ IF (WIN32)
   SET_TARGET_PROPERTIES(pyspatialite PROPERTIES SUFFIX ".pyd")
 ENDIF (WIN32)
 
-FOREACH(file
-  lib/__init__.py
-  lib/dbapi2.py
-  lib/dump.py
-)
+FOREACH(file lib/__init__.py lib/dbapi2.py lib/dump.py)
   ADD_CUSTOM_COMMAND(TARGET pyspatialite
 	  POST_BUILD
 	  COMMAND ${CMAKE_COMMAND} -E copy ${file} ${PYTHON_OUTPUT_DIRECTORY}/pyspatialite/${file}

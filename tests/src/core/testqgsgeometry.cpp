@@ -185,8 +185,8 @@ void TestQgsGeometry::initTestCase()
   // Runs once before any tests are run
   //
   // init QGIS's paths - true means that all path will be inited from prefix
-  QString qgisPath = QCoreApplication::applicationDirPath();
-  QgsApplication::setPrefixPath( INSTALL_PREFIX, true );
+  QgsApplication::init();
+  QgsApplication::initQgis();
   QgsApplication::showSettings();
   mReport += "<h1>Geometry Tests</h1>\n";
   mReport += "<p><font color=\"green\">Green = polygonA</font></p>\n";
@@ -312,11 +312,9 @@ bool TestQgsGeometry::renderCheck( QString theTestName, QString theComment )
   mReport += "<h3>" + theComment + "</h3>\n";
   QString myTmpDir = QDir::tempPath() + QDir::separator() ;
   QString myFileName = myTmpDir + theTestName + ".png";
-  QString myDataDir( TEST_DATA_DIR ); //defined in CmakeLists.txt
-  QString myTestDataDir = myDataDir + QDir::separator();
   mImage.save( myFileName, "PNG" );
   QgsRenderChecker myChecker;
-  myChecker.setExpectedImage( myTestDataDir + "expected_" + theTestName + ".png" );
+  myChecker.setControlName( "expected_" + theTestName );
   myChecker.setRenderedImage( myFileName );
   bool myResultFlag = myChecker.compareImages( theTestName );
   mReport += myChecker.report();

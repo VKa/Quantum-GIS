@@ -47,6 +47,7 @@ class CORE_EXPORT QgsAction
       Mac,
       Windows,
       Unix,
+      OpenUrl,
     };
 
     QgsAction( ActionType type, QString name, QString action, bool capture ) :
@@ -69,6 +70,7 @@ class CORE_EXPORT QgsAction
     {
       return mType == Generic ||
              mType == GenericPython ||
+             mType == OpenUrl ||
 #if defined(Q_OS_WIN)
              mType == Windows
 #elif defined(Q_OS_MAC)
@@ -144,11 +146,8 @@ class  CORE_EXPORT QgsAttributeAction
 
     /*! Expands the given action, replacing all %'s with the value as
      *  given.
-     *  @deprecated
      */
-    Q_DECL_DEPRECATED QString expandAction( QString action,
-                                            const QgsAttributeMap &attributes,
-                                            uint defaultValueIndex );
+    QString expandAction( QString action, const QgsAttributeMap &attributes, uint defaultValueIndex );
 
     /*! Expands the given action using the expression builder
      *  This function currently replaces each expression between [% and %]

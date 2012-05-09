@@ -21,6 +21,7 @@
 #include "qgsgeometry.h"
 
 #include <QDir>
+#include <QFile>
 #include <QFileOpenEvent>
 #include <QMessageBox>
 #include <QPalette>
@@ -50,6 +51,9 @@ QStringList ABISYM( QgsApplication::mDefaultSvgPaths );
 QString ABISYM( QgsApplication::mConfigPath );
 bool ABISYM( QgsApplication::mRunningFromBuildDir ) = false;
 QString ABISYM( QgsApplication::mBuildSourcePath );
+#ifdef _MSC_VER
+QString ABISYM( QgsApplication::mCfgIntDir );
+#endif
 QString ABISYM( QgsApplication::mBuildOutputPath );
 QStringList ABISYM( QgsApplication::mGdalSkipList );
 
@@ -81,14 +85,23 @@ void QgsApplication::init( QString customConfigPath )
 
   // check if QGIS is run from build directory (not the install directory)
   QDir appDir( applicationDirPath() );
-  if ( appDir.exists( "source_path.txt" ) )
+#ifndef _MSC_VER
+#define SOURCE_PATH "source_path.txt"
+#else
+#define SOURCE_PATH "../source_path.txt"
+#endif
+  if ( appDir.exists( SOURCE_PATH ) )
   {
-    QFile f( applicationDirPath() + "/source_path.txt" );
+    QFile f( applicationDirPath() + "/" + SOURCE_PATH );
     if ( f.open( QIODevice::ReadOnly ) )
     {
       ABISYM( mRunningFromBuildDir ) = true;
       ABISYM( mBuildSourcePath ) = f.readAll();
-#if defined(Q_WS_MACX) || defined(Q_WS_WIN32) || defined(WIN32)
+#if _MSC_VER
+      QStringList elems = applicationDirPath().split( "/", QString::SkipEmptyParts );
+      ABISYM( mCfgIntDir ) = elems.last();
+      ABISYM( mBuildOutputPath ) = applicationDirPath() + "/../..";
+#elif defined(Q_WS_MACX)
       ABISYM( mBuildOutputPath ) = applicationDirPath();
 #else
       ABISYM( mBuildOutputPath ) = applicationDirPath() + "/.."; // on linux
@@ -103,7 +116,11 @@ void QgsApplication::init( QString customConfigPath )
   {
     // we run from source directory - not installed to destination (specified prefix)
     ABISYM( mPrefixPath ) = QString(); // set invalid path
+#ifdef _MSC_VER
+    setPluginPath( ABISYM( mBuildOutputPath ) + "/" + QString( QGIS_PLUGIN_SUBDIR ) + "/" + ABISYM( mCfgIntDir ) );
+#else
     setPluginPath( ABISYM( mBuildOutputPath ) + "/" + QString( QGIS_PLUGIN_SUBDIR ) );
+#endif
     setPkgDataPath( ABISYM( mBuildSourcePath ) ); // directly source path - used for: doc, resources, svg
     ABISYM( mLibraryPath ) = ABISYM( mBuildOutputPath ) + "/" + QGIS_LIB_SUBDIR + "/";
     ABISYM( mLibexecPath ) = ABISYM( mBuildOutputPath ) + "/" + QGIS_LIBEXEC_SUBDIR + "/";
@@ -438,7 +455,25 @@ const QString QgsApplication::iconsPath()
 */
 const QString QgsApplication::srsDbFilePath()
 {
-  return ABISYM( mPkgDataPath ) + QString( "/resources/srs.db" );
+  if ( ABISYM( mRunningFromBuildDir ) )
+  {
+    QString tempCopy = QDir::tempPath() + "/srs.db";
+
+    if ( !QFile( tempCopy ).exists() )
+    {
+      QFile f( ABISYM( mPkgDataPath ) + "/resources/srs.db" );
+      if ( !f.copy( tempCopy ) )
+      {
+        qFatal( "Could not create temporary copy" );
+      }
+    }
+
+    return tempCopy;
+  }
+  else
+  {
+    return ABISYM( mPkgDataPath ) + QString( "/resources/srs.db" );
+  }
 }
 
 /*!
