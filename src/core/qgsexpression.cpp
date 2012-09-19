@@ -18,6 +18,8 @@
 #include <QtDebug>
 #include <QDomDocument>
 #include <QSettings>
+#include <QDate>
+#include <QRegExp>
 
 #include <math.h>
 #include <limits>
@@ -30,6 +32,79 @@
 // from parser
 extern QgsExpression::Node* parseExpression( const QString& str, QString& parserErrorMsg );
 
+QgsExpression::Interval::~Interval() {}
+
+QgsExpression::Interval QgsExpression::Interval::invalidInterVal()
+{
+  QgsExpression::Interval inter = QgsExpression::Interval();
+  inter.setValid( false );
+  return inter;
+}
+
+QgsExpression::Interval QgsExpression::Interval::fromString( QString string )
+{
+  int seconds = 0;
+  QRegExp rx( "(\\d?\\.?\\d+\\s+[a-z]+)", Qt::CaseInsensitive );
+  QStringList list;
+  int pos = 0;
+
+  while (( pos = rx.indexIn( string, pos ) ) != -1 )
+  {
+    list << rx.cap( 1 );
+    pos += rx.matchedLength();
+  }
+
+  foreach ( QString match, list )
+  {
+    QStringList split = match.split( QRegExp( "\\s+" ) );
+    bool ok;
+    int value = split.at( 0 ).toInt( &ok );
+    if ( !ok )
+    {
+      continue;
+    }
+
+    if ( match.contains( "day", Qt::CaseInsensitive ) ||
+         match.contains( QObject::tr( "day", "Note: Word is part matched in code" ), Qt::CaseInsensitive ) ||
+         match.contains( QObject::tr( "days", "Note: Word is part matched in code" ), Qt::CaseInsensitive ) )
+      seconds += value * QgsExpression::Interval::DAY;
+    if ( match.contains( "week", Qt::CaseInsensitive ) ||
+         match.contains( QObject::tr( "week", "Note: Word is part matched in code" ), Qt::CaseInsensitive ) ||
+         match.contains( QObject::tr( "weeks", "Note: Word is part matched in code" ), Qt::CaseInsensitive ) )
+      seconds += value * QgsExpression::Interval::WEEKS;
+    if ( match.contains( "month", Qt::CaseInsensitive ) ||
+         match.contains( QObject::tr( "month", "Note: Word is part matched in code" ), Qt::CaseInsensitive ) ||
+         match.contains( QObject::tr( "months", "Note: Word is part matched in code" ), Qt::CaseInsensitive ) )
+      seconds += value * QgsExpression::Interval::MONTHS;
+    if ( match.contains( "year", Qt::CaseInsensitive ) ||
+         match.contains( QObject::tr( "year", "Note: Word is part matched in code" ), Qt::CaseInsensitive ) ||
+         match.contains( QObject::tr( "years", "Note: Word is part matched in code" ), Qt::CaseInsensitive ) )
+      seconds += value * QgsExpression::Interval::YEARS;
+    if ( match.contains( "second", Qt::CaseInsensitive ) ||
+         match.contains( QObject::tr( "second", "Note: Word is part matched in code" ), Qt::CaseInsensitive ) ||
+         match.contains( QObject::tr( "seconds", "Note: Word is part matched in code" ), Qt::CaseInsensitive ) )
+      seconds += value;
+    if ( match.contains( "minute", Qt::CaseInsensitive ) ||
+         match.contains( QObject::tr( "minute", "Note: Word is part matched in code" ), Qt::CaseInsensitive ) ||
+         match.contains( QObject::tr( "minutes", "Note: Word is part matched in code" ), Qt::CaseInsensitive ) )
+      seconds += value * QgsExpression::Interval::MINUTE;
+    if ( match.contains( "hour", Qt::CaseInsensitive ) ||
+         match.contains( QObject::tr( "hour", "Note: Word is part matched in code" ), Qt::CaseInsensitive ) ||
+         match.contains( QObject::tr( "hours", "Note: Word is part matched in code" ), Qt::CaseInsensitive ) )
+      seconds += value * QgsExpression::Interval::HOUR;
+  }
+
+  // If we can't parse the string at all then we just return invalid
+  if ( seconds == 0 )
+    return QgsExpression::Interval::invalidInterVal();
+
+  return QgsExpression::Interval( seconds );
+}
+
+bool QgsExpression::Interval::operator==( const QgsExpression::Interval& other ) const
+{
+  return ( mSeconds == other.mSeconds );
+}
 
 ///////////////////////////////////////////////
 // three-value logic
@@ -91,6 +166,26 @@ inline bool isDoubleSafe( const QVariant& v )
   return false;
 }
 
+inline bool isDateTimeSafe( const QVariant& v )
+{
+  return v.type() == QVariant::DateTime || v.type() == QVariant::Date ||
+         v.type() == QVariant::Time;
+}
+
+inline bool isIntervalSafe( const QVariant& v )
+{
+  if ( v.canConvert<QgsExpression::Interval>() )
+  {
+    return true;
+  }
+
+  if ( v.type() == QVariant::String )
+  {
+    return QgsExpression::Interval::fromString( v.toString() ).isValid();
+  }
+  return false;
+}
+
 inline bool isNull( const QVariant& v ) { return v.isNull(); }
 
 ///////////////////////////////////////////////
@@ -114,7 +209,7 @@ const char* QgsExpression::BinaryOgcOperatorText[] =
 {
   "Or", "And",
   "PropertyIsEqualTo", "PropertyIsNotEqualTo",
-  "PropertyIsGreaterThanOrEqualTo", "PropertyIsLessThanOrEqualTo",
+  "PropertyIsLessThanOrEqualTo", "PropertyIsGreaterThanOrEqualTo",
   "PropertyIsLessThan", "PropertyIsGreaterThan",
   "", "PropertyIsLike", "", "", "",
   "Add", "Sub", "Mul", "Div", "", "",
@@ -165,6 +260,65 @@ static int getIntValue( const QVariant& value, QgsExpression* parent )
     parent->setEvalErrorString( QObject::tr( "Cannot convert '%1' to int" ).arg( value.toString() ) );
     return 0;
   }
+}
+
+static QDateTime getDateTimeValue( const QVariant& value, QgsExpression* parent )
+{
+  QDateTime d = value.toDateTime();
+  if ( d.isValid() )
+  {
+    return d;
+  }
+  else
+  {
+    parent->setEvalErrorString( QObject::tr( "Cannot convert '%1' to DateTime" ).arg( value.toString() ) );
+    return QDateTime();
+  }
+}
+
+static QDate getDateValue( const QVariant& value, QgsExpression* parent )
+{
+  QDate d = value.toDate();
+  if ( d.isValid() )
+  {
+    return d;
+  }
+  else
+  {
+    parent->setEvalErrorString( QObject::tr( "Cannot convert '%1' to Date" ).arg( value.toString() ) );
+    return QDate();
+  }
+}
+
+static QTime getTimeValue( const QVariant& value, QgsExpression* parent )
+{
+  QTime t = value.toTime();
+  if ( t.isValid() )
+  {
+    return t;
+  }
+  else
+  {
+    parent->setEvalErrorString( QObject::tr( "Cannot convert '%1' to Time" ).arg( value.toString() ) );
+    return QTime();
+  }
+}
+
+static QgsExpression::Interval getInterval( const QVariant& value, QgsExpression* parent, bool report_error = false )
+{
+  if ( value.canConvert<QgsExpression::Interval>() )
+    return value.value<QgsExpression::Interval>();
+
+  QgsExpression::Interval inter = QgsExpression::Interval::fromString( value.toString() );
+  if ( inter.isValid() )
+  {
+    return inter;
+  }
+  // If we get here then we can't convert so we just error and return invalid.
+  if ( report_error )
+    parent->setEvalErrorString( QObject::tr( "Cannot convert '%1' to Interval" ).arg( value.toString() ) );
+
+  return QgsExpression::Interval::invalidInterVal();
 }
 
 
@@ -270,6 +424,22 @@ static QVariant fcnToString( const QVariantList& values, QgsFeature* , QgsExpres
 {
   return QVariant( getStringValue( values.at( 0 ), parent ) );
 }
+
+static QVariant fcnToDateTime( const QVariantList& values, QgsFeature* , QgsExpression* parent )
+{
+  return QVariant( getDateTimeValue( values.at( 0 ), parent ) );
+}
+
+static QVariant fcnCoalesce( const QVariantList& values, QgsFeature* , QgsExpression* )
+{
+  foreach ( const QVariant &value, values )
+  {
+    if ( value.isNull() )
+      continue;
+    return value;
+  }
+  return QVariant();
+}
 static QVariant fcnLower( const QVariantList& values, QgsFeature* , QgsExpression* parent )
 {
   QString str = getStringValue( values.at( 0 ), parent );
@@ -279,6 +449,17 @@ static QVariant fcnUpper( const QVariantList& values, QgsFeature* , QgsExpressio
 {
   QString str = getStringValue( values.at( 0 ), parent );
   return QVariant( str.toUpper() );
+}
+static QVariant fcnTitle( const QVariantList& values, QgsFeature* , QgsExpression* parent )
+{
+  QString str = getStringValue( values.at( 0 ), parent );
+  QStringList elems = str.split( " " );
+  for ( int i = 0; i < elems.size(); i++ )
+  {
+    if ( elems[i].size() > 1 )
+      elems[i] = elems[i].left( 1 ).toUpper() + elems[i].mid( 1 ).toLower();
+  }
+  return QVariant( elems.join( " " ) );
 }
 static QVariant fcnLength( const QVariantList& values, QgsFeature* , QgsExpression* parent )
 {
@@ -324,6 +505,186 @@ static QVariant fcnFeatureId( const QVariantList& , QgsFeature* f, QgsExpression
   // TODO: handling of 64-bit feature ids?
   return f ? QVariant(( int )f->id() ) : QVariant();
 }
+
+static QVariant fcnConcat( const QVariantList& values, QgsFeature* , QgsExpression *parent )
+{
+  QString concat;
+  foreach ( const QVariant &value, values )
+  {
+    concat += getStringValue( value, parent );
+  }
+  return concat;
+}
+
+static QVariant fcnStrpos( const QVariantList& values, QgsFeature* , QgsExpression *parent )
+{
+  QString string = getStringValue( values.at( 0 ), parent );
+  return string.indexOf( QRegExp( getStringValue( values.at( 1 ), parent ) ) );
+}
+
+static QVariant fcnRight( const QVariantList& values, QgsFeature* , QgsExpression *parent )
+{
+  QString string = getStringValue( values.at( 0 ), parent );
+  int pos = getIntValue( values.at( 1 ), parent );
+  return string.right( pos );
+}
+
+static QVariant fcnLeft( const QVariantList& values, QgsFeature* , QgsExpression *parent )
+{
+  QString string = getStringValue( values.at( 0 ), parent );
+  int pos = getIntValue( values.at( 1 ), parent );
+  return string.left( pos );
+}
+
+static QVariant fcnRPad( const QVariantList& values, QgsFeature* , QgsExpression *parent )
+{
+  QString string = getStringValue( values.at( 0 ), parent );
+  int length = getIntValue( values.at( 1 ), parent );
+  QString fill = getStringValue( values.at( 2 ), parent );
+  return string.rightJustified( length, fill.at( 0 ), true );
+}
+
+static QVariant fcnLPad( const QVariantList& values, QgsFeature* , QgsExpression *parent )
+{
+  QString string = getStringValue( values.at( 0 ), parent );
+  int length = getIntValue( values.at( 1 ), parent );
+  QString fill = getStringValue( values.at( 2 ), parent );
+  return string.leftJustified( length, fill.at( 0 ), true );
+}
+
+static QVariant fcnNow( const QVariantList&, QgsFeature* , QgsExpression * )
+{
+  return QVariant( QDateTime::currentDateTime() );
+}
+
+static QVariant fcnToDate( const QVariantList& values, QgsFeature* , QgsExpression * parent )
+{
+  return QVariant( getDateValue( values.at( 0 ), parent ) );
+}
+
+static QVariant fcnToTime( const QVariantList& values, QgsFeature* , QgsExpression * parent )
+{
+  return QVariant( getTimeValue( values.at( 0 ), parent ) );
+}
+
+static QVariant fcnToInterval( const QVariantList& values, QgsFeature* , QgsExpression * parent )
+{
+  return QVariant::fromValue( getInterval( values.at( 0 ), parent ) );
+}
+
+static QVariant fcnAge( const QVariantList& values, QgsFeature* , QgsExpression *parent )
+{
+  QDateTime d1 = getDateTimeValue( values.at( 0 ), parent );
+  QDateTime d2 = getDateTimeValue( values.at( 1 ), parent );
+  int seconds = d2.secsTo( d1 );
+  return QVariant::fromValue( QgsExpression::Interval( seconds ) );
+}
+
+static QVariant fcnDay( const QVariantList& values, QgsFeature* , QgsExpression *parent )
+{
+  QVariant value = values.at( 0 );
+  QgsExpression::Interval inter = getInterval( value, parent, false );
+  if ( inter.isValid() )
+  {
+    return QVariant( inter.days() );
+  }
+  else
+  {
+    QDateTime d1 =  getDateTimeValue( value, parent );
+    return QVariant( d1.date().day() );
+  }
+}
+
+static QVariant fcnYear( const QVariantList& values, QgsFeature* , QgsExpression *parent )
+{
+  QVariant value = values.at( 0 );
+  QgsExpression::Interval inter = getInterval( value, parent, false );
+  if ( inter.isValid() )
+  {
+    return QVariant( inter.years() );
+  }
+  else
+  {
+    QDateTime d1 =  getDateTimeValue( value, parent );
+    return QVariant( d1.date().year() );
+  }
+}
+
+static QVariant fcnMonth( const QVariantList& values, QgsFeature* , QgsExpression *parent )
+{
+  QVariant value = values.at( 0 );
+  QgsExpression::Interval inter = getInterval( value, parent, false );
+  if ( inter.isValid() )
+  {
+    return QVariant( inter.months() );
+  }
+  else
+  {
+    QDateTime d1 =  getDateTimeValue( value, parent );
+    return QVariant( d1.date().month() );
+  }
+}
+
+static QVariant fcnWeek( const QVariantList& values, QgsFeature* , QgsExpression *parent )
+{
+  QVariant value = values.at( 0 );
+  QgsExpression::Interval inter = getInterval( value, parent, false );
+  if ( inter.isValid() )
+  {
+    return QVariant( inter.weeks() );
+  }
+  else
+  {
+    QDateTime d1 =  getDateTimeValue( value, parent );
+    return QVariant( d1.date().weekNumber() );
+  }
+}
+
+static QVariant fcnHour( const QVariantList& values, QgsFeature* , QgsExpression *parent )
+{
+  QVariant value = values.at( 0 );
+  QgsExpression::Interval inter = getInterval( value, parent, false );
+  if ( inter.isValid() )
+  {
+    return QVariant( inter.hours() );
+  }
+  else
+  {
+    QDateTime d1 =  getDateTimeValue( value, parent );
+    return QVariant( d1.time().hour() );
+  }
+}
+
+static QVariant fcnMinute( const QVariantList& values, QgsFeature* , QgsExpression *parent )
+{
+  QVariant value = values.at( 0 );
+  QgsExpression::Interval inter = getInterval( value, parent, false );
+  if ( inter.isValid() )
+  {
+    return QVariant( inter.minutes() );
+  }
+  else
+  {
+    QDateTime d1 =  getDateTimeValue( value, parent );
+    return QVariant( d1.time().minute() );
+  }
+}
+
+static QVariant fcnSeconds( const QVariantList& values, QgsFeature* , QgsExpression *parent )
+{
+  QVariant value = values.at( 0 );
+  QgsExpression::Interval inter = getInterval( value, parent, false );
+  if ( inter.isValid() )
+  {
+    return QVariant( inter.seconds() );
+  }
+  else
+  {
+    QDateTime d1 =  getDateTimeValue( value, parent );
+    return QVariant( d1.time().second() );
+  }
+}
+
 
 #define ENSURE_GEOM_TYPE(f, g, geomtype)   if (!f) return QVariant(); \
   QgsGeometry* g = f->geometry(); \
@@ -407,6 +768,37 @@ static QVariant fcnGeomPerimeter( const QVariantList& , QgsFeature* f, QgsExpres
   return QVariant( calc->measurePerimeter( f->geometry() ) );
 }
 
+static QVariant fcnRound( const QVariantList& values , QgsFeature *f, QgsExpression* parent )
+{
+  Q_UNUSED( f );
+  if ( values.length() == 2 )
+  {
+    double number = getDoubleValue( values.at( 0 ), parent );
+    double scaler = pow( 10.0, getIntValue( values.at( 1 ), parent ) );
+    return QVariant( qRound( number * scaler ) / scaler );
+  }
+
+  if ( values.length() == 1 )
+  {
+    double number = getIntValue( values.at( 0 ), parent );
+    return QVariant( qRound( number ) ).toInt();
+  }
+
+  return QVariant();
+}
+
+static QVariant fcnScale( const QVariantList&, QgsFeature*, QgsExpression* parent )
+{
+  return QVariant( parent->scale() );
+}
+
+static QVariant fcnFormatNumber( const QVariantList& values, QgsFeature*, QgsExpression* parent )
+{
+  double value = getDoubleValue( values.at( 0 ), parent );
+  int places = getIntValue( values.at( 1 ), parent );
+  return QString( "%L1" ).arg( value, 0, 'f', places );
+}
+
 QList<QgsExpression::FunctionDef> QgsExpression::gmBuiltinFunctions;
 
 const QList<QgsExpression::FunctionDef> &QgsExpression::BuiltinFunctions()
@@ -427,17 +819,43 @@ const QList<QgsExpression::FunctionDef> &QgsExpression::BuiltinFunctions()
     << FunctionDef( "ln", 1, fcnLn, QObject::tr( "Math" ) )
     << FunctionDef( "log10", 1, fcnLog10, QObject::tr( "Math" ) )
     << FunctionDef( "log", 2, fcnLog, QObject::tr( "Math" ) )
+    << FunctionDef( "round", -1, fcnRound, QObject::tr( "Math" ) )
     // casts
     << FunctionDef( "toint", 1, fcnToInt, QObject::tr( "Conversions" ) )
     << FunctionDef( "toreal", 1, fcnToReal, QObject::tr( "Conversions" ) )
     << FunctionDef( "tostring", 1, fcnToString, QObject::tr( "Conversions" ) )
+    << FunctionDef( "todatetime", 1, fcnToDateTime, QObject::tr( "Conversions" ) )
+    << FunctionDef( "todate", 1, fcnToDate, QObject::tr( "Conversions" ) )
+    << FunctionDef( "totime", 1, fcnToTime, QObject::tr( "Conversions" ) )
+    << FunctionDef( "tointerval", 1, fcnToInterval, QObject::tr( "Conversions" ) )
+    // conditionals
+    << FunctionDef( "coalesce", -1, fcnCoalesce, QObject::tr( "Conditionals" ) )
+    // Date and Time
+    << FunctionDef( "$now", 0, fcnNow, QObject::tr( "Date and Time" ) )
+    << FunctionDef( "age", 2, fcnAge, QObject::tr( "Date and Time" ) )
+    << FunctionDef( "year", 1, fcnYear, QObject::tr( "Date and Time" ) )
+    << FunctionDef( "month", 1, fcnMonth, QObject::tr( "Date and Time" ) )
+    << FunctionDef( "week", 1, fcnWeek, QObject::tr( "Date and Time" ) )
+    << FunctionDef( "day", 1, fcnDay, QObject::tr( "Date and Time" ) )
+    << FunctionDef( "hour", 1, fcnHour, QObject::tr( "Date and Time" ) )
+    << FunctionDef( "minute", 1, fcnMinute, QObject::tr( "Date and Time" ) )
+    << FunctionDef( "second", 1, fcnSeconds, QObject::tr( "Date and Time" ) )
     // string manipulation
     << FunctionDef( "lower", 1, fcnLower, QObject::tr( "String" ) )
     << FunctionDef( "upper", 1, fcnUpper, QObject::tr( "String" ) )
+    << FunctionDef( "title", 1, fcnTitle, QObject::tr( "String" ) )
     << FunctionDef( "length", 1, fcnLength, QObject::tr( "String" ) )
     << FunctionDef( "replace", 3, fcnReplace, QObject::tr( "String" ) )
     << FunctionDef( "regexp_replace", 3, fcnRegexpReplace, QObject::tr( "String" ) )
     << FunctionDef( "substr", 3, fcnSubstr, QObject::tr( "String" ) )
+    << FunctionDef( "concat", -1, fcnConcat, QObject::tr( "String" ) )
+    << FunctionDef( "strpos", 2, fcnStrpos, QObject::tr( "String" ) )
+    << FunctionDef( "left", 2, fcnLeft, QObject::tr( "String" ) )
+    << FunctionDef( "right", 2, fcnRight, QObject::tr( "String" ) )
+    << FunctionDef( "rpad", 3, fcnRPad, QObject::tr( "String" ) )
+    << FunctionDef( "lpad", 3, fcnLPad, QObject::tr( "String" ) )
+    << FunctionDef( "format_number", 2, fcnFormatNumber, QObject::tr( "String" ) )
+
     // geometry accessors
     << FunctionDef( "xat", 1, fcnXat, QObject::tr( "Geometry" ), "", true )
     << FunctionDef( "yat", 1, fcnYat, QObject::tr( "Geometry" ), "", true )
@@ -449,6 +867,7 @@ const QList<QgsExpression::FunctionDef> &QgsExpression::BuiltinFunctions()
     // special columns
     << FunctionDef( "$rownum", 0, fcnRowNumber, QObject::tr( "Record" ) )
     << FunctionDef( "$id", 0, fcnFeatureId, QObject::tr( "Record" ) )
+    << FunctionDef( "$scale", 0, fcnScale, QObject::tr( "Record" ) )
     ;
   }
 
@@ -479,7 +898,10 @@ int QgsExpression::functionCount()
 
 
 QgsExpression::QgsExpression( const QString& expr )
-    : mExpression( expr ), mRowNumber( 0 ), mCalc( NULL )
+    : mExpression( expr )
+    , mRowNumber( 0 )
+    , mScale( 0 )
+    , mCalc( NULL )
 {
   mRootNode = ::parseExpression( mExpression, mParserErrorString );
 
@@ -528,10 +950,10 @@ bool QgsExpression::needsGeometry()
 void QgsExpression::initGeomCalculator()
 {
   mCalc = new QgsDistanceArea;
-  mCalc->setProjectionsEnabled( false );
   QSettings settings;
-  QString ellipsoid = settings.value( "/qgis/measure/ellipsoid", "WGS84" ).toString();
+  QString ellipsoid = settings.value( "/qgis/measure/ellipsoid", GEO_NONE ).toString();
   mCalc->setEllipsoid( ellipsoid );
+  mCalc->setEllipsoidalMode( false );
 }
 
 bool QgsExpression::prepare( const QgsFieldMap& fields )
@@ -576,6 +998,7 @@ QString QgsExpression::dump() const
 
   return mRootNode->dump();
 }
+
 
 void QgsExpression::toOgcFilter( QDomDocument &doc, QDomElement &element ) const
 {
@@ -624,6 +1047,57 @@ void QgsExpression::acceptVisitor( QgsExpression::Visitor& v )
 {
   if ( mRootNode )
     mRootNode->accept( v );
+}
+
+QString QgsExpression::replaceExpressionText( QString action, QgsFeature &feat,
+    QgsVectorLayer* layer,
+    const QMap<QString, QVariant> *substitutionMap )
+{
+  QString expr_action;
+
+  int index = 0;
+  while ( index < action.size() )
+  {
+    QRegExp rx = QRegExp( "\\[%([^\\]]+)%\\]" );
+
+    int pos = rx.indexIn( action, index );
+    if ( pos < 0 )
+      break;
+
+    int start = index;
+    index = pos + rx.matchedLength();
+
+    QString to_replace = rx.cap( 1 ).trimmed();
+    QgsDebugMsg( "Found expression: " + to_replace );
+
+    if ( substitutionMap && substitutionMap->contains( to_replace ) )
+    {
+      expr_action += action.mid( start, pos - start ) + substitutionMap->value( to_replace ).toString();
+      continue;
+    }
+
+    QgsExpression exp( to_replace );
+    if ( exp.hasParserError() )
+    {
+      QgsDebugMsg( "Expression parser error: " + exp.parserErrorString() );
+      expr_action += action.mid( start, index - start );
+      continue;
+    }
+
+    QVariant result = exp.evaluate( &feat, layer->pendingFields() );
+    if ( exp.hasEvalError() )
+    {
+      QgsDebugMsg( "Expression parser eval error: " + exp.evalErrorString() );
+      expr_action += action.mid( start, index - start );
+      continue;
+    }
+
+    QgsDebugMsg( "Expression result is: " + result.toString() );
+    expr_action += action.mid( start, pos - start ) + result.toString();
+  }
+
+  expr_action += action.mid( index );
+  return expr_action;
 }
 
 
@@ -689,31 +1163,38 @@ QgsExpression::Node* QgsExpression::Node::createFromOgcFilter( QDomElement &elem
   else if ( element.localName() == "PropertyIsBetween" )
   {
     // <ogc:PropertyIsBetween> encode a Range check
-    QgsExpression::Node *operand = 0, *lowerBound = 0, *upperBound = 0;
+    QgsExpression::Node *operand = 0, *lowerBound = 0;
+    QgsExpression::Node *operand2 = 0, *upperBound = 0;
 
-    QDomElement operandElem = element.firstChildElement( "LowerBoundary" );
-    if ( !operandElem.isNull() )
-      lowerBound = createFromOgcFilter( operandElem, errorMessage );
-
-    operandElem = element.firstChildElement( "UpperBoundary" );
-    if ( !operandElem.isNull() )
-      upperBound = createFromOgcFilter( operandElem, errorMessage );
-
-    // <ogc:expression>
-    operandElem = element.firstChildElement();
+    QDomElement operandElem = element.firstChildElement();
     while ( !operandElem.isNull() )
     {
-      if ( operandElem.localName() != "LowerBoundary" &&
-           operandElem.localName() != "UpperBoundary" )
+      if ( operandElem.localName() == "LowerBoundary" )
       {
-        operand = createFromOgcFilter( operandElem, errorMessage );
-        break;
+        QDomElement lowerBoundElem = operandElem.firstChildElement();
+        lowerBound = createFromOgcFilter( lowerBoundElem, errorMessage );
       }
+      else if ( operandElem.localName() ==  "UpperBoundary" )
+      {
+        QDomElement upperBoundElem = operandElem.firstChildElement();
+        upperBound = createFromOgcFilter( upperBoundElem, errorMessage );
+      }
+      else
+      {
+        // <ogc:expression>
+        // both operand and operand2 contain the same expression,
+        // they are respectively compared to lower bound and upper bound
+        operand = createFromOgcFilter( operandElem, errorMessage );
+        operand2 = createFromOgcFilter( operandElem, errorMessage );
+      }
+
+      if ( operand && lowerBound && operand2 && upperBound )
+        break;
 
       operandElem = operandElem.nextSiblingElement();
     }
 
-    if ( !operand || !lowerBound || !upperBound )
+    if ( !operand || !lowerBound || !operand2 || !upperBound )
     {
       if ( operand )
         delete operand;
@@ -729,7 +1210,7 @@ QgsExpression::Node* QgsExpression::Node::createFromOgcFilter( QDomElement &elem
     }
 
     QgsExpression::Node *geOperator = new QgsExpression::NodeBinaryOperator( boGE, operand, lowerBound );
-    QgsExpression::Node *leOperator = new QgsExpression::NodeBinaryOperator( boLE, operand, upperBound );
+    QgsExpression::Node *leOperator = new QgsExpression::NodeBinaryOperator( boLE, operand2, upperBound );
     return new QgsExpression::NodeBinaryOperator( boAnd, geOperator, leOperator );
   }
 
@@ -743,7 +1224,7 @@ QgsExpression::Node* QgsExpression::Node::createFromOgcFilter( QDomElement &elem
 QString QgsExpression::NodeList::dump() const
 {
   QString msg; bool first = true;
-  foreach( Node* n, mList )
+  foreach ( Node* n, mList )
   {
     if ( !first ) msg += ", "; else first = false;
     msg += n->dump();
@@ -753,7 +1234,7 @@ QString QgsExpression::NodeList::dump() const
 
 void QgsExpression::NodeList::toOgcFilter( QDomDocument &doc, QDomElement &element ) const
 {
-  foreach( Node* n, mList )
+  foreach ( Node* n, mList )
   {
     n->toOgcFilter( doc, element );
   }
@@ -876,6 +1357,17 @@ QVariant QgsExpression::NodeBinaryOperator::eval( QgsExpression* parent, QgsFeat
         int iR = getIntValue( vR, parent ); ENSURE_NO_EVAL_ERROR;
         if ( mOp == boDiv && iR == 0 ) return QVariant(); // silently handle division by zero and return NULL
         return QVariant( computeInt( iL, iR ) );
+      }
+      else if ( isDateTimeSafe( vL ) && isIntervalSafe( vR ) )
+      {
+        QDateTime dL = getDateTimeValue( vL, parent );  ENSURE_NO_EVAL_ERROR;
+        QgsExpression::Interval iL = getInterval( vR, parent ); ENSURE_NO_EVAL_ERROR;
+        if ( mOp == boDiv || mOp == boMul || mOp == boMod )
+        {
+          parent->setEvalErrorString( QObject::tr( "Can't preform /, *, or % on DateTime and Interval" ) );
+          return QVariant();
+        }
+        return QVariant( computeDateTimeFromInterval( dL, &iL ) );
       }
       else
       {
@@ -1037,6 +1529,16 @@ int QgsExpression::NodeBinaryOperator::computeInt( int x, int y )
     case boDiv: return x/y;
     case boMod: return x%y;
     default: Q_ASSERT( false ); return 0;
+  }
+}
+
+QDateTime QgsExpression::NodeBinaryOperator::computeDateTimeFromInterval( QDateTime d, QgsExpression::Interval *i )
+{
+  switch ( mOp )
+  {
+    case boPlus: return d.addSecs( i->seconds() );
+    case boMinus: return d.addSecs( -i->seconds() );
+    default: Q_ASSERT( false ); return QDateTime();
   }
 }
 
@@ -1244,7 +1746,7 @@ QVariant QgsExpression::NodeInOperator::eval( QgsExpression* parent, QgsFeature*
 
   bool listHasNull = false;
 
-  foreach( Node* n, mList->list() )
+  foreach ( Node* n, mList->list() )
   {
     QVariant v2 = n->eval( parent, f );
     ENSURE_NO_EVAL_ERROR;
@@ -1282,7 +1784,7 @@ QVariant QgsExpression::NodeInOperator::eval( QgsExpression* parent, QgsFeature*
 bool QgsExpression::NodeInOperator::prepare( QgsExpression* parent, const QgsFieldMap& fields )
 {
   bool res = mNode->prepare( parent, fields );
-  foreach( Node* n, mList->list() )
+  foreach ( Node* n, mList->list() )
   {
     res = res && n->prepare( parent, fields );
   }
@@ -1309,7 +1811,7 @@ void QgsExpression::NodeInOperator::toOgcFilter( QDomDocument &doc, QDomElement 
     parent = &orElem;
   }
 
-  foreach( Node* n, mList->list() )
+  foreach ( Node* n, mList->list() )
   {
     QDomElement eqElem = doc.createElement( "ogc:PropertyIsEqualTo" );
     mNode->toOgcFilter( doc, eqElem );
@@ -1329,12 +1831,12 @@ QVariant QgsExpression::NodeFunction::eval( QgsExpression* parent, QgsFeature* f
   QVariantList argValues;
   if ( mArgs )
   {
-    foreach( Node* n, mArgs->list() )
+    foreach ( Node* n, mArgs->list() )
     {
       QVariant v = n->eval( parent, f );
       ENSURE_NO_EVAL_ERROR;
-      if ( isNull( v ) )
-        return QVariant(); // all "normal" functions return NULL when any parameter is NULL
+      if ( isNull( v ) && fd.mFcn != fcnCoalesce )
+        return QVariant(); // all "normal" functions return NULL, when any parameter is NULL (so coalesce is abnormal)
       argValues.append( v );
     }
   }
@@ -1352,7 +1854,7 @@ bool QgsExpression::NodeFunction::prepare( QgsExpression* parent, const QgsField
   bool res = true;
   if ( mArgs )
   {
-    foreach( Node* n, mArgs->list() )
+    foreach ( Node* n, mArgs->list() )
     {
       res = res && n->prepare( parent, fields );
     }
@@ -1508,12 +2010,20 @@ QgsExpression::Node* QgsExpression::NodeLiteral::createFromOgcFilter( QDomElemen
     }
     else
     {
-      // probably a text/CDATA node, convert its content to string
-      operand = new QgsExpression::NodeLiteral( childNode.nodeValue() );
-    }
+      // probably a text/CDATA node
+      QVariant value = childNode.nodeValue();
 
-    if ( !operand )
-      continue;
+      // try to convert the node content to number if possible,
+      // otherwise let's use it as string
+      bool ok;
+      double d = value.toDouble( &ok );
+      if ( ok )
+        value = d;
+
+      operand = new QgsExpression::NodeLiteral( value );
+      if ( !operand )
+        continue;
+    }
 
     // use the concat operator to merge the ogc:Literal children
     if ( !root )
@@ -1543,7 +2053,7 @@ QVariant QgsExpression::NodeColumnRef::eval( QgsExpression* /*parent*/, QgsFeatu
 
 bool QgsExpression::NodeColumnRef::prepare( QgsExpression* parent, const QgsFieldMap& fields )
 {
-  foreach( int i, fields.keys() )
+  foreach ( int i, fields.keys() )
   {
     if ( QString::compare( fields[i].name(), mName, Qt::CaseInsensitive ) == 0 )
     {
@@ -1551,7 +2061,7 @@ bool QgsExpression::NodeColumnRef::prepare( QgsExpression* parent, const QgsFiel
       return true;
     }
   }
-  parent->mEvalErrorString = QObject::tr( "Column '%1'' not found" ).arg( mName );
+  parent->mEvalErrorString = QObject::tr( "Column '%1' not found" ).arg( mName );
   mIndex = -1;
   return false;
 }
@@ -1586,7 +2096,7 @@ QgsExpression::Node* QgsExpression::NodeColumnRef::createFromOgcFilter( QDomElem
 
 QVariant QgsExpression::NodeCondition::eval( QgsExpression* parent, QgsFeature* f )
 {
-  foreach( WhenThen* cond, mConditions )
+  foreach ( WhenThen* cond, mConditions )
   {
     QVariant vWhen = cond->mWhenExp->eval( parent, f );
     TVL tvl = getTVLValue( vWhen, parent );
@@ -1613,7 +2123,7 @@ QVariant QgsExpression::NodeCondition::eval( QgsExpression* parent, QgsFeature* 
 bool QgsExpression::NodeCondition::prepare( QgsExpression* parent, const QgsFieldMap& fields )
 {
   bool res;
-  foreach( WhenThen* cond, mConditions )
+  foreach ( WhenThen* cond, mConditions )
   {
     res = cond->mWhenExp->prepare( parent, fields )
           & cond->mThenExp->prepare( parent, fields );
@@ -1629,7 +2139,7 @@ bool QgsExpression::NodeCondition::prepare( QgsExpression* parent, const QgsFiel
 QString QgsExpression::NodeCondition::dump() const
 {
   QString msg = "CONDITION:\n";
-  foreach( WhenThen* cond, mConditions )
+  foreach ( WhenThen* cond, mConditions )
   {
     msg += QString( "- WHEN %1 THEN %2\n" ).arg( cond->mWhenExp->dump() ).arg( cond->mThenExp->dump() );
   }
@@ -1647,7 +2157,7 @@ void QgsExpression::NodeCondition::toOgcFilter( QDomDocument &doc, QDomElement &
 QStringList QgsExpression::NodeCondition::referencedColumns() const
 {
   QStringList lst;
-  foreach( WhenThen* cond, mConditions )
+  foreach ( WhenThen* cond, mConditions )
   {
     lst += cond->mWhenExp->referencedColumns() + cond->mThenExp->referencedColumns();
   }
@@ -1660,7 +2170,7 @@ QStringList QgsExpression::NodeCondition::referencedColumns() const
 
 bool QgsExpression::NodeCondition::needsGeometry() const
 {
-  foreach( WhenThen* cond, mConditions )
+  foreach ( WhenThen* cond, mConditions )
   {
     if ( cond->mWhenExp->needsGeometry() ||
          cond->mThenExp->needsGeometry() )

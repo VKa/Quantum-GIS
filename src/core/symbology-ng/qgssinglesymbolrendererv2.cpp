@@ -1,3 +1,17 @@
+/***************************************************************************
+    qgssinglesymbolrendererv2.cpp
+    ---------------------
+    begin                : November 2009
+    copyright            : (C) 2009 by Martin Dobias
+    email                : wonder.sk at gmail.com
+ ***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
 
 #include "qgssinglesymbolrendererv2.h"
 
@@ -47,6 +61,7 @@ QgsSymbolV2* QgsSingleSymbolRendererV2::symbolForFeature( QgsFeature& feature )
       markerSymbol->setAngle( rotation );
     if ( mSizeScaleFieldIdx != -1 )
       markerSymbol->setSize( sizeScale * mOrigSize );
+    markerSymbol->setScaleMethod( mScaleMethod );
   }
   else if ( mTempSymbol->type() == QgsSymbolV2::Line )
   {
@@ -169,6 +184,7 @@ QgsFeatureRendererV2* QgsSingleSymbolRendererV2::clone()
   r->setUsingSymbolLevels( usingSymbolLevels() );
   r->setRotationField( rotationField() );
   r->setSizeScaleField( sizeScaleField() );
+  r->setScaleMethod( scaleMethod() );
   return r;
 }
 
@@ -219,7 +235,10 @@ QgsFeatureRendererV2* QgsSingleSymbolRendererV2::create( QDomElement& element )
 
   QDomElement sizeScaleElem = element.firstChildElement( "sizescale" );
   if ( !sizeScaleElem.isNull() )
+  {
     r->setSizeScaleField( sizeScaleElem.attribute( "field" ) );
+    r->setScaleMethod( QgsSymbolLayerV2Utils::decodeScaleMethod( sizeScaleElem.attribute( "scalemethod" ) ) );
+  }
 
   // TODO: symbol levels
   return r;
@@ -246,11 +265,35 @@ QgsFeatureRendererV2* QgsSingleSymbolRendererV2::createFromSld( QDomElement& ele
   {
     if ( childElem.localName() == "Name" )
     {
-      label = childElem.firstChild().nodeValue();
+      // <se:Name> tag contains the rule identifier,
+      // so prefer title tag for the label property value
+      if ( label.isEmpty() )
+        label = childElem.firstChild().nodeValue();
     }
-    else if ( childElem.localName() == "Description" || childElem.localName() == "Abstract" )
+    else if ( childElem.localName() == "Description" )
     {
+      // <se:Description> can contains a title and an abstract
+      QDomElement titleElem = childElem.firstChildElement( "Title" );
+      if ( !titleElem.isNull() )
+      {
+        label = titleElem.firstChild().nodeValue();
+      }
+
+      QDomElement abstractElem = childElem.firstChildElement( "Abstract" );
+      if ( !abstractElem.isNull() )
+      {
+        description = abstractElem.firstChild().nodeValue();
+      }
+    }
+    else if ( childElem.localName() == "Abstract" )
+    {
+      // <sld:Abstract> (v1.0)
       description = childElem.firstChild().nodeValue();
+    }
+    else if ( childElem.localName() == "Title" )
+    {
+      // <sld:Title> (v1.0)
+      label = childElem.firstChild().nodeValue();
     }
     else if ( childElem.localName().endsWith( "Symbolizer" ) )
     {
@@ -306,6 +349,7 @@ QDomElement QgsSingleSymbolRendererV2::save( QDomDocument& doc )
 
   QDomElement sizeScaleElem = doc.createElement( "sizescale" );
   sizeScaleElem.setAttribute( "field", mSizeScaleField );
+  sizeScaleElem.setAttribute( "scalemethod", QgsSymbolLayerV2Utils::encodeScaleMethod( mScaleMethod ) );
   rendererElem.appendChild( sizeScaleElem );
 
   return rendererElem;

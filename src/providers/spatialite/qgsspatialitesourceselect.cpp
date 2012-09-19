@@ -199,7 +199,7 @@ void QgsSpatiaLiteSourceSelect::setLayerType( QString table, QString column, QSt
 void QgsSpatiaLiteSourceSelect::populateConnectionList()
 {
   cmbConnections->clear();
-  foreach( QString name, QgsSpatiaLiteConnection::connectionList() )
+  foreach ( QString name, QgsSpatiaLiteConnection::connectionList() )
   {
     // retrieving the SQLite DB name and full path
     QString text = name + tr( "@" ) + QgsSpatiaLiteConnection::connectionPath( name );
@@ -417,7 +417,7 @@ void QgsSpatiaLiteSourceSelect::on_btnConnect_clicked()
   mTableModel.setSqliteDb( subKey );
 
   QList<QgsSpatiaLiteConnection::TableEntry> tables = conn.tables();
-  foreach( const QgsSpatiaLiteConnection::TableEntry& table, tables )
+  foreach ( const QgsSpatiaLiteConnection::TableEntry& table, tables )
   {
     mTableModel.addTableEntry( table.type, table.tableName, table.column, "" );
   }
@@ -492,6 +492,8 @@ void QgsSpatiaLiteSourceSelect::setConnectionListPosition()
   QSettings settings;
   // If possible, set the item currently displayed database
   QString toSelect = settings.value( "/SpatiaLite/connections/selected" ).toString();
+
+  toSelect += "@" + settings.value( "/SpatiaLite/connections/" + toSelect + "/sqlitepath" ).toString();
 
   cmbConnections->setCurrentIndex( cmbConnections->findText( toSelect ) );
 

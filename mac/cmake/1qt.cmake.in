@@ -59,7 +59,7 @@ ENDFOREACH (QFW)
 # Qt plugins
 
 EXECUTE_PROCESS (COMMAND mkdir -p "${QPLUGDIR}/../imageformats")
-FOREACH (QI qgif;qjpeg;qsvg;qtiff)
+FOREACH (QI qgif;qico;qjpeg;qsvg;qtiff)
     IF (NOT EXISTS "${QPLUGDIR}/../imageformats/lib${QI}.dylib")
         EXECUTE_PROCESS (COMMAND ditto ${QARCHS} "@QT_PLUGINS_DIR@/imageformats/lib${QI}.dylib" "${QPLUGDIR}/../imageformats/lib${QI}.dylib")
     ENDIF ()
@@ -74,6 +74,10 @@ EXECUTE_PROCESS (COMMAND mkdir -p "${QPLUGDIR}/../sqldrivers")
 IF (NOT EXISTS "${QPLUGDIR}/../sqldrivers/libqsqlite.dylib")
     EXECUTE_PROCESS (COMMAND ditto ${QARCHS} "@QT_PLUGINS_DIR@/sqldrivers/libqsqlite.dylib" "${QPLUGDIR}/../sqldrivers/libqsqlite.dylib")
 ENDIF ()
+EXECUTE_PROCESS (COMMAND mkdir -p "${QPLUGDIR}/../iconengines")
+IF (NOT EXISTS "${QPLUGDIR}/../iconengines/libqsvgicon.dylib")
+    EXECUTE_PROCESS (COMMAND ditto ${QARCHS} "@QT_PLUGINS_DIR@/iconengines/libqsvgicon.dylib" "${QPLUGDIR}/../iconengines/libqsvgicon.dylib")
+ENDIF ()
 
 # Qwt
 # assumes shared libraries
@@ -84,7 +88,7 @@ IF (NOT EXISTS "${QLIBDIR}/libqwt.dylib")
 ENDIF ()
 GET_INSTALL_NAME ("@QWT_LIBRARY@" "libqwt" QWT_CHG)
 IF (QWT_CHG)
-    INSTALLNAMETOOL_CHANGE ("${QWT_CHG}" "${ATEXECUTABLE}/@QGIS_LIB_SUBDIR@/libqwt.dylib" "${QAPPDIR}/@QGIS_APP_NAME@")
+    UPDATEQGISPATHS (${QWT_CHG} libqwt.dylib)
 ENDIF (QWT_CHG)
 
 # PyQt
@@ -117,7 +121,7 @@ FOREACH (PU pylupdate4;pyrcc4)
     ENDIF ()
 ENDFOREACH (PU)
 IF (NOT EXISTS "${QBINDIR}/pyuic4")
-    EXECUTE_PROCESS (COMMAND sed -E "s, /.*/PyQt4/uic/pyuic.py, ${QDATADIR}/python/PyQt4/uic/pyuic.py," "@PYQT4_BIN_DIR@/pyuic4"
+    EXECUTE_PROCESS (COMMAND sed -E "s, /.*/PyQt4/uic/pyuic.py, \"\$(/usr/bin/dirname \"\$0\")/../../Resources/python/PyQt4/uic/pyuic.py\"," "@PYQT4_BIN_DIR@/pyuic4"
                      OUTPUT_VARIABLE PYUIC_CONTENTS)
     FILE (WRITE "${QBINDIR}/pyuic4" "${PYUIC_CONTENTS}")
     EXECUTE_PROCESS (COMMAND chmod +x "${QBINDIR}/pyuic4")
@@ -177,13 +181,14 @@ FOREACH (QFW ${QTLISTQG})
     IF (@OSX_HAVE_LOADERPATH@)
         SET (QFW_CHG_TO "${ATLOADER}/@QGIS_PLUGIN_SUBDIR_REV@/${QGIS_FW_SUBDIR}/${LIBPOST}")
     ENDIF ()
-    FOREACH (QI qgif;qjpeg;qsvg;qtiff)
+    FOREACH (QI qgif;qico;qjpeg;qsvg;qtiff)
         INSTALLNAMETOOL_CHANGE ("${QFW_CHG}" "${QFW_CHG_TO}" "${QPLUGDIR}/../imageformats/lib${QI}.dylib")
     ENDFOREACH (QI)
     FOREACH (QC cn;jp;kr;tw)
         INSTALLNAMETOOL_CHANGE ("${QFW_CHG}" "${QFW_CHG_TO}" "${QPLUGDIR}/../codecs/libq${QC}codecs.dylib")
     ENDFOREACH (QC)
     INSTALLNAMETOOL_CHANGE ("${QFW_CHG}" "${QFW_CHG_TO}" "${QPLUGDIR}/../sqldrivers/libqsqlite.dylib")
+    INSTALLNAMETOOL_CHANGE ("${QFW_CHG}" "${QFW_CHG_TO}" "${QPLUGDIR}/../iconengines/libqsvgicon.dylib")
     # qt fw
     IF (@OSX_HAVE_LOADERPATH@)
         SET (QFW_CHG_TO "${ATLOADER}/../../../${LIBPOST}")

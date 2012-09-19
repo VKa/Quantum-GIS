@@ -16,12 +16,14 @@
 #ifndef QGSEXPRESSION_H
 #define QGSEXPRESSION_H
 
+#include <QMetaType>
 #include <QStringList>
 #include <QVariant>
 #include <QList>
 #include <QDomDocument>
 
 #include "qgsfield.h"
+#include "qgsvectorlayer.h"
 
 class QgsDistanceArea;
 class QgsFeature;
@@ -120,12 +122,27 @@ class CORE_EXPORT QgsExpression
     //! Return the number used for $rownum special column
     int currentRowNumber() { return mRowNumber; }
 
+    void setScale( double scale ) { mScale = scale; }
+
+    int scale() {return mScale; }
+
     //! Return the parsed expression as a string - useful for debugging
     QString dump() const;
 
     //! Return calculator used for distance and area calculations
     //! (used by internal functions)
     QgsDistanceArea* geomCalculator() { if ( !mCalc ) initGeomCalculator(); return mCalc; }
+
+    /** This function currently replaces each expression between [% and %]
+       in the string with the result of its evaluation on the feature
+       passed as argument.
+
+       Additional substitutions can be passed through the substitutionMap
+       parameter
+    */
+    static QString replaceExpressionText( QString action, QgsFeature &feat,
+                                          QgsVectorLayer* layer,
+                                          const QMap<QString, QVariant> *substitutionMap = 0 );
 
     //
 
@@ -209,6 +226,8 @@ class CORE_EXPORT QgsExpression
 
     //! return quoted column reference (in double quotes)
     static QString quotedColumnRef( QString name ) { return QString( "\"%1\"" ).arg( name.replace( "\"", "\"\"" ) ); }
+    //! return quoted string (in single quotes)
+    static QString quotedString( QString text ) { return QString( "'%1'" ).arg( text.replace( "'", "''" ) ); }
 
     //////
 
@@ -242,7 +261,7 @@ class CORE_EXPORT QgsExpression
     {
       public:
         NodeList() {}
-        virtual ~NodeList() { foreach( Node* n, mList ) delete n; }
+        virtual ~NodeList() { foreach ( Node* n, mList ) delete n; }
         void append( Node* node ) { mList.append( node ); }
         int count() { return mList.count(); }
         QList<Node*> list() { return mList; }
@@ -252,6 +271,36 @@ class CORE_EXPORT QgsExpression
 
       protected:
         QList<Node*> mList;
+    };
+
+    class CORE_EXPORT Interval
+    {
+        // YEAR const value taken from postgres query
+        // SELECT EXTRACT(EPOCH FROM interval '1 year')
+        static const int YEARS = 31557600;
+        static const int MONTHS = 60 * 60 * 24 * 30;
+        static const int WEEKS = 60 * 60 * 24 * 7;
+        static const int DAY = 60 * 60 * 24;
+        static const int HOUR = 60 * 60;
+        static const int MINUTE = 60;
+      public:
+        Interval( double seconds = 0 ) { mSeconds = seconds; }
+        ~Interval();
+        double years() { return mSeconds / YEARS;}
+        double months() { return mSeconds / MONTHS; }
+        double weeks() { return mSeconds / WEEKS;}
+        double days() { return mSeconds / DAY;}
+        double hours() { return mSeconds / HOUR;}
+        double minutes() { return mSeconds / MINUTE;}
+        bool isValid() { return mValid; }
+        void setValid( bool valid ) { mValid = valid; }
+        double seconds() { return mSeconds; }
+        bool operator==( const QgsExpression::Interval& other ) const;
+        static QgsExpression::Interval invalidInterVal();
+        static QgsExpression::Interval fromString( QString string );
+      private:
+        double mSeconds;
+        bool mValid;
     };
 
     class CORE_EXPORT NodeUnaryOperator : public Node
@@ -304,6 +353,7 @@ class CORE_EXPORT QgsExpression
         bool compare( double diff );
         int computeInt( int x, int y );
         double computeDouble( double x, double y );
+        QDateTime computeDateTimeFromInterval( QDateTime d, QgsExpression::Interval *i );
 
         BinaryOperator mOp;
         Node* mOpLeft;
@@ -326,8 +376,8 @@ class CORE_EXPORT QgsExpression
 
         virtual void toOgcFilter( QDomDocument &doc, QDomElement &element ) const;
 
-        virtual QStringList referencedColumns() const { QStringList lst( mNode->referencedColumns() ); foreach( Node* n, mList->list() ) lst.append( n->referencedColumns() ); return lst; }
-        virtual bool needsGeometry() const { bool needs = false; foreach( Node* n, mList->list() ) needs |= n->needsGeometry(); return needs; }
+        virtual QStringList referencedColumns() const { QStringList lst( mNode->referencedColumns() ); foreach ( Node* n, mList->list() ) lst.append( n->referencedColumns() ); return lst; }
+        virtual bool needsGeometry() const { bool needs = false; foreach ( Node* n, mList->list() ) needs |= n->needsGeometry(); return needs; }
         virtual void accept( Visitor& v ) { v.visit( this ); }
 
       protected:
@@ -353,8 +403,8 @@ class CORE_EXPORT QgsExpression
         virtual void toOgcFilter( QDomDocument &doc, QDomElement &element ) const;
         static QgsExpression::Node* createFromOgcFilter( QDomElement &element, QString &errorMessage );
 
-        virtual QStringList referencedColumns() const { QStringList lst; if ( !mArgs ) return lst; foreach( Node* n, mArgs->list() ) lst.append( n->referencedColumns() ); return lst; }
-        virtual bool needsGeometry() const { bool needs = BuiltinFunctions()[mFnIndex].mUsesGeometry; if ( mArgs ) { foreach( Node* n, mArgs->list() ) needs |= n->needsGeometry(); } return needs; }
+        virtual QStringList referencedColumns() const { QStringList lst; if ( !mArgs ) return lst; foreach ( Node* n, mArgs->list() ) lst.append( n->referencedColumns() ); return lst; }
+        virtual bool needsGeometry() const { bool needs = BuiltinFunctions()[mFnIndex].mUsesGeometry; if ( mArgs ) { foreach ( Node* n, mArgs->list() ) needs |= n->needsGeometry(); } return needs; }
         virtual void accept( Visitor& v ) { v.visit( this ); }
 
       protected:
@@ -424,7 +474,7 @@ class CORE_EXPORT QgsExpression
     {
       public:
         NodeCondition( WhenThenList* conditions, Node* elseExp = NULL ) : mConditions( *conditions ), mElseExp( elseExp ) { delete conditions; }
-        ~NodeCondition() { delete mElseExp; foreach( WhenThen* cond, mConditions ) delete cond; }
+        ~NodeCondition() { delete mElseExp; foreach ( WhenThen* cond, mConditions ) delete cond; }
 
         virtual QVariant eval( QgsExpression* parent, QgsFeature* f );
         virtual bool prepare( QgsExpression* parent, const QgsFieldMap& fields );
@@ -469,6 +519,8 @@ class CORE_EXPORT QgsExpression
     // internally used to create an empty expression
     QgsExpression() : mRootNode( NULL ), mRowNumber( 0 ), mCalc( NULL ) {}
 
+    void initGeomCalculator();
+
     QString mExpression;
     Node* mRootNode;
 
@@ -476,9 +528,11 @@ class CORE_EXPORT QgsExpression
     QString mEvalErrorString;
 
     int mRowNumber;
+    double mScale;
 
-    void initGeomCalculator();
     QgsDistanceArea* mCalc;
 };
+
+Q_DECLARE_METATYPE( QgsExpression::Interval )
 
 #endif // QGSEXPRESSION_H

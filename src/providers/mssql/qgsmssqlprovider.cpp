@@ -214,19 +214,20 @@ QSqlDatabase QgsMssqlProvider::GetDatabase( QString driver, QString host, QStrin
 #ifdef WIN32
     connectionString = "driver={SQL Server}";
 #else
-    connectionString = "driver={FreeTDS}";
+    connectionString = "driver={FreeTDS};port=1433";
 #endif
-    if ( !host.isEmpty() )
-      connectionString += ";server=" + host;
-
-    if ( !database.isEmpty() )
-      connectionString += ";database=" + database;
-
-    if ( password.isEmpty() )
-      connectionString += ";trusted_connection=yes";
-    else
-      connectionString += ";uid=" + username + ";pwd=" + password;
   }
+
+  if ( !host.isEmpty() )
+    connectionString += ";server=" + host;
+
+  if ( !database.isEmpty() )
+    connectionString += ";database=" + database;
+
+  if ( password.isEmpty() )
+    connectionString += ";trusted_connection=yes";
+  else
+    connectionString += ";uid=" + username + ";pwd=" + password;
 
   if ( !username.isEmpty() )
     db.setUserName( username );
@@ -387,7 +388,7 @@ void QgsMssqlProvider::loadFields()
           return;
         }
       }
-      foreach( QString pk, pkCandidates )
+      foreach ( QString pk, pkCandidates )
       {
         mQuery.clear();
         mQuery.setForwardOnly( true );
@@ -520,7 +521,7 @@ bool QgsMssqlProvider::nextFeature( QgsFeature& feature )
 
     if ( mFidCol >= 0 )
     {
-      feature.setFeatureId( mQuery.value( col ).toInt() );
+      feature.setFeatureId( mQuery.value( col ).toLongLong() );
       col++;
     }
 
@@ -604,7 +605,10 @@ void QgsMssqlProvider::select( QgsAttributeList fetchAttributes,
 
   if ( !mSqlWhereClause.isEmpty() )
   {
-    mStatement += " and (" + mSqlWhereClause + ")";
+    if ( rect.isEmpty() )
+      mStatement += " where (" + mSqlWhereClause + ")";
+    else
+      mStatement += " and (" + mSqlWhereClause + ")";
   }
 
   mFetchGeom = fetchGeometry;
@@ -625,6 +629,129 @@ void QgsMssqlProvider::select( QgsAttributeList fetchAttributes,
     QgsDebugMsg( "QgsMssqlProvider::select no fields have been requested" );
   }
 }
+
+// Returns the minimum value of an attribute
+QVariant QgsMssqlProvider::minimumValue( int index )
+{
+  // get the field name
+  QgsField fld = mAttributeFields[ index ];
+  QString sql = QString( "select min([%1]) from " )
+                .arg( fld.name() );
+
+  if ( !mSchemaName.isEmpty() )
+    sql += "[" + mSchemaName + "].";
+
+  sql += "[" + mTableName + "]";
+
+  if ( !mSqlWhereClause.isEmpty() )
+  {
+    sql += QString( " where (%1)" ).arg( mSqlWhereClause );
+  }
+
+  mQuery = QSqlQuery( mDatabase );
+  mQuery.setForwardOnly( true );
+
+  if ( !mQuery.exec( sql ) )
+  {
+    QString msg = mQuery.lastError().text();
+    QgsDebugMsg( msg );
+  }
+
+  if ( mQuery.isActive() )
+  {
+    if ( mQuery.next() )
+    {
+      return mQuery.value( 0 );
+    }
+  }
+
+  return QVariant( QString::null );
+}
+
+// Returns the maximum value of an attribute
+QVariant QgsMssqlProvider::maximumValue( int index )
+{
+  // get the field name
+  QgsField fld = mAttributeFields[ index ];
+  QString sql = QString( "select max([%1]) from " )
+                .arg( fld.name() );
+
+  if ( !mSchemaName.isEmpty() )
+    sql += "[" + mSchemaName + "].";
+
+  sql += "[" + mTableName + "]";
+
+  if ( !mSqlWhereClause.isEmpty() )
+  {
+    sql += QString( " where (%1)" ).arg( mSqlWhereClause );
+  }
+
+  mQuery = QSqlQuery( mDatabase );
+  mQuery.setForwardOnly( true );
+
+  if ( !mQuery.exec( sql ) )
+  {
+    QString msg = mQuery.lastError().text();
+    QgsDebugMsg( msg );
+  }
+
+  if ( mQuery.isActive() )
+  {
+    if ( mQuery.next() )
+    {
+      return mQuery.value( 0 );
+    }
+  }
+
+  return QVariant( QString::null );
+}
+
+// Returns the list of unique values of an attribute
+void QgsMssqlProvider::uniqueValues( int index, QList<QVariant> &uniqueValues, int limit )
+{
+  uniqueValues.clear();
+
+  // get the field name
+  QgsField fld = mAttributeFields[ index ];
+  QString sql = QString( "select distinct " );
+
+  if ( limit > 0 )
+  {
+    sql += QString( " top %1 " ).arg( limit );
+  }
+
+  sql += QString( "[%1] from " )
+         .arg( fld.name() );
+
+  if ( !mSchemaName.isEmpty() )
+    sql += "[" + mSchemaName + "].";
+
+  sql += "[" + mTableName + "]";
+
+  if ( !mSqlWhereClause.isEmpty() )
+  {
+    sql += QString( " where (%1)" ).arg( mSqlWhereClause );
+  }
+
+  mQuery = QSqlQuery( mDatabase );
+  mQuery.setForwardOnly( true );
+
+  if ( !mQuery.exec( sql ) )
+  {
+    QString msg = mQuery.lastError().text();
+    QgsDebugMsg( msg );
+  }
+
+  if ( mQuery.isActive() )
+  {
+    // read all features
+    while ( mQuery.next() )
+    {
+      uniqueValues.append( mQuery.value( 0 ) );
+    }
+  }
+}
+
 
 // update the extent, feature count, wkb type and srid for this layer
 void QgsMssqlProvider::UpdateStatistics( bool estimate )
@@ -1315,7 +1442,7 @@ QString  QgsMssqlProvider::name() const
   return TEXT_PROVIDER_KEY;
 } // ::name()
 
-bool QgsMssqlProvider::setSubsetString( QString theSQL, bool updateFeatureCount )
+bool QgsMssqlProvider::setSubsetString( QString theSQL, bool )
 {
   QString prevWhere = mSqlWhereClause;
 

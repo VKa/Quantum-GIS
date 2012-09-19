@@ -1,6 +1,22 @@
+/***************************************************************************
+    qgsembedlayerdialog.cpp
+    ---------------------
+    begin                : June 2011
+    copyright            : (C) 2011 by Marco Hugentobler
+    email                : marco dot hugentobler at sourcepole dot ch
+ ***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
 #include "qgsembedlayerdialog.h"
 #include "qgsproject.h"
 #include "qgisapp.h"
+#include "qgsapplication.h"
+
 #include <QDomDocument>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -158,7 +174,7 @@ void QgsEmbedLayerDialog::addLegendGroupToTreeWidget( const QDomElement& groupEl
   {
     groupItem = new QTreeWidgetItem( parent );
   }
-  groupItem->setIcon( 0, QgisApp::getThemeIcon( "mActionFolder.png" ) );
+  groupItem->setIcon( 0, QgsApplication::getThemeIcon( "mActionFolder.png" ) );
   groupItem->setText( 0, groupElem.attribute( "name" ) );
   groupItem->setData( 0, Qt::UserRole, "group" );
 

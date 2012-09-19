@@ -1,3 +1,17 @@
+/***************************************************************************
+    qgsbrowsermodel.cpp
+    ---------------------
+    begin                : July 2011
+    copyright            : (C) 2011 by Martin Dobias
+    email                : wonder.sk at gmail.com
+ ***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
 #include <QDir>
 #include <QApplication>
 #include <QStyle>
@@ -43,7 +57,7 @@ void QgsBrowserModel::addRootItems()
   }
 
   // add drives
-  foreach( QFileInfo drive, QDir::drives() )
+  foreach ( QFileInfo drive, QDir::drives() )
   {
     QString path = drive.absolutePath();
     QgsDirectoryItem *item = new QgsDirectoryItem( NULL, path, path );
@@ -55,7 +69,7 @@ void QgsBrowserModel::addRootItems()
   // Add non file top level items
   QStringList providersList = QgsProviderRegistry::instance()->providerList();
   providersList.sort();
-  foreach( QString key, providersList )
+  foreach ( QString key, providersList )
   {
     QLibrary *library = QgsProviderRegistry::instance()->providerLibrary( key );
     if ( !library )
@@ -94,7 +108,7 @@ void QgsBrowserModel::addRootItems()
 
 void QgsBrowserModel::removeRootItems()
 {
-  foreach( QgsDataItem* item, mRootItems )
+  foreach ( QgsDataItem* item, mRootItems )
   {
     delete item;
   }
@@ -113,11 +127,7 @@ Qt::ItemFlags QgsBrowserModel::flags( const QModelIndex & index ) const
   QgsDataItem* ptr = ( QgsDataItem* ) index.internalPointer();
   if ( ptr->type() == QgsDataItem::Layer )
   {
-    QgsLayerItem *layer = ( QgsLayerItem* ) ptr;
-    if ( layer->providerKey() != "wms" )
-    {
-      flags |= Qt::ItemIsDragEnabled;
-    }
+    flags |= Qt::ItemIsDragEnabled;
   }
   if ( ptr->acceptDrop() )
     flags |= Qt::ItemIsDropEnabled;
@@ -347,14 +357,13 @@ QStringList QgsBrowserModel::mimeTypes() const
 QMimeData * QgsBrowserModel::mimeData( const QModelIndexList &indexes ) const
 {
   QgsMimeDataUtils::UriList lst;
-  foreach( const QModelIndex &index, indexes )
+  foreach ( const QModelIndex &index, indexes )
   {
     if ( index.isValid() )
     {
       QgsDataItem* ptr = ( QgsDataItem* ) index.internalPointer();
       if ( ptr->type() != QgsDataItem::Layer ) continue;
       QgsLayerItem *layer = ( QgsLayerItem* ) ptr;
-      if ( layer->providerKey() == "wms" ) continue;
       lst.append( QgsMimeDataUtils::Uri( layer ) );
     }
   }

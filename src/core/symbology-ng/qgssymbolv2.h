@@ -1,3 +1,17 @@
+/***************************************************************************
+    qgssymbolv2.h
+    ---------------------
+    begin                : November 2009
+    copyright            : (C) 2009 by Martin Dobias
+    email                : wonder.sk at gmail.com
+ ***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
 
 #ifndef QGSSYMBOLV2_H
 #define QGSSYMBOLV2_H
@@ -42,6 +56,12 @@ class CORE_EXPORT QgsSymbolV2
       Fill
     };
 
+    enum ScaleMethod
+    {
+      ScaleArea,
+      ScaleDiameter
+    };
+
     //! @note added in 1.5
     enum RenderHint
     {
@@ -76,7 +96,6 @@ class CORE_EXPORT QgsSymbolV2
 
     //! delete layer at specified index and set a new one
     bool changeSymbolLayer( int index, QgsSymbolLayerV2* layer );
-
 
     void startRender( QgsRenderContext& context, const QgsVectorLayer* layer = 0 );
     void stopRender( QgsRenderContext& context );
@@ -204,6 +223,9 @@ class CORE_EXPORT QgsMarkerSymbolV2 : public QgsSymbolV2
 
     void setSize( double size );
     double size();
+
+    void setScaleMethod( QgsSymbolV2::ScaleMethod scaleMethod );
+    ScaleMethod scaleMethod();
 
     void renderPoint( const QPointF& point, const QgsFeature* f, QgsRenderContext& context, int layer = -1, bool selected = false );
 

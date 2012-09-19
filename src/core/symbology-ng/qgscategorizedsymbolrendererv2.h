@@ -1,3 +1,17 @@
+/***************************************************************************
+    qgscategorizedsymbolrendererv2.h
+    ---------------------
+    begin                : November 2009
+    copyright            : (C) 2009 by Martin Dobias
+    email                : wonder.sk at gmail.com
+ ***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
 #ifndef QGSCATEGORIZEDSYMBOLRENDERERV2_H
 #define QGSCATEGORIZEDSYMBOLRENDERERV2_H
 
@@ -116,6 +130,11 @@ class CORE_EXPORT QgsCategorizedSymbolRendererV2 : public QgsFeatureRendererV2
     //! @note added in 1.6
     QString sizeScaleField() const { return mSizeScaleField; }
 
+    //! @note added in 2.0
+    void setScaleMethod( QgsSymbolV2::ScaleMethod scaleMethod ) { mScaleMethod = scaleMethod; }
+    //! @note added in 2.0
+    QgsSymbolV2::ScaleMethod scaleMethod() const { return mScaleMethod; }
+
   protected:
     QString mAttrName;
     QgsCategoryList mCategories;
@@ -123,6 +142,7 @@ class CORE_EXPORT QgsCategorizedSymbolRendererV2 : public QgsFeatureRendererV2
     QgsVectorColorRampV2* mSourceColorRamp;
     QString mRotationField;
     QString mSizeScaleField;
+    QgsSymbolV2::ScaleMethod mScaleMethod;
 
     //! attribute index (derived from attribute name in startRender)
     int mAttrNum;

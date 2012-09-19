@@ -41,6 +41,8 @@
 #include <QMenuBar>
 #include <QPushButton>
 #include <QWebView>
+#include <QDesktopServices>
+#include <QMessageBox>
 
 #include "qgslogger.h"
 
@@ -226,7 +228,7 @@ void QgsIdentifyResults::addFeature( QgsVectorLayer *vlayer,
     if ( vlayer->pendingFields().size() > 0 )
     {
       QTreeWidgetItem *editItem = new QTreeWidgetItem( QStringList() << "" << ( vlayer->isEditable() ? tr( "Edit feature form" ) : tr( "View feature form" ) ) );
-      editItem->setIcon( 0, QgisApp::getThemeIcon( vlayer->isEditable() ? "/mIconEditable.png" : "/mIconEditable.png" ) );
+      editItem->setIcon( 0, QgsApplication::getThemeIcon( vlayer->isEditable() ? "/mIconEditable.png" : "/mIconEditable.png" ) );
       editItem->setData( 0, Qt::UserRole, "edit" );
       actionItem->addChild( editItem );
     }
@@ -239,7 +241,7 @@ void QgsIdentifyResults::addFeature( QgsVectorLayer *vlayer,
         continue;
 
       QTreeWidgetItem *twi = new QTreeWidgetItem( QStringList() << "" << action.name() );
-      twi->setIcon( 0, QgisApp::getThemeIcon( "/mAction.png" ) );
+      twi->setIcon( 0, QgsApplication::getThemeIcon( "/mAction.png" ) );
       twi->setData( 0, Qt::UserRole, "action" );
       twi->setData( 0, Qt::UserRole + 1, QVariant::fromValue( i ) );
       actionItem->addChild( twi );
@@ -277,6 +279,8 @@ void QgsIdentifyResults::addFeature( QgsRasterLayer *layer,
 
     QWebView *wv = new QWebView( attrItem->treeWidget() );
     wv->setHtml( attributes.begin().value() );
+    wv->page()->setLinkDelegationPolicy( QWebPage::DelegateAllLinks );
+    connect( wv, SIGNAL( linkClicked( const QUrl & ) ), this, SLOT( openUrl( const QUrl & ) ) );
     attrItem->treeWidget()->setItemWidget( attrItem, 1, wv );
   }
   else
@@ -329,7 +333,7 @@ void QgsIdentifyResults::editingToggled()
       continue;
 
     QTreeWidgetItem *editItem = actions->child( j );
-    editItem->setIcon( 0, QgisApp::getThemeIcon( vlayer->isEditable() ? "/mIconEditable.png" : "/mIconEditable.png" ) );
+    editItem->setIcon( 0, QgsApplication::getThemeIcon( vlayer->isEditable() ? "/mIconEditable.png" : "/mIconEditable.png" ) );
     editItem->setText( 1, vlayer->isEditable() ? tr( "Edit feature form" ) : tr( "View feature form" ) );
   }
 }
@@ -434,7 +438,7 @@ void QgsIdentifyResults::contextMenuEvent( QContextMenuEvent* event )
   if ( featItem )
   {
     mActionPopup->addAction(
-      QgisApp::getThemeIcon( vlayer->isEditable() ? "/mIconEditable.png" : "/mIconEditable.png" ),
+      QgsApplication::getThemeIcon( vlayer->isEditable() ? "/mIconEditable.png" : "/mIconEditable.png" ),
       vlayer->isEditable() ? tr( "Edit feature form" ) : tr( "View feature form" ),
       this, SLOT( featureForm() ) );
     mActionPopup->addAction( tr( "Zoom to feature" ), this, SLOT( zoomToFeature() ) );
@@ -474,7 +478,7 @@ void QgsIdentifyResults::contextMenuEvent( QContextMenuEvent* event )
         continue;
 
       QgsFeatureAction *a = new QgsFeatureAction( action.name(), mFeatures[ featIdx ], vlayer, i, idx, this );
-      mActionPopup->addAction( QgisApp::getThemeIcon( "/mAction.png" ), action.name(), a, SLOT( execute() ) );
+      mActionPopup->addAction( QgsApplication::getThemeIcon( "/mAction.png" ), action.name(), a, SLOT( execute() ) );
     }
   }
 
@@ -502,7 +506,7 @@ void QgsIdentifyResults::expandColumnsToFit()
 
 void QgsIdentifyResults::clearHighlights()
 {
-  foreach( QgsHighlight *h, mHighlights )
+  foreach ( QgsHighlight *h, mHighlights )
   {
     delete h;
   }
@@ -524,7 +528,7 @@ void QgsIdentifyResults::clear()
 void QgsIdentifyResults::activate()
 {
 #if 0
-  foreach( QgsRubberBand *rb, mRubberBands )
+  foreach ( QgsRubberBand *rb, mRubberBands )
   {
     rb->show();
   }
@@ -540,7 +544,7 @@ void QgsIdentifyResults::activate()
 void QgsIdentifyResults::deactivate()
 {
 #if 0
-  foreach( QgsRubberBand *rb, mRubberBands )
+  foreach ( QgsRubberBand *rb, mRubberBands )
   {
     rb->hide();
   }
@@ -743,7 +747,7 @@ void QgsIdentifyResults::featureDeleted( QgsFeatureId fid )
   {
     QTreeWidgetItem *featItem = layItem->child( i );
 
-    if ( featItem && featItem->data( 0, Qt::UserRole ).toString() == FID_TO_STRING( fid ) )
+    if ( featItem && STRING_TO_FID( featItem->data( 0, Qt::UserRole ) ) == fid )
     {
       delete mHighlights.take( featItem );
       delete featItem;
@@ -774,7 +778,7 @@ void QgsIdentifyResults::attributeValueChanged( QgsFeatureId fid, int idx, const
   {
     QTreeWidgetItem *featItem = layItem->child( i );
 
-    if ( featItem && featItem->data( 0, Qt::UserRole ).toString() == FID_TO_STRING( fid ) )
+    if ( featItem && STRING_TO_FID( featItem->data( 0, Qt::UserRole ) ) == fid )
     {
       if ( featItem->data( 0, Qt::DisplayRole ).toString() == vlayer->displayField() )
         featItem->setData( 1, Qt::DisplayRole, val );
@@ -808,7 +812,7 @@ void QgsIdentifyResults::highlightFeature( QTreeWidgetItem *item )
   if ( mHighlights.contains( featItem ) )
     return;
 
-  QgsFeatureId fid = featItem->data( 0, Qt::UserRole ).toInt();
+  QgsFeatureId fid = STRING_TO_FID( featItem->data( 0, Qt::UserRole ) );
 
   QgsFeature feat;
   if ( !layer->featureAtId( fid, feat, true, false ) )
@@ -843,7 +847,7 @@ void QgsIdentifyResults::zoomToFeature()
   if ( !featItem )
     return;
 
-  int fid = featItem->data( 0, Qt::UserRole ).toInt();
+  int fid = STRING_TO_FID( featItem->data( 0, Qt::UserRole ) );
 
   QgsFeature feat;
   if ( ! layer->featureAtId( fid, feat, true, false ) )
@@ -862,7 +866,7 @@ void QgsIdentifyResults::zoomToFeature()
   {
     QgsPoint c = rect.center();
     rect = mCanvas->extent();
-    rect.expand( 0.25, &c );
+    rect.scale( 0.5, &c );
   }
 
   mCanvas->setExtent( rect );
@@ -881,7 +885,7 @@ void QgsIdentifyResults::featureForm()
   if ( !featItem )
     return;
 
-  int fid = featItem->data( 0, Qt::UserRole ).toInt();
+  int fid = STRING_TO_FID( featItem->data( 0, Qt::UserRole ) );
   int idx = featItem->data( 0, Qt::UserRole + 1 ).toInt();
 
   QgsFeature f;
@@ -979,4 +983,12 @@ void QgsIdentifyResults::copyFeatureAttributes()
 
   QgsDebugMsg( QString( "set clipboard: %1" ).arg( text ) );
   clipboard->setText( text );
+}
+
+void QgsIdentifyResults::openUrl( const QUrl &url )
+{
+  if ( !QDesktopServices::openUrl( url ) )
+  {
+    QMessageBox::warning( this, tr( "Could not open url" ), tr( "Could not open URL '%1'" ).arg( url.toString() ) );
+  }
 }

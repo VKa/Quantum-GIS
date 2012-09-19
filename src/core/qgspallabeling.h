@@ -28,10 +28,11 @@ class QgsMapRenderer;
 class QgsRectangle;
 class QgsCoordinateTransform;
 class QgsLabelSearchTree;
-struct QgsDiagramLayerSettings;
+class QgsDiagramLayerSettings;
 
 #include <QString>
 #include <QFont>
+#include <QFontDatabase>
 #include <QColor>
 #include <QHash>
 #include <QList>
@@ -48,6 +49,7 @@ class QgsMapToPixel;
 class QgsFeature;
 
 #include "qgspoint.h"
+#include "qgsrectangle.h"
 #include "qgsmaprenderer.h" // definition of QgsLabelingEngineInterface
 #include "qgsexpression.h"
 
@@ -79,6 +81,7 @@ class CORE_EXPORT QgsPalLayerSettings
       MapOrientation = 8
     };
 
+    // increment iterator in _writeDataDefinedPropertyMap() when adding more
     enum DataDefinedProperties
     {
       Size = 0,
@@ -95,7 +98,13 @@ class CORE_EXPORT QgsPalLayerSettings
       Hali, //horizontal alignment for data defined label position (Left, Center, Right)
       Vali, //vertical alignment for data defined label position (Bottom, Base, Half, Cap, Top)
       LabelDistance,
-      Rotation //data defined rotation (only useful in connection with data defined position)
+      Rotation, //data defined rotation (only useful in connection with data defined position)
+      Show,
+      MinScale,
+      MaxScale,
+      FontTransp,
+      BufferTransp,
+      PropertyCount, // keep last entry
     };
 
     QString fieldName;
@@ -110,27 +119,49 @@ class CORE_EXPORT QgsPalLayerSettings
 
     Placement placement;
     unsigned int placementFlags;
+    // offset labels of point/centroid features default to center
+    // move label to quadrant: left/down, don't move, right/up (-1, 0, 1)
+    int xQuadOffset;
+    int yQuadOffset;
+
+    // offset from point in mm or map units
+    double xOffset;
+    double yOffset;
+    double angleOffset; // rotation applied to offset labels
+    bool centroidWhole; // whether centroid calculated from whole or visible polygon
     QFont textFont;
+    QString textNamedStyle;
     QColor textColor;
+    int textTransp;
+    QColor previewBkgrdColor;
     bool enabled;
     int priority; // 0 = low, 10 = high
     bool obstacle; // whether it's an obstacle
     double dist; // distance from the feature (in mm)
     double vectorScaleFactor; //scale factor painter units->pixels
     double rasterCompressFactor; //pixel resolution scale factor
-    int scaleMin, scaleMax; // disabled if both are zero
+
+    // disabled if both are zero
+    int scaleMin;
+    int scaleMax;
     double bufferSize; //buffer size (in mm)
     QColor bufferColor;
+    int bufferTransp;
+    Qt::PenJoinStyle bufferJoinStyle;
+    bool bufferNoFill; //set interior of buffer to 100% transparent
     bool formatNumbers;
     int decimals;
     bool plusSign;
     bool labelPerPart; // whether to label every feature's part or only the biggest one
+    bool displayAll;  // if true, all features will be labelled even though overlaps occur
     bool mergeLines;
     double minFeatureSize; // minimum feature size to be labelled (in mm)
     // Adds '<' or '>' to the label string pointing to the direction of the line / polygon ring
     // Works only if Placement == Line
     bool addDirectionSymbol;
     bool fontSizeInMapUnits; //true if font size is in map units (otherwise in points)
+    bool bufferSizeInMapUnits; //true if buffer is in map units (otherwise in mm)
+    bool labelOffsetInMapUnits; //true if label offset is in map units (otherwise in mm)
     bool distInMapUnits; //true if distance is in map units (otherwise in mm)
     QString wrapChar;
     // called from register feature hook
@@ -147,6 +178,18 @@ class CORE_EXPORT QgsPalLayerSettings
     /**Set a property to static instead data defined*/
     void removeDataDefinedProperty( DataDefinedProperties p );
 
+    /**Stores field indices for data defined layer properties*/
+    QMap< DataDefinedProperties, int > dataDefinedProperties;
+
+    bool preserveRotation; // preserve predefined rotation data during label pin/unpin operations
+
+    /**Calculates pixel size (considering output size should be in pixel or map units, scale factors and oversampling)
+     @param size size to convert
+     @param c rendercontext
+     @param buffer whether it buffer size being calculated
+     @return font pixel size*/
+    int sizeToPixel( double size, const QgsRenderContext& c , bool buffer = false ) const;
+
     // temporary stuff: set when layer gets prepared
     pal::Layer* palLayer;
     int fieldIndex;
@@ -157,20 +200,15 @@ class CORE_EXPORT QgsPalLayerSettings
     QList<QgsPalGeometry*> geometries;
     QgsGeometry* extentGeom;
 
-    /**Stores field indices for data defined layer properties*/
-    QMap< DataDefinedProperties, int > dataDefinedProperties;
-
-    /**Calculates pixel size (considering output size should be in pixel or map units, scale factors and oversampling)
-     @param size size to convert
-     @param c rendercontext
-     @return font pixel size*/
-    int sizeToPixel( double size, const QgsRenderContext& c ) const;
-
   private:
     /**Checks if a feature is larger than a minimum size (in mm)
     @return true if above size, false if below*/
     bool checkMinimumSizeMM( const QgsRenderContext& ct, QgsGeometry* geom, double minSize ) const;
     QgsExpression* expression;
+
+    QFontDatabase mFontDB;
+    /**Updates layer font with one of its named styles */
+    void updateFontViaStyle( const QString & fontstyle );
 };
 
 class CORE_EXPORT QgsLabelCandidate
@@ -224,6 +262,8 @@ class CORE_EXPORT QgsPalLabeling : public QgsLabelingEngineInterface
     virtual void exit();
     //! return infos about labels at a given (map) position
     virtual QList<QgsLabelPosition> labelsAtPosition( const QgsPoint& p );
+    //! return infos about labels within a given (map) rectangle
+    virtual QList<QgsLabelPosition> labelsWithinRect( const QgsRectangle& r );
 
     //! called when passing engine among map renderers
     virtual QgsLabelingEngineInterface* clone();
@@ -232,7 +272,7 @@ class CORE_EXPORT QgsPalLabeling : public QgsLabelingEngineInterface
     //!drawLabel
     void drawLabel( pal::LabelPosition* label, QPainter* painter, const QFont& f, const QColor& c, const QgsMapToPixel* xform, double bufferSize = -1,
                     const QColor& bufferColor = QColor( 255, 255, 255 ), bool drawBuffer = false );
-    static void drawLabelBuffer( QPainter* p, QString text, const QFont& font, double size, QColor color );
+    static void drawLabelBuffer( QPainter* p, QString text, const QFont& font, double size, QColor color , Qt::PenJoinStyle joinstyle = Qt::BevelJoin, bool noFill = false );
 
   protected:
 

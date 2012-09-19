@@ -30,15 +30,22 @@
 #include "qgsrenderer.h"
 #include "qgssnappingdialog.h"
 #include "qgsrasterlayer.h"
+#include "qgsscaleutils.h"
 #include "qgsgenericprojectionselector.h"
+#include "qgsstylev2.h"
+#include "qgssymbolv2.h"
+#include "qgsstylev2managerdialog.h"
+#include "qgsvectorcolorrampv2.h"
+#include "qgssymbolv2selectordialog.h"
 
 //qt includes
 #include <QColorDialog>
+#include <QInputDialog>
+#include <QFileDialog>
 #include <QHeaderView>  // Qt 4.4
 #include <QMessageBox>
 
 //stdc++ includes
-
 
 QgsProjectProperties::QgsProjectProperties( QgsMapCanvas* mapCanvas, QWidget *parent, Qt::WFlags fl )
     : QDialog( parent, fl )
@@ -62,7 +69,6 @@ QgsProjectProperties::QgsProjectProperties( QgsMapCanvas* mapCanvas, QWidget *pa
   //see if the user wants on the fly projection enabled
   bool myProjectionEnabled = myRenderer->hasCrsTransformEnabled();
   cbxProjectionEnabled->setChecked( myProjectionEnabled );
-  btnGrpMapUnits->setEnabled( !myProjectionEnabled );
 
   mProjectSrsId = myRenderer->destinationCrs().srsid();
   QgsDebugMsg( "Read project CRSID: " + QString::number( mProjectSrsId ) );
@@ -93,6 +99,14 @@ QgsProjectProperties::QgsProjectProperties( QgsMapCanvas* mapCanvas, QWidget *pa
   int dp = QgsProject::instance()->readNumEntry( "PositionPrecision", "/DecimalPlaces" );
   spinBoxDP->setValue( dp );
 
+  QString format = QgsProject::instance()->readEntry( "PositionPrecision", "/DegreeFormat", "D" );
+  if ( format == "DM" )
+    radDM->setChecked( true );
+  else if ( format == "DMS" )
+    radDMS->setChecked( true );
+  else
+    radD->setChecked( true );
+
   //get the color selections and set the button color accordingly
   int myRedInt = QgsProject::instance()->readNumEntry( "Gui", "/SelectionColorRedPart", 255 );
   int myGreenInt = QgsProject::instance()->readNumEntry( "Gui", "/SelectionColorGreenPart", 255 );
@@ -107,6 +121,22 @@ QgsProjectProperties::QgsProjectProperties( QgsMapCanvas* mapCanvas, QWidget *pa
   myBlueInt = QgsProject::instance()->readNumEntry( "Gui", "/CanvasColorBluePart", 255 );
   myColor = QColor( myRedInt, myGreenInt, myBlueInt );
   pbnCanvasColor->setColor( myColor );
+
+  //get project scales
+  QStringList myScales = QgsProject::instance()->readListEntry( "Scales", "/ScalesList" );
+  if ( !myScales.isEmpty() )
+  {
+    QStringList::const_iterator scaleIt = myScales.constBegin();
+    for ( ; scaleIt != myScales.constEnd(); ++scaleIt )
+    {
+      QListWidgetItem* newItem = new QListWidgetItem( lstScales );
+      newItem->setText( *scaleIt );
+      newItem->setFlags( Qt::ItemIsEditable | Qt::ItemIsEnabled | Qt::ItemIsSelectable );
+      lstScales->addItem( newItem );
+    }
+  }
+
+  grpProjectScales->setChecked( QgsProject::instance()->readBoolEntry( "Scales", "/useProjectScales" ) );
 
   QgsMapLayer* currentLayer = 0;
 
@@ -184,6 +214,7 @@ QgsProjectProperties::QgsProjectProperties( QgsMapCanvas* mapCanvas, QWidget *pa
   mWMSContactPhone->setText( QgsProject::instance()->readEntry( "WMSContactPhone", "/", "" ) );
   mWMSAbstract->setPlainText( QgsProject::instance()->readEntry( "WMSServiceAbstract", "/", "" ) );
   mWMSOnlineResourceLineEdit->setText( QgsProject::instance()->readEntry( "WMSOnlineResource", "/", "" ) );
+  mWMSUrlLineEdit->setText( QgsProject::instance()->readEntry( "WMSUrl", "/", "" ) );
 
   bool ok;
   QStringList values;
@@ -216,7 +247,7 @@ QgsProjectProperties::QgsProjectProperties( QgsMapCanvas* mapCanvas, QWidget *pa
     if ( grpWMSList->isChecked() )
     {
       QStringList list;
-      foreach( QString value, values )
+      foreach ( QString value, values )
       {
         list << QString( "EPSG:%1" ).arg( value );
       }
@@ -276,6 +307,22 @@ QgsProjectProperties::QgsProjectProperties( QgsMapCanvas* mapCanvas, QWidget *pa
   twWFSLayers->setRowCount( j );
   twWFSLayers->verticalHeader()->setResizeMode( QHeaderView::ResizeToContents );
 
+  // Default Styles
+  mStyle = QgsStyleV2::defaultStyle();
+  populateStyles();
+
+  // Project macros
+  QString pythonMacros = QgsProject::instance()->readEntry( "Macros", "/pythonCode", QString::null );
+  grpPythonMacros->setChecked( !pythonMacros.isEmpty() );
+  if ( !pythonMacros.isEmpty() )
+  {
+    ptePythonMacros->setPlainText( pythonMacros );
+  }
+  else
+  {
+    resetPythonMacros();
+  }
+
   restoreState();
 }
 
@@ -300,22 +347,11 @@ void QgsProjectProperties::setMapUnits( QGis::UnitType unit )
   {
     unit = QGis::Meters;
   }
-  if ( unit == QGis::Meters )
-  {
-    radMeters->setChecked( true );
-  }
-  else if ( unit == QGis::Feet )
-  {
-    radFeet->setChecked( true );
-  }
-  else if ( unit == QGis::DegreesMinutesSeconds )
-  {
-    radDMS->setChecked( true );
-  }
-  else
-  {
-    radDecimalDegrees->setChecked( true );
-  }
+
+  radMeters->setChecked( unit == QGis::Meters );
+  radFeet->setChecked( unit == QGis::Feet );
+  radDegrees->setChecked( unit == QGis::Degrees );
+
   mMapCanvas->mapRenderer()->setMapUnits( unit );
 }
 
@@ -341,21 +377,17 @@ void QgsProjectProperties::apply()
   // Note. Qt 3.2.3 and greater have a function selectedId() that
   // can be used instead of the two part technique here
   QGis::UnitType mapUnit;
-  if ( radMeters->isChecked() )
+  if ( radDegrees->isChecked() )
   {
-    mapUnit = QGis::Meters;
+    mapUnit = QGis::Degrees;
   }
   else if ( radFeet->isChecked() )
   {
     mapUnit = QGis::Feet;
   }
-  else if ( radDMS->isChecked() )
-  {
-    mapUnit = QGis::DegreesMinutesSeconds;
-  }
   else
   {
-    mapUnit = QGis::Degrees;
+    mapUnit = QGis::Meters;
   }
 
   QgsMapRenderer* myRenderer = mMapCanvas->mapRenderer();
@@ -395,6 +427,9 @@ void QgsProjectProperties::apply()
   // can be used instead of the two part technique here
   QgsProject::instance()->writeEntry( "PositionPrecision", "/Automatic", radAutomatic->isChecked() );
   QgsProject::instance()->writeEntry( "PositionPrecision", "/DecimalPlaces", spinBoxDP->value() );
+  QgsProject::instance()->writeEntry( "PositionPrecision", "/DegreeFormat",
+                                      QString( radDM->isChecked() ? "DM" : radDMS->isChecked() ? "DMS" : "D" ) );
+
   // Announce that we may have a new display precision setting
   emit displayPrecisionChanged();
 
@@ -413,6 +448,33 @@ void QgsProjectProperties::apply()
   QgsProject::instance()->writeEntry( "Gui", "/CanvasColorRedPart", myColor.red() );
   QgsProject::instance()->writeEntry( "Gui", "/CanvasColorGreenPart", myColor.green() );
   QgsProject::instance()->writeEntry( "Gui", "/CanvasColorBluePart", myColor.blue() );
+
+  //save project scales
+  QStringList myScales;
+  for ( int i = 0; i < lstScales->count(); ++i )
+  {
+    myScales.append( lstScales->item( i )->text() );
+  }
+
+  if ( !myScales.isEmpty() )
+  {
+    QgsProject::instance()->writeEntry( "Scales", "/ScalesList", myScales );
+    QgsProject::instance()->writeEntry( "Scales", "/useProjectScales", grpProjectScales->isChecked() );
+  }
+  else
+  {
+    QgsProject::instance()->removeEntry( "Scales", "/" );
+  }
+
+  //use global or project scales depending on checkbox state
+  if ( grpProjectScales->isChecked() )
+  {
+    emit scalesChanged( myScales );
+  }
+  else
+  {
+    emit scalesChanged();
+  }
 
   QStringList noIdentifyLayerList;
   for ( int i = 0; i < twIdentifyLayers->rowCount(); i++ )
@@ -435,6 +497,7 @@ void QgsProjectProperties::apply()
   QgsProject::instance()->writeEntry( "WMSContactPhone", "/", mWMSContactPhone->text() );
   QgsProject::instance()->writeEntry( "WMSServiceAbstract", "/", mWMSAbstract->toPlainText() );
   QgsProject::instance()->writeEntry( "WMSOnlineResource", "/", mWMSOnlineResourceLineEdit->text() );
+  QgsProject::instance()->writeEntry( "WMSUrl", "/", mWMSUrlLineEdit->text() );
 
   if ( grpWMSExt->isChecked() )
   {
@@ -506,6 +569,23 @@ void QgsProjectProperties::apply()
   }
   QgsProject::instance()->writeEntry( "WFSLayers", "/", wfsLayerList );
 
+  // Default Styles
+  QgsProject::instance()->writeEntry( "DefaultStyles", "/Marker", cboStyleMarker->currentText() );
+  QgsProject::instance()->writeEntry( "DefaultStyles", "/Line", cboStyleLine->currentText() );
+  QgsProject::instance()->writeEntry( "DefaultStyles", "/Fill", cboStyleFill->currentText() );
+  QgsProject::instance()->writeEntry( "DefaultStyles", "/ColorRamp", cboStyleColorRamp->currentText() );
+  QgsProject::instance()->writeEntry( "DefaultStyles", "/AlphaInt", 255 - mTransparencySlider->value() );
+  QgsProject::instance()->writeEntry( "DefaultStyles", "/RandomColors", cbxStyleRandomColors->isChecked() );
+
+  // store project macros
+  QString pythonMacros = ptePythonMacros->toPlainText();
+  if ( !grpPythonMacros->isChecked() || pythonMacros.isEmpty() )
+  {
+    pythonMacros = QString::null;
+    resetPythonMacros();
+  }
+  QgsProject::instance()->writeEntry( "Macros", "/pythonCode", pythonMacros );
+
   //todo XXX set canvas color
   emit refresh();
 }
@@ -545,7 +625,6 @@ void QgsProjectProperties::on_pbnCanvasColor_clicked()
 
 void QgsProjectProperties::on_cbxProjectionEnabled_stateChanged( int state )
 {
-  btnGrpMapUnits->setEnabled( state == Qt::Unchecked );
   projectionSelector->setEnabled( state == Qt::Checked );
 
   if ( state != Qt::Checked )
@@ -568,23 +647,10 @@ void QgsProjectProperties::setMapUnitsToCurrentProjection()
     QgsCoordinateReferenceSystem srs( myCRSID, QgsCoordinateReferenceSystem::InternalCrsId );
     //set radio button to crs map unit type
     QGis::UnitType units = srs.mapUnits();
-    switch ( units )
-    {
-      case QGis::Meters:
-        radMeters->setChecked( true );
-        break;
-      case QGis::Feet:
-        radFeet->setChecked( true );
-        break;
-      case QGis::Degrees:
-        radDecimalDegrees->setChecked( true );
-        break;
-      case QGis::DegreesMinutesSeconds:
-        radDMS->setChecked( true );
-        break;
-      default:
-        break;
-    }
+
+    radMeters->setChecked( units == QGis::Meters );
+    radFeet->setChecked( units == QGis::Feet );
+    radDegrees->setChecked( units == QGis::Degrees );
   }
 }
 
@@ -644,7 +710,7 @@ void QgsProjectProperties::on_pbnWMSAddSRS_clicked()
 
 void QgsProjectProperties::on_pbnWMSRemoveSRS_clicked()
 {
-  foreach( QListWidgetItem *item, mWMSList->selectedItems() )
+  foreach ( QListWidgetItem *item, mWMSList->selectedItems() )
   {
     delete item;
   }
@@ -676,4 +742,236 @@ void QgsProjectProperties::on_pbnWMSSetUsedSRS_clicked()
 
   mWMSList->clear();
   mWMSList->addItems( crsList.values() );
+}
+
+void QgsProjectProperties::on_pbnAddScale_clicked()
+{
+  int myScale = QInputDialog::getInt(
+                  this,
+                  tr( "Enter scale" ),
+                  tr( "Scale denominator" ),
+                  -1,
+                  1
+                );
+
+  if ( myScale != -1 )
+  {
+    QListWidgetItem* newItem = new QListWidgetItem( lstScales );
+    newItem->setText( QString( "1:%1" ).arg( myScale ) );
+    newItem->setFlags( Qt::ItemIsEditable | Qt::ItemIsEnabled | Qt::ItemIsSelectable );
+    lstScales->addItem( newItem );
+    lstScales->setCurrentItem( newItem );
+  }
+}
+
+void QgsProjectProperties::on_pbnRemoveScale_clicked()
+{
+  int currentRow = lstScales->currentRow();
+  QListWidgetItem* itemToRemove = lstScales->takeItem( currentRow );
+  delete itemToRemove;
+}
+
+void QgsProjectProperties::on_pbnImportScales_clicked()
+{
+  QString fileName = QFileDialog::getOpenFileName( this, tr( "Load scales" ), ".",
+                     tr( "XML files (*.xml *.XML)" ) );
+  if ( fileName.isEmpty() )
+  {
+    return;
+  }
+
+  QString msg;
+  QStringList myScales;
+  if ( !QgsScaleUtils::loadScaleList( fileName, myScales, msg ) )
+  {
+    QgsDebugMsg( msg );
+  }
+
+  QStringList::const_iterator scaleIt = myScales.constBegin();
+  for ( ; scaleIt != myScales.constEnd(); ++scaleIt )
+  {
+    QListWidgetItem* newItem = new QListWidgetItem( lstScales );
+    newItem->setText( *scaleIt );
+    newItem->setFlags( Qt::ItemIsEditable | Qt::ItemIsEnabled | Qt::ItemIsSelectable );
+    lstScales->addItem( newItem );
+  }
+}
+
+void QgsProjectProperties::on_pbnExportScales_clicked()
+{
+  QString fileName = QFileDialog::getSaveFileName( this, tr( "Save scales" ), ".",
+                     tr( "XML files (*.xml *.XML)" ) );
+  if ( fileName.isEmpty() )
+  {
+    return;
+  }
+
+  // ensure the user never ommited the extension from the file name
+  if ( !fileName.toLower().endsWith( ".xml" ) )
+  {
+    fileName += ".xml";
+  }
+
+  QStringList myScales;
+  for ( int i = 0; i < lstScales->count(); ++i )
+  {
+    myScales.append( lstScales->item( i )->text() );
+  }
+
+  QString msg;
+  if ( !QgsScaleUtils::saveScaleList( fileName, myScales, msg ) )
+  {
+    QgsDebugMsg( msg );
+  }
+}
+
+void QgsProjectProperties::populateStyles()
+{
+  // Styles - taken from qgsstylev2managerdialog
+
+  // use QComboBox and QString lists for shorter code
+  QStringList prefList;
+  QList<QComboBox*> cboList;
+  cboList << cboStyleMarker;
+  prefList << QgsProject::instance()->readEntry( "DefaultStyles", "/Marker", "" );
+  cboList << cboStyleLine;
+  prefList << QgsProject::instance()->readEntry( "DefaultStyles", "/Line", "" );
+  cboList << cboStyleFill;
+  prefList << QgsProject::instance()->readEntry( "DefaultStyles", "/Fill", "" );
+  cboList << cboStyleColorRamp;
+  prefList << QgsProject::instance()->readEntry( "DefaultStyles", "/ColorRamp", "" );
+  for ( int i = 0; i < cboList.count(); i++ )
+  {
+    cboList[i]->clear();
+    cboList[i]->addItem( "" );
+  }
+
+  // populate symbols
+  QStringList symbolNames = mStyle->symbolNames();
+  for ( int i = 0; i < symbolNames.count(); ++i )
+  {
+    QString name = symbolNames[i];
+    QgsSymbolV2* symbol = mStyle->symbol( name );
+    QComboBox* cbo = 0;
+    switch ( symbol->type() )
+    {
+      case QgsSymbolV2::Marker :
+        cbo = cboStyleMarker;
+        break;
+      case QgsSymbolV2::Line :
+        cbo = cboStyleLine;
+        break;
+      case QgsSymbolV2::Fill :
+        cbo = cboStyleFill;
+        break;
+    }
+    if ( cbo )
+    {
+      QIcon icon = QgsSymbolLayerV2Utils::symbolPreviewIcon( symbol, cbo->iconSize() );
+      cbo->addItem( icon, name );
+    }
+    delete symbol;
+  }
+
+  // populate color ramps
+  QStringList colorRamps = mStyle->colorRampNames();
+  for ( int i = 0; i < colorRamps.count(); ++i )
+  {
+    QString name = colorRamps[i];
+    QgsVectorColorRampV2* ramp = mStyle->colorRamp( name );
+    QIcon icon = QgsSymbolLayerV2Utils::colorRampPreviewIcon( ramp, cboStyleColorRamp->iconSize() );
+    cboStyleColorRamp->addItem( icon, name );
+    delete ramp;
+  }
+
+  // set current index if found
+  for ( int i = 0; i < cboList.count(); i++ )
+  {
+    int index = cboList[i]->findText( prefList[i], Qt::MatchCaseSensitive );
+    if ( index >= 0 )
+      cboList[i]->setCurrentIndex( index );
+  }
+
+  // random colors
+  cbxStyleRandomColors->setChecked( QgsProject::instance()->readBoolEntry( "DefaultStyles", "/RandomColors", true ) );
+
+  // alpha transparency
+  int transparencyInt = 255 - QgsProject::instance()->readNumEntry( "DefaultStyles", "/AlphaInt", 255 );
+  mTransparencySlider->setValue( transparencyInt );
+  on_mTransparencySlider_valueChanged( transparencyInt );
+}
+
+void QgsProjectProperties::on_pbtnStyleManager_clicked()
+{
+  QgsStyleV2ManagerDialog dlg( mStyle, this );
+  dlg.exec();
+  populateStyles();
+}
+
+void QgsProjectProperties::on_pbtnStyleMarker_clicked()
+{
+  editSymbol( cboStyleMarker );
+}
+
+void QgsProjectProperties::on_pbtnStyleLine_clicked()
+{
+  editSymbol( cboStyleLine );
+}
+
+void QgsProjectProperties::on_pbtnStyleFill_clicked()
+{
+  editSymbol( cboStyleFill );
+}
+
+void QgsProjectProperties::on_pbtnStyleColorRamp_clicked()
+{
+  // TODO for now just open style manager
+  // code in QgsStyleV2ManagerDialog::editColorRamp()
+  on_pbtnStyleManager_clicked();
+}
+
+void QgsProjectProperties::on_mTransparencySlider_valueChanged( int value )
+{
+  double alpha = 1 - ( value / 255.0 );
+  double transparencyPercent = ( 1 - alpha ) * 100;
+  mTransparencyLabel->setText( tr( "Transparency %1%" ).arg(( int ) transparencyPercent ) );
+}
+
+void QgsProjectProperties::editSymbol( QComboBox* cbo )
+{
+  QString symbolName = cbo->currentText();
+  if ( symbolName == "" )
+  {
+    QMessageBox::information( this, "", tr( "Select a valid symbol" ) );
+    return;
+  }
+  QgsSymbolV2* symbol = mStyle->symbol( symbolName );
+  if ( ! symbol )
+  {
+    QMessageBox::warning( this, "", tr( "Invalid symbol : " ) + symbolName );
+    return;
+  }
+
+  // let the user edit the symbol and update list when done
+  QgsSymbolV2SelectorDialog dlg( symbol, mStyle, 0, this );
+  if ( dlg.exec() == 0 )
+  {
+    delete symbol;
+    return;
+  }
+
+  // by adding symbol to style with the same name the old effectively gets overwritten
+  mStyle->addSymbol( symbolName, symbol );
+
+  // update icon
+  QIcon icon = QgsSymbolLayerV2Utils::symbolPreviewIcon( symbol, cbo->iconSize() );
+  cbo->setItemIcon( cbo->currentIndex(), icon );
+}
+
+void QgsProjectProperties::resetPythonMacros()
+{
+  grpPythonMacros->setChecked( false );
+  ptePythonMacros->setPlainText( "def openProject():\n    pass\n\n" \
+                                 "def saveProject():\n    pass\n\n" \
+                                 "def closeProject():\n    pass\n" );
 }

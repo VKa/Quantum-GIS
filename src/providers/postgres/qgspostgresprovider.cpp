@@ -68,9 +68,7 @@ QgsPostgresProvider::QgsPostgresProvider( QString const & uri )
   mRequestedGeomType = mUri.wkbType();
   mIsGeography = false;
 
-  if ( mSchemaName.isEmpty() &&
-       mTableName.startsWith( "(SELECT", Qt::CaseInsensitive ) &&
-       mTableName.endsWith( ")" ) )
+  if ( mSchemaName.isEmpty() && mTableName.startsWith( "(" ) && mTableName.endsWith( ")" ) )
   {
     mIsQuery = true;
     mQuery = mTableName;
@@ -180,7 +178,7 @@ QgsPostgresProvider::QgsPostgresProvider( QString const & uri )
     case pktFidMap:
     {
       QString delim;
-      foreach( int idx, mPrimaryKeyAttrs )
+      foreach ( int idx, mPrimaryKeyAttrs )
       {
         key += delim + mAttributeFields[ idx ].name();
         delim = ",";
@@ -221,11 +219,13 @@ void QgsPostgresProvider::disconnectDb()
   if ( mConnectionRO )
   {
     mConnectionRO->disconnect();
+    mConnectionRO = 0;
   }
 
   if ( mConnectionRW )
   {
     mConnectionRW->disconnect();
+    mConnectionRW = 0;
   }
 }
 
@@ -277,7 +277,7 @@ bool QgsPostgresProvider::declareCursor(
         break;
 
       case pktFidMap:
-        foreach( int idx, mPrimaryKeyAttrs )
+        foreach ( int idx, mPrimaryKeyAttrs )
         {
           query += delim + mConnectionRO->fieldExpression( field( idx ) );
           delim = ",";
@@ -290,7 +290,7 @@ bool QgsPostgresProvider::declareCursor(
         break;
     }
 
-    foreach( int idx, fetchAttributes )
+    foreach ( int idx, fetchAttributes )
     {
       if ( mPrimaryKeyAttrs.contains( idx ) )
         continue;
@@ -456,7 +456,7 @@ bool QgsPostgresProvider::getFeature( QgsPostgresResult &queryResult, int row, b
       {
         QList<QVariant> primaryKeyVals;
 
-        foreach( int idx, mPrimaryKeyAttrs )
+        foreach ( int idx, mPrimaryKeyAttrs )
         {
           const QgsField &fld = field( idx );
 
@@ -482,7 +482,7 @@ bool QgsPostgresProvider::getFeature( QgsPostgresResult &queryResult, int row, b
     QgsDebugMsgLevel( QString( "fid=%1" ).arg( fid ), 4 );
 
     // iterate attributes
-    foreach( int idx, fetchAttributes )
+    foreach ( int idx, fetchAttributes )
     {
       if ( mPrimaryKeyAttrs.contains( idx ) )
         continue;
@@ -915,7 +915,7 @@ const QgsField &QgsPostgresProvider::field( int index ) const
 
   if ( it == mAttributeFields.constEnd() )
   {
-    QgsLogger::warning( QString( "FAILURE: Field %1 not found." ).arg( index ) );
+    QgsMessageLog::logMessage( tr( "FAILURE: Field %1 not found." ).arg( index ), tr( "PostGIS" ) );
     throw PGFieldNotFound();
   }
 
@@ -1029,12 +1029,15 @@ bool QgsPostgresProvider::loadFields()
       QString attnum = tresult.PQgetvalue( 0, 0 );
       formattedFieldType = tresult.PQgetvalue( 0, 1 );
 
-      sql = QString( "SELECT description FROM pg_description WHERE objoid=%1 AND objsubid=%2" )
-            .arg( tableoid ).arg( attnum );
+      if( !attnum.isEmpty() )
+      {
+        sql = QString( "SELECT description FROM pg_description WHERE objoid=%1 AND objsubid=%2" )
+              .arg( tableoid ).arg( attnum );
 
-      tresult = mConnectionRO->PQexec( sql );
-      if ( tresult.PQntuples() > 0 )
-        fieldComment = tresult.PQgetvalue( 0, 0 );
+        tresult = mConnectionRO->PQexec( sql );
+        if ( tresult.PQntuples() > 0 )
+          fieldComment = tresult.PQgetvalue( 0, 0 );
+      }
     }
 
     QVariant::Type fieldType;
@@ -1306,8 +1309,7 @@ bool QgsPostgresProvider::hasSufficientPermsAndCapabilities()
   else
   {
     // Check if the sql is a select query
-    if ( !mQuery.startsWith( "(SELECT", Qt::CaseInsensitive ) &&
-         !mQuery.endsWith( ")" ) )
+    if ( !mQuery.startsWith( "(" ) && !mQuery.endsWith( ")" ) )
     {
       QgsMessageLog::logMessage( tr( "The custom query is not a select query." ), tr( "PostGIS" ) );
       return false;
@@ -1423,20 +1425,39 @@ bool QgsPostgresProvider::determinePrimaryKey()
       else if ( type == "v" ) // the relation is a view
       {
         QString primaryKey = mUri.keyColumn();
-        int idx = fieldNameIndex( mUri.keyColumn() );
+        mPrimaryKeyType = pktUnknown;
 
-        if ( idx >= 0 && ( mAttributeFields[idx].type() == QVariant::Int || mAttributeFields[idx].type() == QVariant::LongLong ) )
+        if ( !primaryKey.isEmpty() )
         {
-          if ( mUseEstimatedMetadata || uniqueData( mQuery, primaryKey ) )
+          int idx = fieldNameIndex( primaryKey );
+
+          if ( idx >= 0 )
           {
-            mPrimaryKeyType = pktInt;
-            mPrimaryKeyAttrs << idx;
+            if ( mAttributeFields[idx].type() == QVariant::Int || mAttributeFields[idx].type() == QVariant::LongLong )
+            {
+              if ( mUseEstimatedMetadata || uniqueData( mQuery, primaryKey ) )
+              {
+                mPrimaryKeyType = pktInt;
+                mPrimaryKeyAttrs << idx;
+              }
+              else
+              {
+                QgsMessageLog::logMessage( tr( "Primary key field '%1' for view not unique." ).arg( primaryKey ), tr( "PostGIS" ) );
+              }
+            }
+            else
+            {
+              QgsMessageLog::logMessage( tr( "Type '%1' of primary key field '%2' for view invalid." ).arg( mAttributeFields[idx].typeName() ).arg( primaryKey ), tr( "PostGIS" ) );
+            }
+          }
+          else
+          {
+            QgsMessageLog::logMessage( tr( "Key field '%1' for view not found." ).arg( primaryKey ), tr( "PostGIS" ) );
           }
         }
         else
         {
           QgsMessageLog::logMessage( tr( "No key field for view given." ), tr( "PostGIS" ) );
-          mPrimaryKeyType = pktUnknown;
         }
       }
       else
@@ -1800,7 +1821,8 @@ QString QgsPostgresProvider::geomParam( int offset ) const
 {
   QString geometry;
 
-  bool forceMulti;
+  bool forceMulti = false;
+
   switch ( geometryType() )
   {
     case QGis::WKBPoint:
@@ -1823,7 +1845,6 @@ QString QgsPostgresProvider::geomParam( int offset ) const
       forceMulti = true;
       break;
   }
-
 
   if ( forceMulti )
   {
@@ -1881,7 +1902,7 @@ bool QgsPostgresProvider::addFeatures( QgsFeatureList &flist )
 
     if ( mPrimaryKeyType == pktInt || mPrimaryKeyType == pktFidMap )
     {
-      foreach( int idx, mPrimaryKeyAttrs )
+      foreach ( int idx, mPrimaryKeyAttrs )
       {
         insert += delim + quotedIdentifier( field( idx ).name() );
         values += delim + QString( "$%1" ).arg( defaultValues.size() + offset );
@@ -2056,7 +2077,7 @@ bool QgsPostgresProvider::addFeatures( QgsFeatureList &flist )
         {
           QList<QVariant> primaryKeyVals;
 
-          foreach( int idx, mPrimaryKeyAttrs )
+          foreach ( int idx, mPrimaryKeyAttrs )
           {
             primaryKeyVals << attributevec[ idx ];
           }

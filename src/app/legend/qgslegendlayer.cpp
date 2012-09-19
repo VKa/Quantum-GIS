@@ -1,23 +1,17 @@
 /***************************************************************************
- *   Copyright (C) 2005 by Tim Sutton                                      *
- *   aps02ts@macbuntu                                                      *
+    qgslegendlayer.cpp
+    ---------------------
+    begin                : January 2007
+    copyright            : (C) 2007 by Martin Dobias
+    email                : wonder.sk at gmail.com
+ ***************************************************************************
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
  *   the Free Software Foundation; either version 2 of the License, or     *
  *   (at your option) any later version.                                   *
  *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
-
 #include "qgsapplication.h"
 #include "qgisapp.h"
 #include "qgslegend.h"
@@ -331,7 +325,7 @@ void QgsLegendLayer::updateIcon()
   if ( theFile->isInOverview() )
   {
     // Overlay the overview icon on the default icon
-    QPixmap myPixmap = QgisApp::getThemePixmap(  "/mIconOverview.png" );
+    QPixmap myPixmap = QgsApplication::getThemePixmap(  "/mIconOverview.png" );
     QPainter p( &newIcon );
     p.drawPixmap( 0, 0, myPixmap );
     p.end();
@@ -340,7 +334,7 @@ void QgsLegendLayer::updateIcon()
   //editable
   if ( theLayer->isEditable() )
   {
-    QPixmap myPixmap = QgisApp::getThemePixmap( "/mIconEditable.png" );
+    QPixmap myPixmap = QgsApplication::getThemePixmap( "/mIconEditable.png" );
     // use editable icon instead of the layer's type icon
     newIcon = myPixmap;
 
@@ -377,15 +371,15 @@ QPixmap QgsLegendLayer::getOriginalPixmap()
       switch ( vlayer->geometryType() )
       {
         case QGis::Point:
-          return QgisApp::getThemePixmap( "/mIconPointLayer.png" );
+          return QgsApplication::getThemePixmap( "/mIconPointLayer.png" );
         case QGis::Line:
-          return QgisApp::getThemePixmap( "/mIconLineLayer.png" );
+          return QgsApplication::getThemePixmap( "/mIconLineLayer.png" );
         case QGis::Polygon:
-          return QgisApp::getThemePixmap( "/mIconPolygonLayer.png" );
+          return QgsApplication::getThemePixmap( "/mIconPolygonLayer.png" );
         case QGis::NoGeometry:
-          return QgisApp::getThemePixmap( "/mIconTableLayer.png" );
+          return QgsApplication::getThemePixmap( "/mIconTableLayer.png" );
         default:
-          return QgisApp::getThemePixmap( "/mIconLayer.png" );
+          return QgsApplication::getThemePixmap( "/mIconLayer.png" );
       }
     }
     else if ( theLayer->type() == QgsMapLayer::RasterLayer )
@@ -406,7 +400,7 @@ QPixmap QgsLegendLayer::getOriginalPixmap()
   }
 
   // undefined - should never reach this
-  return QgisApp::getThemePixmap( "/mIconLayer.png" );
+  return QgsApplication::getThemePixmap( "/mIconLayer.png" );
 }
 
 void QgsLegendLayer::addToPopupMenu( QMenu& theMenu )
@@ -415,7 +409,7 @@ void QgsLegendLayer::addToPopupMenu( QMenu& theMenu )
   QAction *toggleEditingAction = QgisApp::instance()->actionToggleEditing();
 
   // zoom to layer extent
-  theMenu.addAction( QgisApp::getThemeIcon( "/mActionZoomToLayer.png" ),
+  theMenu.addAction( QgsApplication::getThemeIcon( "/mActionZoomToLayer.png" ),
                      tr( "&Zoom to Layer Extent" ), legend(), SLOT( legendLayerZoom() ) );
   if ( lyr->type() == QgsMapLayer::RasterLayer )
   {
@@ -436,13 +430,13 @@ void QgsLegendLayer::addToPopupMenu( QMenu& theMenu )
   showInOverviewAction->blockSignals( false );
 
   // remove from canvas
-  theMenu.addAction( QgisApp::getThemeIcon( "/mActionRemoveLayer.png" ), tr( "&Remove" ), QgisApp::instance(), SLOT( removeLayer() ) );
+  theMenu.addAction( QgsApplication::getThemeIcon( "/mActionRemoveLayer.png" ), tr( "&Remove" ), QgisApp::instance(), SLOT( removeLayer() ) );
 
   // set layer crs
-  theMenu.addAction( QgisApp::getThemeIcon( "/mActionSetCRS.png" ), tr( "&Set Layer CRS" ), QgisApp::instance(), SLOT( setLayerCRS() ) );
+  theMenu.addAction( QgsApplication::getThemeIcon( "/mActionSetCRS.png" ), tr( "&Set Layer CRS" ), QgisApp::instance(), SLOT( setLayerCRS() ) );
 
   // assign layer crs to project
-  theMenu.addAction( QgisApp::getThemeIcon( "/mActionSetProjectCRS.png" ), tr( "Set &Project CRS from Layer" ), QgisApp::instance(), SLOT( setProjectCRSFromLayer() ) );
+  theMenu.addAction( QgsApplication::getThemeIcon( "/mActionSetProjectCRS.png" ), tr( "Set &Project CRS from Layer" ), QgisApp::instance(), SLOT( setProjectCRSFromLayer() ) );
 
   theMenu.addSeparator();
 
@@ -451,7 +445,7 @@ void QgsLegendLayer::addToPopupMenu( QMenu& theMenu )
     QgsVectorLayer* vlayer = qobject_cast<QgsVectorLayer *>( lyr );
 
     // attribute table
-    theMenu.addAction( QgisApp::getThemeIcon( "/mActionOpenTable.png" ), tr( "&Open Attribute Table" ),
+    theMenu.addAction( QgsApplication::getThemeIcon( "/mActionOpenTable.png" ), tr( "&Open Attribute Table" ),
                        QgisApp::instance(), SLOT( attributeTable() ) );
 
     // allow editing
@@ -466,7 +460,7 @@ void QgsLegendLayer::addToPopupMenu( QMenu& theMenu )
     }
 
     // save as vector file
-    theMenu.addAction( tr( "Save As..." ), QgisApp::instance(), SLOT( saveAsVectorFile() ) );
+    theMenu.addAction( tr( "Save As..." ), QgisApp::instance(), SLOT( saveAsFile() ) );
 
     // save selection as vector file
     QAction* saveSelectionAsAction = theMenu.addAction( tr( "Save Selection As..." ), QgisApp::instance(), SLOT( saveSelectionAsVectorFile() ) );
@@ -485,6 +479,10 @@ void QgsLegendLayer::addToPopupMenu( QMenu& theMenu )
     QObject::connect( showNFeaturesAction, SIGNAL( toggled( bool ) ), this, SLOT( setShowFeatureCount( bool ) ) );
     theMenu.addAction( showNFeaturesAction );
     theMenu.addSeparator();
+  }
+  else if ( lyr->type() == QgsMapLayer::RasterLayer )
+  {
+    theMenu.addAction( tr( "Save As..." ), QgisApp::instance(), SLOT( saveAsRasterFile() ) );
   }
 
   // properties goes on bottom of menu for consistency with normal ui standards

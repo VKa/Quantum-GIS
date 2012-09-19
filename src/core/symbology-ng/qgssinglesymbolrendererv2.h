@@ -1,8 +1,23 @@
+/***************************************************************************
+    qgssinglesymbolrendererv2.h
+    ---------------------
+    begin                : November 2009
+    copyright            : (C) 2009 by Martin Dobias
+    email                : wonder.sk at gmail.com
+ ***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
 #ifndef QGSSINGLESYMBOLRENDERERV2_H
 #define QGSSINGLESYMBOLRENDERERV2_H
 
 #include "qgis.h"
 #include "qgsrendererv2.h"
+#include "qgssymbolv2.h"
 
 class CORE_EXPORT QgsSingleSymbolRendererV2 : public QgsFeatureRendererV2
 {
@@ -32,6 +47,11 @@ class CORE_EXPORT QgsSingleSymbolRendererV2 : public QgsFeatureRendererV2
     void setSizeScaleField( QString fieldName ) { mSizeScaleField = fieldName; }
     //! @note added in 1.5
     QString sizeScaleField() const { return mSizeScaleField; }
+
+    //! @note added in 2.0
+    void setScaleMethod( QgsSymbolV2::ScaleMethod scaleMethod ) { mScaleMethod = scaleMethod; }
+    //! @note added in 2.0
+    QgsSymbolV2::ScaleMethod scaleMethod() const { return mScaleMethod; }
 
     virtual QString dump();
 
@@ -63,6 +83,7 @@ class CORE_EXPORT QgsSingleSymbolRendererV2 : public QgsFeatureRendererV2
     QgsSymbolV2* mSymbol;
     QString mRotationField;
     QString mSizeScaleField;
+    QgsSymbolV2::ScaleMethod mScaleMethod;
 
     // temporary stuff for rendering
     int mRotationFieldIdx, mSizeScaleFieldIdx;

@@ -24,6 +24,8 @@
 //qt includes
 #include <QString>
 #include <QMap>
+#include <QHash>
+
 class QDomNode;
 class QDomDocument;
 
@@ -171,6 +173,35 @@ class CORE_EXPORT QgsCoordinateReferenceSystem
      */
     bool createFromString( const QString theDefinition );
 
+    /*! Set up this srs from a various text formats.
+     *
+     * Valid formats: WKT string, "EPSG:n", "EPSGA:n", "AUTO:proj_id,unit_id,lon0,lat0",
+     * "urn:ogc:def:crs:EPSG::n", PROJ.4 string, filename (with WKT, XML or PROJ.4 string),
+     * well known name (such as NAD27, NAD83, WGS84 or WGS72),
+     * ESRI::[WKT string] (directly or in a file), "IGNF:xxx"
+     *
+     * For more details on supported formats see OGRSpatialReference::SetFromUserInput()
+     * ( http://www.gdal.org/ogr/classOGRSpatialReference.html#aec3c6a49533fe457ddc763d699ff8796 )
+     * @note this function generates a WKT string using OSRSetFromUserInput() and
+     * passes it to createFromWkt() function.
+     * @param theDefinition A String containing a coordinate reference system definition.
+     *
+     * @note added in 1.8
+     */
+    bool createFromUserInput( const QString theDefinition );
+
+    /*! Make sure that ESRI WKT import is done properly.
+     * This is required for proper shapefile CRS import when using gdal>= 1.9.
+     * @note This function is called by createFromUserInput() and QgsOgrProvider::crs(), there is usually
+     * no need to call it from elsewhere.
+     * @note This function sets CPL config option GDAL_FIX_ESRI_WKT to a proper value,
+     * unless it has been set by the user through the commandline or an environment variable.
+     * For more details refer to OGRSpatialReference::morphFromESRI() .
+     *
+     * @note added in 1.8
+     */
+    static void setupESRIWktFix();
+
     /*! Find out whether this CRS is correctly initialised and usable */
     bool isValid() const;
 
@@ -311,7 +342,7 @@ class CORE_EXPORT QgsCoordinateReferenceSystem
 
     /*! return if axis is inverted (eg. for WMS 1.3)
      * @return  bool Whether this is crs axis is inverted
-     * @note added in 1.9.90
+     * @note added in 1.8
      */
     bool axisInverted() const;
 
@@ -447,6 +478,9 @@ class CORE_EXPORT QgsCoordinateReferenceSystem
 
     QString mValidationHint;
     mutable QString mWkt;
+
+    static bool loadIDs( QHash<int, QString> &wkts );
+    static bool loadWkts( QHash<int, QString> &wkts, const char *filename );
 
     //!Whether this is a coordinate system has inverted axis
     mutable int mAxisInverted;

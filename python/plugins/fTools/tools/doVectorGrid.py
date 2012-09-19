@@ -139,8 +139,10 @@ class Dialog(QDialog, Ui_Dialog):
                 QMessageBox.information(self, self.tr("Vector grid"), self.tr("Invalid extent coordinates entered"))
             xSpace = self.spnX.value()
             ySpace = self.spnY.value()
-            if self.rdoPolygons.isChecked(): polygon = True
-            else: polygon = False
+            if self.rdoPolygons.isChecked():
+              polygon = True
+            else:
+              polygon = False
             self.outShape.clear()
             QApplication.setOverrideCursor(Qt.WaitCursor)
             self.compute( boundBox, xSpace, ySpace, polygon )
@@ -153,7 +155,13 @@ class Dialog(QDialog, Ui_Dialog):
         self.buttonOk.setEnabled( True )
 
     def compute( self, bound, xOffset, yOffset, polygon ):
-        crs = self.iface.mapCanvas().mapRenderer().destinationSrs()
+        crs = None
+        layer = ftools_utils.getMapLayerByName(unicode(self.inShape.currentText()))
+
+        if layer is None:
+          crs = self.iface.mapCanvas().mapRenderer().destinationCrs()
+        else:
+          crs = layer.crs()
         if not crs.isValid(): crs = None
         if polygon:
             fields = {0:QgsField("ID", QVariant.Int), 1:QgsField("XMIN", QVariant.Double), 2:QgsField("XMAX", QVariant.Double),
@@ -163,7 +171,6 @@ class Dialog(QDialog, Ui_Dialog):
                 if not QgsVectorFileWriter.deleteShapeFile(self.shapefileName):
                     return
             writer = QgsVectorFileWriter(self.shapefileName, self.encoding, fields, QGis.WKBPolygon, crs)
-            #writer = QgsVectorFileWriter(outPath, "CP1250", fields, QGis.WKBPolygon, None)
         else:
             fields = {0:QgsField("ID", QVariant.Int), 1:QgsField("COORD", QVariant.Double)}
             check = QFile(self.shapefileName)
@@ -171,11 +178,9 @@ class Dialog(QDialog, Ui_Dialog):
                 if not QgsVectorFileWriter.deleteShapeFile(self.shapefileName):
                     return
             writer = QgsVectorFileWriter(self.shapefileName, self.encoding, fields, QGis.WKBLineString, crs)
-            #writer = QgsVectorFileWriter(unicode(outPath), "CP1250", fields, QGis.WKBLineString, None)
         outFeat = QgsFeature()
         outGeom = QgsGeometry()
         idVar = 0
-#        self.progressBar.setRange( 0, 0 )
         self.progressBar.setValue( 0 )
         if not polygon:
             # counters for progressbar - update every 5%
@@ -279,7 +284,7 @@ class Dialog(QDialog, Ui_Dialog):
             while foundVal is None:
                 if tmpVal <= targetVal:
                     if backOneStep:
-                        tmpVal -= step 
+                        tmpVal -= step
                     foundVal = tmpVal
                 tmpVal += step
         else:
@@ -287,8 +292,8 @@ class Dialog(QDialog, Ui_Dialog):
             while foundVal is None:
                 if tmpVal >= targetVal:
                     if backOneStep:
-                        tmpVal -= step 
+                        tmpVal -= step
                     foundVal = tmpVal
                 tmpVal += step
-        return foundVal           
+        return foundVal
 

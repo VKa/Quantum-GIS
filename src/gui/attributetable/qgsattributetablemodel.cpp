@@ -164,7 +164,15 @@ void QgsAttributeTableModel::attributeDeleted( int idx )
   Q_UNUSED( idx );
   QgsDebugMsg( "entered." );
   loadAttributes();
-  loadLayer();
+  for ( int row = 0; row <= mRowIdMap.size(); row++ )
+  {
+    QgsFeatureId fid = rowToId( row );
+
+    if ( !mFeatureMap.contains( fid ) )
+      continue;
+
+    mFeatureMap[ fid ].deleteAttribute( idx );
+  }
   emit modelChanged();
 }
 
@@ -253,7 +261,7 @@ void QgsAttributeTableModel::loadLayer()
   if ( behaviour == 1 )
   {
     beginInsertRows( QModelIndex(), 0, mLayer->selectedFeatureCount() - 1 );
-    foreach( QgsFeatureId fid, mLayer->selectedFeaturesIds() )
+    foreach ( QgsFeatureId fid, mLayer->selectedFeaturesIds() )
     {
       featureAdded( fid, false );
 
@@ -380,7 +388,7 @@ QVariant QgsAttributeTableModel::headerData( int section, Qt::Orientation orient
     {
       return QVariant( section );
     }
-    else if ( section < mFieldCount )
+    else if ( section >= 0 && section < mFieldCount )
     {
       QString attributeName = mLayer->attributeAlias( mAttributes[section] );
       if ( attributeName.isEmpty() )

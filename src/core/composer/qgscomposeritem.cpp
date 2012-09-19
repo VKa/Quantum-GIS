@@ -24,6 +24,7 @@
 
 #include "qgscomposition.h"
 #include "qgscomposeritem.h"
+#include "qgscomposerframe.h"
 
 
 #include <limits>
@@ -41,7 +42,7 @@ QgsComposerItem::QgsComposerItem( QgsComposition* composition, bool manageZValue
     , QGraphicsRectItem( 0 )
     , mComposition( composition )
     , mBoundingResizeRectangle( 0 )
-    , mFrame( true )
+    , mFrame( false )
     , mItemPositionLocked( false )
     , mLastValidViewScaleFactor( -1 )
     , mRotation( 0 )
@@ -54,7 +55,7 @@ QgsComposerItem::QgsComposerItem( qreal x, qreal y, qreal width, qreal height, Q
     , QGraphicsRectItem( 0, 0, width, height, 0 )
     , mComposition( composition )
     , mBoundingResizeRectangle( 0 )
-    , mFrame( true )
+    , mFrame( false )
     , mItemPositionLocked( false )
     , mLastValidViewScaleFactor( -1 )
     , mRotation( 0 )
@@ -124,13 +125,13 @@ bool QgsComposerItem::_writeXML( QDomElement& itemElem, QDomDocument& doc ) cons
   }
 
   //scene rect
-  composerItemElem.setAttribute( "x", transform().dx() );
-  composerItemElem.setAttribute( "y", transform().dy() );
-  composerItemElem.setAttribute( "width", rect().width() );
-  composerItemElem.setAttribute( "height", rect().height() );
+  composerItemElem.setAttribute( "x", QString::number( transform().dx() ) );
+  composerItemElem.setAttribute( "y", QString::number( transform().dy() ) );
+  composerItemElem.setAttribute( "width", QString::number( rect().width() ) );
+  composerItemElem.setAttribute( "height", QString::number( rect().height() ) );
   composerItemElem.setAttribute( "zValue", QString::number( zValue() ) );
   composerItemElem.setAttribute( "outlineWidth", QString::number( pen().widthF() ) );
-  composerItemElem.setAttribute( "rotation", mRotation );
+  composerItemElem.setAttribute( "rotation",  QString::number( mRotation ) );
   composerItemElem.setAttribute( "id", mId );
   //position lock for mouse moves/resizes
   if ( mItemPositionLocked )
@@ -142,7 +143,7 @@ bool QgsComposerItem::_writeXML( QDomElement& itemElem, QDomDocument& doc ) cons
     composerItemElem.setAttribute( "positionLock", "false" );
   }
 
-  composerItemElem.setAttribute( "lastValidViewScaleFactor", mLastValidViewScaleFactor );
+  composerItemElem.setAttribute( "lastValidViewScaleFactor", QString::number( mLastValidViewScaleFactor ) );
 
 
   //frame color
@@ -380,9 +381,9 @@ void QgsComposerItem::mouseReleaseEvent( QGraphicsSceneMouseEvent * event )
     return;
   }
 
-  beginCommand( tr( "Change item position" ) );
+  beginItemCommand( tr( "Change item position" ) );
   changeItemRectangle( mouseMoveStopPoint, mMouseMoveStartPos, this, diffX, diffY, this );
-  endCommand();
+  endItemCommand();
 
   //reset default action
   mCurrentMouseMoveAction = QgsComposerItem::MoveItem;
@@ -724,6 +725,8 @@ void QgsComposerItem::setSceneRect( const QRectF& rectangle )
   QTransform t;
   t.translate( xTranslation, yTranslation );
   setTransform( t );
+
+  emit sizeChanged();
 }
 
 void QgsComposerItem::drawBackground( QPainter* p )
@@ -943,6 +946,14 @@ bool QgsComposerItem::imageSizeConsideringRotation( double& width, double& heigh
     return true;
   }
 
+  if ( doubleNear( qAbs( mRotation ), 90 ) || doubleNear( qAbs( mRotation ), 270 ) )
+  {
+    double tmp = width;
+    width = height;
+    height = tmp;
+    return true;
+  }
+
   double x1 = 0;
   double y1 = 0;
   double x2 = width;
@@ -990,33 +1001,6 @@ bool QgsComposerItem::imageSizeConsideringRotation( double& width, double& heigh
   width = sqrt(( x2 - p1.x() ) * ( x2 - p1.x() ) + ( y2 - p1.y() ) * ( y2 - p1.y() ) );
   height = sqrt(( p3.x() - x2 ) * ( p3.x() - x2 ) + ( p3.y() - y2 ) * ( p3.y() - y2 ) );
   return true;
-
-
-#if 0
-  double x1 = 0;
-  double y1 = 0;
-  double x2 = width;
-  double y2 = 0;
-  double x3 = width;
-  double y3 = height;
-
-  if ( !cornerPointOnRotatedAndScaledRect( x1, y1, width, height ) )
-  {
-    return false;
-  }
-  if ( !cornerPointOnRotatedAndScaledRect( x2, y2, width, height ) )
-  {
-    return false;
-  }
-  if ( !cornerPointOnRotatedAndScaledRect( x3, y3, width, height ) )
-  {
-    return false;
-  }
-
-  width = sqrt(( x2 - x1 ) * ( x2 - x1 ) + ( y2 - y1 ) * ( y2 - y1 ) );
-  height = sqrt(( x3 - x2 ) * ( x3 - x2 ) + ( y3 - y2 ) * ( y3 - y2 ) );
-  return true;
-#endif //0
 }
 
 bool QgsComposerItem::cornerPointOnRotatedAndScaledRect( double& x, double& y, double width, double height ) const

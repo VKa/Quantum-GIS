@@ -16,6 +16,7 @@
 #include <QObject>
 #include <QString>
 #include <QObject>
+#include <qgsapplication.h>
 //header for class being tested
 #include <qgsexpression.h>
 #include <qgsfeature.h>
@@ -30,6 +31,17 @@ class TestQgsExpression: public QObject
 {
     Q_OBJECT;
   private slots:
+
+    void initTestCase()
+    {
+      //
+      // Runs once before any tests are run
+      //
+      // init QGIS's paths - true means that all path will be inited from prefix
+      QgsApplication::init();
+      QgsApplication::initQgis();
+      QgsApplication::showSettings();
+    }
 
     void parsing_data()
     {
@@ -234,6 +246,10 @@ class TestQgsExpression: public QObject
       QTest::newRow( "log10(100)" ) << "log10(100)" << false << QVariant( 2. );
       QTest::newRow( "log(2,32)" ) << "log(2,32)" << false << QVariant( 5. );
       QTest::newRow( "log(10,1000)" ) << "log(10,1000)" << false << QVariant( 3. );
+      QTest::newRow( "round(1234.557,2) - round up" ) << "round(1234.557,2)" << false << QVariant( 1234.56 );
+      QTest::newRow( "round(1234.554,2) - round down" ) << "round(1234.554,2)" << false << QVariant( 1234.55 );
+      QTest::newRow( "round(1234.6) - round up to int" ) << "round(1234.6)" << false << QVariant( 1235 );
+      QTest::newRow( "round(1234.6) - round down to int" ) << "round(1234.4)" << false << QVariant( 1234 );
 
       // cast functions
       QTest::newRow( "double to int" ) << "toint(3.2)" << false << QVariant( 3 );
@@ -255,6 +271,15 @@ class TestQgsExpression: public QObject
       QTest::newRow( "regexp_replace invalid" ) << "regexp_replace('HeLLo','[[[', '-')" << true << QVariant();
       QTest::newRow( "substr" ) << "substr('HeLLo', 3,2)" << false << QVariant( "LL" );
       QTest::newRow( "substr outside" ) << "substr('HeLLo', -5,2)" << false << QVariant( "" );
+      QTest::newRow( "strpos" ) << "strpos('Hello World','World')" << false << QVariant( 6 );
+      QTest::newRow( "strpos outside" ) << "strpos('Hello World','blah')" << false << QVariant( -1 );
+      QTest::newRow( "left" ) << "left('Hello World',5)" << false << QVariant( "Hello" );
+      QTest::newRow( "right" ) << "right('Hello World', 5)" << false << QVariant( "World" );
+      QTest::newRow( "rpad" ) << "rpad('Hello', 10, 'x')" << false << QVariant( "xxxxxHello" );
+      QTest::newRow( "rpad truncate" ) << "rpad('Hello', 4, 'x')" << false << QVariant( "Hell" );
+      QTest::newRow( "lpad" ) << "lpad('Hello', 10, 'x')" << false << QVariant( "Helloxxxxx" );
+      QTest::newRow( "lpad truncate" ) << "rpad('Hello', 4, 'x')" << false << QVariant( "Hell" );
+      QTest::newRow( "title" ) << "title(' HeLlO   WORLD ')" << false << QVariant( " Hello   World " );
 
       // implicit conversions
       QTest::newRow( "implicit int->text" ) << "length(123)" << false << QVariant( 3 );
@@ -270,6 +295,21 @@ class TestQgsExpression: public QObject
       QTest::newRow( "condition else" ) << "case when 1=0 then 'bad' else 678 end" << false << QVariant( 678 );
       QTest::newRow( "condition null" ) << "case when length(123)=0 then 111 end" << false << QVariant();
       QTest::newRow( "condition 2 when" ) << "case when 2>3 then 23 when 3>2 then 32 else 0 end" << false << QVariant( 32 );
+      QTest::newRow( "coalesce null" ) << "coalesce(NULL)" << false << QVariant( );
+      QTest::newRow( "coalesce mid-null" ) << "coalesce(1, NULL, 3)" << false << QVariant( 1 );
+      QTest::newRow( "coalesce exp" ) << "coalesce(NULL, 1+1)" << false << QVariant( 2 );
+
+      // Datetime functions
+      QTest::newRow( "to date" ) << "todate('2012-06-28')" << false << QVariant( QDate( 2012, 6, 28 ) );
+      QTest::newRow( "to interval" ) << "tointerval('1 Year 1 Month 1 Week 1 Hour 1 Minute')" << false << QVariant::fromValue( QgsExpression::Interval( 34758060 ) );
+      QTest::newRow( "day with date" ) << "day('2012-06-28')" << false << QVariant( 28 );
+      QTest::newRow( "day with interval" ) << "day(tointerval('28 days'))" << false << QVariant( 28.0 );
+      QTest::newRow( "month with date" ) << "month('2012-06-28')" << false << QVariant( 6 );
+      QTest::newRow( "month with interval" ) << "month(tointerval('2 months'))" << false << QVariant( 2.0 );
+      QTest::newRow( "year with date" ) << "year('2012-06-28')" << false << QVariant( 2012 );
+      QTest::newRow( "year with interval" ) << "year(tointerval('2 years'))" << false << QVariant( 2.0 );
+      QTest::newRow( "age" ) << "age('2012-06-30','2012-06-28')" << false << QVariant::fromValue( QgsExpression::Interval( 172800 ) );
+      QTest::newRow( "negative age" ) << "age('2012-06-28','2012-06-30')" << false << QVariant::fromValue( QgsExpression::Interval( -172800 ) );
     }
 
     void evaluation()
@@ -280,6 +320,8 @@ class TestQgsExpression: public QObject
 
       QgsExpression exp( string );
       QCOMPARE( exp.hasParserError(), false );
+      if ( exp.hasParserError() )
+        qDebug() << exp.parserErrorString();
 
       QVariant res = exp.evaluate();
       if ( exp.hasEvalError() )
@@ -295,7 +337,8 @@ class TestQgsExpression: public QObject
       QCOMPARE( res.type(), result.type() );
       switch ( res.type() )
       {
-        case QVariant::Invalid: break; // nothing more to check
+        case QVariant::Invalid:
+          break; // nothing more to check
         case QVariant::Int:
           QCOMPARE( res.toInt(), result.toInt() );
           break;
@@ -305,6 +348,29 @@ class TestQgsExpression: public QObject
         case QVariant::String:
           QCOMPARE( res.toString(), result.toString() );
           break;
+        case QVariant::Date:
+          QCOMPARE( res.toDate(), result.toDate() );
+          break;
+        case QVariant::DateTime:
+          QCOMPARE( res.toDateTime(), result.toDateTime() );
+          break;
+        case QVariant::Time:
+          QCOMPARE( res.toTime(), result.toTime() );
+          break;
+        case QVariant::UserType:
+        {
+          if ( res.userType() == qMetaTypeId<QgsExpression::Interval>() )
+          {
+            QgsExpression::Interval inter = res.value<QgsExpression::Interval>();
+            QgsExpression::Interval gotinter = result.value<QgsExpression::Interval>();
+            QCOMPARE( inter.seconds(), gotinter.seconds() );
+          }
+          else
+          {
+            QFAIL( "unexpected user type" );
+          }
+          break;
+        }
         default:
           Q_ASSERT( false ); // should never happen
       }
@@ -347,6 +413,17 @@ class TestQgsExpression: public QObject
       QCOMPARE( v2.toInt(), 101 );
     }
 
+    void eval_scale()
+    {
+      QgsExpression exp( "$scale" );
+      QVariant v1 = exp.evaluate();
+      QCOMPARE( v1.toInt(), 0 );
+
+      exp.setScale( 100.00 );
+      QVariant v2 = exp.evaluate();
+      QCOMPARE( v2.toDouble(), 100.00 );
+    }
+
     void eval_feature_id()
     {
       QgsFeature f( 100 );
@@ -364,8 +441,8 @@ class TestQgsExpression: public QObject
       QStringList refCols = exp.referencedColumns();
       // make sure we have lower case
       QSet<QString> refColsSet;
-      foreach( QString col, refCols )
-      refColsSet.insert( col.toLower() );
+      foreach ( QString col, refCols )
+        refColsSet.insert( col.toLower() );
 
       QCOMPARE( refColsSet, expectedCols );
     }

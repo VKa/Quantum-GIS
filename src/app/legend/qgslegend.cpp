@@ -65,7 +65,7 @@ static QString getUniqueGroupName( QString prefix, QStringList groups )
     match.replaceInStrings( prefix, QString( "" ) );
     // find the maximum
     int max = 0;
-    foreach( QString m, match )
+    foreach ( QString m, match )
     {
       if ( m.toInt() > max )
         max = m.toInt();
@@ -231,8 +231,28 @@ int QgsLegend::addGroup( QString name, bool expand, QTreeWidgetItem* parent )
 
 int QgsLegend::addGroup( QString name, bool expand, int groupIndex )
 {
-  QgsLegendGroup * lg = dynamic_cast<QgsLegendGroup *>( topLevelItem( groupIndex ) );
-  return addGroup( name, expand, lg );
+  QTreeWidgetItem * parentItem = invisibleRootItem();
+
+  int itemCount = 0;
+  for ( QTreeWidgetItem* theItem = firstItem(); theItem; theItem = nextItem( theItem ) )
+  {
+    QgsLegendItem* legendItem = dynamic_cast<QgsLegendItem *>( theItem );
+    if ( legendItem->type() == QgsLegendItem::LEGEND_GROUP )
+    {
+      if ( itemCount == groupIndex )
+      {
+        // this is the matching group
+        parentItem = legendItem;
+        break;
+      }
+      else
+      {
+        itemCount = itemCount + 1;
+      }
+    }
+  }
+
+  return addGroup( name, expand, parentItem );
 }
 
 void QgsLegend::removeAll()
@@ -276,7 +296,27 @@ void QgsLegend::setLayersVisible( bool visible )
 
 void QgsLegend::removeGroup( int groupIndex )
 {
-  QgsLegendGroup * lg = dynamic_cast<QgsLegendGroup *>( topLevelItem( groupIndex ) );
+  QgsLegendGroup * lg = NULL;
+  int itemCount = 0;
+
+  for ( QTreeWidgetItem* theItem = firstItem(); theItem; theItem = nextItem( theItem ) )
+  {
+    QgsLegendItem* legendItem = dynamic_cast<QgsLegendItem *>( theItem );
+    if ( legendItem->type() == QgsLegendItem::LEGEND_GROUP )
+    {
+      if ( itemCount == groupIndex )
+      {
+        // this is the matching group
+        lg = dynamic_cast<QgsLegendGroup*>( legendItem );
+        break;
+      }
+      else
+      {
+        itemCount = itemCount + 1;
+      }
+    }
+  }
+
   if ( lg )
   {
     removeGroup( lg );
@@ -286,7 +326,7 @@ void QgsLegend::removeGroup( int groupIndex )
 void QgsLegend::removeLayers( QStringList theLayers )
 {
   QgsDebugMsg( "Entering." );
-  foreach( const QString &myId, theLayers )
+  foreach ( const QString &myId, theLayers )
   {
     bool invLayerRemoved = false;
 
@@ -364,7 +404,7 @@ void QgsLegend::mouseMoveEvent( QMouseEvent * e )
     QgsDebugMsg( "layers prior to move: " + mLayersPriorToMove.join( ", " ) );
 
     // record which items were selected and hide them
-    foreach( QTreeWidgetItem * item, selectedItems() )
+    foreach ( QTreeWidgetItem * item, selectedItems() )
     {
       //prevent to drag out content under groups that are embedded from other
       //project files.
@@ -377,7 +417,7 @@ void QgsLegend::mouseMoveEvent( QMouseEvent * e )
     }
 
     // remove and unhide items, whose parent is already to be moved
-    foreach( QTreeWidgetItem * item, mItemsBeingMoved )
+    foreach ( QTreeWidgetItem * item, mItemsBeingMoved )
     {
       QTreeWidgetItem *parent = item->parent();
 
@@ -433,7 +473,7 @@ void QgsLegend::mouseMoveEvent( QMouseEvent * e )
     showItem( "layer/group" , item );
 
     int line_x = visualItemRect( item ).left();
-    int line_y;
+    int line_y = 0;
     if ( layer )
     {
       QTreeWidgetItem *lastItem = item->childCount() > 0 && item->isExpanded() ? item->child( item->childCount() - 1 ) : item;
@@ -556,7 +596,7 @@ void QgsLegend::mouseReleaseEvent( QMouseEvent * e )
   hideLine();
 
   // unhide
-  foreach( QTreeWidgetItem * item, mItemsBeingMoved )
+  foreach ( QTreeWidgetItem * item, mItemsBeingMoved )
   {
     item->setHidden( false );
   }
@@ -574,7 +614,7 @@ void QgsLegend::mouseReleaseEvent( QMouseEvent * e )
 
         showItem( "prev sibling", mDropTarget );
 
-        foreach( QTreeWidgetItem * item, mItemsBeingMoved )
+        foreach ( QTreeWidgetItem * item, mItemsBeingMoved )
         {
           moveItem( item, mDropTarget );
           mDropTarget = item;
@@ -601,7 +641,7 @@ void QgsLegend::mouseReleaseEvent( QMouseEvent * e )
     {
       showItem( "drop after", mDropTarget );
 
-      foreach( QTreeWidgetItem * item, mItemsBeingMoved )
+      foreach ( QTreeWidgetItem * item, mItemsBeingMoved )
       {
         moveItem( item, mDropTarget );
         mDropTarget = item;
@@ -612,7 +652,7 @@ void QgsLegend::mouseReleaseEvent( QMouseEvent * e )
     {
       showItem( "insert into", mDropTarget );
 
-      foreach( QTreeWidgetItem * item, mItemsBeingMoved )
+      foreach ( QTreeWidgetItem * item, mItemsBeingMoved )
       {
         insertItem( item, mDropTarget );
       }
@@ -674,13 +714,13 @@ void QgsLegend::handleRightClickEvent( QTreeWidgetItem* item, const QPoint& posi
     }
     else if ( li->type() == QgsLegendItem::LEGEND_GROUP )
     {
-      theMenu.addAction( QgisApp::getThemeIcon( "/mActionZoomToLayer.png" ),
+      theMenu.addAction( QgsApplication::getThemeIcon( "/mActionZoomToLayer.png" ),
                          tr( "Zoom to Group" ), this, SLOT( legendLayerZoom() ) );
 
       // use QGisApp::removeLayer() to remove all selected layers+groups
-      theMenu.addAction( QgisApp::getThemeIcon( "/mActionRemoveLayer.png" ), tr( "&Remove" ), QgisApp::instance(), SLOT( removeLayer() ) );
+      theMenu.addAction( QgsApplication::getThemeIcon( "/mActionRemoveLayer.png" ), tr( "&Remove" ), QgisApp::instance(), SLOT( removeLayer() ) );
 
-      theMenu.addAction( QgisApp::getThemeIcon( "/mActionSetCRS.png" ),
+      theMenu.addAction( QgsApplication::getThemeIcon( "/mActionSetCRS.png" ),
                          tr( "&Set Group CRS" ), this, SLOT( legendGroupSetCRS() ) );
     }
 
@@ -709,11 +749,11 @@ void QgsLegend::handleRightClickEvent( QTreeWidgetItem* item, const QPoint& posi
     }
   }
 
-  theMenu.addAction( QgisApp::getThemeIcon( "/folder_new.png" ), tr( "&Add New Group" ), this, SLOT( addGroupToCurrentItem() ) );
-  theMenu.addAction( QgisApp::getThemeIcon( "/mActionExpandTree.png" ), tr( "&Expand All" ), this, SLOT( expandAll() ) );
-  theMenu.addAction( QgisApp::getThemeIcon( "/mActionCollapseTree.png" ), tr( "&Collapse All" ), this, SLOT( collapseAll() ) );
+  theMenu.addAction( QgsApplication::getThemeIcon( "/folder_new.png" ), tr( "&Add New Group" ), this, SLOT( addGroupToCurrentItem() ) );
+  theMenu.addAction( QgsApplication::getThemeIcon( "/mActionExpandTree.png" ), tr( "&Expand All" ), this, SLOT( expandAll() ) );
+  theMenu.addAction( QgsApplication::getThemeIcon( "/mActionCollapseTree.png" ), tr( "&Collapse All" ), this, SLOT( collapseAll() ) );
 
-  QAction *updateDrawingOrderAction = theMenu.addAction( QgisApp::getThemeIcon( "/mUpdateDrawingOrder.png" ), tr( "&Update Drawing Order" ), this, SLOT( toggleDrawingOrderUpdate() ) );
+  QAction *updateDrawingOrderAction = theMenu.addAction( QgsApplication::getThemeIcon( "/mUpdateDrawingOrder.png" ), tr( "&Update Drawing Order" ), this, SLOT( toggleDrawingOrderUpdate() ) );
   updateDrawingOrderAction->setCheckable( true );
   updateDrawingOrderAction->setChecked( mUpdateDrawingOrder );
 
@@ -722,10 +762,10 @@ void QgsLegend::handleRightClickEvent( QTreeWidgetItem* item, const QPoint& posi
 
 void QgsLegend::initPixmaps()
 {
-  mPixmaps.mOriginalPixmap = QgisApp::getThemePixmap( "/mActionFileSmall.png" );
-  mPixmaps.mInOverviewPixmap = QgisApp::getThemePixmap( "/mActionInOverview.png" );
-  mPixmaps.mEditablePixmap = QgisApp::getThemePixmap( "/mIconEditable.png" );
-  mPixmaps.mProjectionErrorPixmap = QgisApp::getThemePixmap( "/mIconProjectionProblem.png" );
+  mPixmaps.mOriginalPixmap = QgsApplication::getThemePixmap( "/mActionFileSmall.png" );
+  mPixmaps.mInOverviewPixmap = QgsApplication::getThemePixmap( "/mActionInOverview.png" );
+  mPixmaps.mEditablePixmap = QgsApplication::getThemePixmap( "/mIconEditable.png" );
+  mPixmaps.mProjectionErrorPixmap = QgsApplication::getThemePixmap( "/mIconProjectionProblem.png" );
 }
 
 Qt::CheckState QgsLegend::layerCheckState( QgsMapLayer * layer )
@@ -884,9 +924,15 @@ void QgsLegend::addLayers( QList<QgsMapLayer *> theLayerList )
   //Note if the canvas was previously blank so we can
   //zoom to all layers at the end if neeeded
   bool myFirstLayerFlag = false;
+  QgsCoordinateReferenceSystem myPreviousCrs;
   if ( layers().count() < 1 )
   {
     myFirstLayerFlag = true;
+  }
+  else
+  {
+    // remember CRS of present layer
+    myPreviousCrs = layers().first()->crs();
   }
 
   //iteratively add the layers to the canvas
@@ -956,10 +1002,26 @@ void QgsLegend::addLayers( QList<QgsMapLayer *> theLayerList )
     mMapCanvas->zoomToFullExtent();
     mMapCanvas->clearExtentHistory();
   }
+  else
+  {
+    if ( settings.value( "/Projections/otfTransformAutoEnable", true ).toBool() &&
+         !mMapCanvas->mapRenderer()->hasCrsTransformEnabled() )
+    {
+      // Verify if all layers have the same CRS
+      foreach ( QgsMapLayer *l, layers() )
+      {
+        if ( myPreviousCrs != l->crs() )
+        {
+          // Set to the previous de facto used so that extent does not change
+          mMapCanvas->mapRenderer()->setDestinationCrs( myPreviousCrs );
+          mMapCanvas->mapRenderer()->setProjectionsEnabled( true );
+          break;
+        }
+      }
+    }
+  }
   //make the QTreeWidget item up-to-date
   doItemsLayout();
-
-
 }
 
 //deprecated since 1.8 - delegates to addLayers
@@ -1018,7 +1080,7 @@ QList<QgsMapLayer *> QgsLegend::selectedLayers()
 {
   QList<QgsMapLayer *> layers;
 
-  foreach( QTreeWidgetItem * item, selectedItems() )
+  foreach ( QTreeWidgetItem * item, selectedItems() )
   {
     QgsLegendLayer *ll = dynamic_cast<QgsLegendLayer *>( item );
     if ( ll )
@@ -1065,7 +1127,7 @@ QList<QgsLegendLayer *> QgsLegend::legendLayers()
 
     QList< QgsLegendLayer * > ls;
 
-    foreach( int o, items.uniqueKeys() )
+    foreach ( int o, items.uniqueKeys() )
     {
       QgsDebugMsgLevel( QString( "o=%1" ).arg( o ), 3 );
       QList< QgsLegendLayer *> values = items.values( o );
@@ -1084,7 +1146,7 @@ QList<QgsMapLayer *> QgsLegend::layers()
 {
   QList<QgsMapLayer *> ls;
 
-  foreach( QgsLegendLayer *l, legendLayers() )
+  foreach ( QgsLegendLayer *l, legendLayers() )
   {
     ls << l->layer();
   }
@@ -1096,7 +1158,7 @@ QList<QgsMapCanvasLayer> QgsLegend::canvasLayers()
 {
   QList<QgsMapCanvasLayer> ls;
 
-  foreach( QgsLegendLayer *l, legendLayers() )
+  foreach ( QgsLegendLayer *l, legendLayers() )
   {
     ls << l->canvasLayer();
   }
@@ -1212,7 +1274,7 @@ void QgsLegend::setGroupCRS( QgsLegendGroup *lg, const QgsCoordinateReferenceSys
     return;
   }
 
-  foreach( QgsLegendLayer *cl, lg->legendLayers() )
+  foreach ( QgsLegendLayer *cl, lg->legendLayers() )
   {
     if ( cl )
     {
@@ -1230,8 +1292,29 @@ void QgsLegend::moveLayer( QgsMapLayer *ml, int groupIndex )
   if ( !layer )
     return;
 
-  QgsLegendGroup *group = dynamic_cast<QgsLegendGroup*>( topLevelItem( groupIndex ) );
-  if ( !group )
+  int itemCount = 0;
+  QgsLegendGroup *group = NULL;
+
+  for ( QTreeWidgetItem* theItem = firstItem(); theItem; theItem = nextItem( theItem ) )
+  {
+
+    QgsLegendItem* legendItem = dynamic_cast<QgsLegendItem *>( theItem );
+    if ( legendItem->type() == QgsLegendItem::LEGEND_GROUP )
+    {
+      if ( itemCount == groupIndex )
+      {
+        // this is the matching group
+        group = dynamic_cast<QgsLegendGroup*>( legendItem );
+        break;
+      }
+      else
+      {
+        itemCount = itemCount + 1;
+      }
+    }
+  }
+
+  if ( group == NULL )
     return;
 
   insertItem( layer, group );
@@ -1288,7 +1371,7 @@ bool QgsLegend::writeXML( QDomNode &legendnode, QDomDocument &document )
 
 bool QgsLegend::writeXML( QList<QTreeWidgetItem *> items, QDomNode &node, QDomDocument &document )
 {
-  foreach( QTreeWidgetItem * currentItem, items )
+  foreach ( QTreeWidgetItem * currentItem, items )
   {
     QgsLegendItem *item = dynamic_cast<QgsLegendItem *>( currentItem );
     if ( !item )
@@ -1980,7 +2063,7 @@ QStringList QgsLegend::layerIDs()
 
 #ifdef QGISDEBUG
   QgsDebugMsg( "QgsLegend::layerIDs()" );
-  foreach( QString id, layers )
+  foreach ( QString id, layers )
   {
     QgsDebugMsg( id );
   }
@@ -2097,7 +2180,7 @@ void QgsLegend::handleItemChange( QTreeWidgetItem* item, int column )
 
     if ( item->isSelected() )
     {
-      foreach( QTreeWidgetItem * i, selectedItems() )
+      foreach ( QTreeWidgetItem * i, selectedItems() )
       {
         if ( i != item )
         {
@@ -2427,7 +2510,7 @@ void QgsLegend::removeSelectedLayers()
   // Turn off rendering to improve speed.
   mMapCanvas->freeze();
 
-  foreach( QTreeWidgetItem * item, selectedItems() )
+  foreach ( QTreeWidgetItem * item, selectedItems() )
   {
     QgsLegendGroup* lg = dynamic_cast<QgsLegendGroup *>( item );
     if ( lg )
@@ -2454,7 +2537,7 @@ void QgsLegend::setCRSForSelectedLayers( const QgsCoordinateReferenceSystem &crs
   // Turn off rendering to improve speed.
   mMapCanvas->freeze();
 
-  foreach( QTreeWidgetItem * item, selectedItems() )
+  foreach ( QTreeWidgetItem * item, selectedItems() )
   {
     QgsLegendGroup* lg = dynamic_cast<QgsLegendGroup *>( item );
     if ( lg )
@@ -2541,8 +2624,8 @@ void QgsLegend::groupSelectedLayers()
   //avoid multiple refreshes of map canvas because of itemChanged signal
   blockSignals( true );
 
-  QTreeWidgetItem * parent;
-  foreach( QTreeWidgetItem* item, selectedItems() )
+  QTreeWidgetItem * parent = 0;
+  foreach ( QTreeWidgetItem* item, selectedItems() )
   {
     parent = item->parent();
   }
@@ -2563,7 +2646,7 @@ void QgsLegend::groupSelectedLayers()
   QList< QModelIndex > oldIndexes;
   QList< QTreeWidgetItem* > selected;
 
-  foreach( QTreeWidgetItem * item, selectedItems() )
+  foreach ( QTreeWidgetItem * item, selectedItems() )
   {
     QgsLegendLayer* layer = dynamic_cast<QgsLegendLayer *>( item );
     if ( layer )
@@ -2572,7 +2655,7 @@ void QgsLegend::groupSelectedLayers()
       selected.append( item );
     }
   }
-  foreach( QTreeWidgetItem * item, selected )
+  foreach ( QTreeWidgetItem * item, selected )
   {
     insertItem( item, group );
   }

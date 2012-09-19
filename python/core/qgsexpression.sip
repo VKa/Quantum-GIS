@@ -1,4 +1,3 @@
-
 class QgsExpression
 {
 %TypeHeaderCode
@@ -50,6 +49,17 @@ public:
   //! Return calculator used for distance and area calculations
   //! (used by internal functions)
   QgsDistanceArea* geomCalculator();
+
+  /** This function currently replaces each expression between [% and %]
+      in the string with the result of its evaluation on the feature
+      passed as argument.
+
+      Additional substitutions can be passed through the substitutionMap
+      parameter
+  */
+  static QString replaceExpressionText( QString action, QgsFeature &feat,
+                                        QgsVectorLayer* layer,
+                                        const QMap<QString, QVariant> *substitutionMap = 0);
 
     //
 
@@ -122,6 +132,8 @@ public:
 
     //! return quoted column reference (in double quotes)
     static QString quotedColumnRef( QString name );
+    //! return quoted string (in single quotes)
+    static QString quotedString( QString text );
 
     //////
 
@@ -302,7 +314,24 @@ public:
       virtual void visit( QgsExpression::NodeCondition* n ) = 0;
     };
 
+    class Interval
+    {
+    public:
+      Interval(int seconds);
+      ~Interval();
+      int years();
+      int weeks();
+      int days();
+      int hours();
+      int minutes();
+      int seconds();
+      bool isValid();
+      void setValid(bool valid);
+      bool operator==(const QgsExpression::Interval& other) const;
+      static QgsExpression::Interval invalidInterVal();
+      static QgsExpression::Interval fromString(QString string);
+    };
+
     /** entry function for the visitor pattern */
     void acceptVisitor( QgsExpression::Visitor& v );
-
 };

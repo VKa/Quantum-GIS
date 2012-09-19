@@ -1,3 +1,17 @@
+/***************************************************************************
+    qgscolorbrewerpalette.h
+    ---------------------
+    begin                : November 2009
+    copyright            : (C) 2009 by Martin Dobias
+    email                : wonder.sk at gmail.com
+ ***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
 #ifndef QGSCOLORBREWERPALETTE_H
 #define QGSCOLORBREWERPALETTE_H
 
@@ -12,14 +26,16 @@ class CORE_EXPORT QgsColorBrewerPalette
       QList<QColor> pal;
       QString palette( brewerString );
       QStringList list = palette.split( QChar( '\n' ) );
-      foreach( QString entry, list )
+      foreach ( QString entry, list )
       {
         QStringList items = entry.split( QChar( '-' ) );
         if ( items.count() != 3 || items[0] != schemeName || items[1].toInt() != colors )
           continue;
         QStringList colors = items[2].split( QChar( ' ' ) );
-        foreach( QString clr, colors )
-        pal << parseColor( clr );
+        foreach ( QString clr, colors )
+        {
+          pal << QgsSymbolLayerV2Utils::parseColor( clr );
+        }
       }
       return pal;
     }
@@ -30,7 +46,7 @@ class CORE_EXPORT QgsColorBrewerPalette
 
       QString palette( brewerString );
       QStringList list = palette.split( QChar( '\n' ) );
-      foreach( QString entry, list )
+      foreach ( QString entry, list )
       {
         QStringList items = entry.split( QChar( '-' ) );
         if ( items.count() != 3 )
@@ -47,7 +63,7 @@ class CORE_EXPORT QgsColorBrewerPalette
 
       QString palette( brewerString );
       QStringList list = palette.split( QChar( '\n' ) );
-      foreach( QString entry, list )
+      foreach ( QString entry, list )
       {
         QStringList items = entry.split( QChar( '-' ) );
         if ( items.count() != 3 || items[0] != schemeName )
@@ -56,14 +72,6 @@ class CORE_EXPORT QgsColorBrewerPalette
       }
 
       return variants;
-    }
-
-    static QColor parseColor( QString color )
-    {
-      QStringList p = color.split( QChar( ',' ) );
-      if ( p.count() != 3 )
-        return QColor();
-      return QColor( p[0].toInt(), p[1].toInt(), p[2].toInt() );
     }
 
 };

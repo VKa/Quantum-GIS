@@ -1,3 +1,17 @@
+/***************************************************************************
+    qgsundowidget.cpp
+    ---------------------
+    begin                : June 2009
+    copyright            : (C) 2009 by Martin Dobias
+    email                : wonder.sk at gmail.com
+ ***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
 #include "qgsundowidget.h"
 
 #include "qgsmaplayer.h"
@@ -5,6 +19,7 @@
 #include "qgslegend.h"
 
 #include "qgisapp.h"
+#include "qgsapplication.h"
 
 QgsUndoWidget::QgsUndoWidget( QWidget * parent, QgsMapCanvas * mapCanvas )
     : QDockWidget( parent )
@@ -134,13 +149,13 @@ void QgsUndoWidget::setupUi( QDockWidget *UndoWidget )
 
   undoButton = new QPushButton( dockWidgetContents );
   undoButton->setObjectName( QString::fromUtf8( "undoButton" ) );
-  undoButton->setIcon( QgisApp::instance()->getThemeIcon( "mActionUndo.png" ) );
+  undoButton->setIcon( QgsApplication::getThemeIcon( "mActionUndo.png" ) );
 
   gridLayout->addWidget( undoButton, 1, 0, 1, 1 );
 
   redoButton = new QPushButton( dockWidgetContents );
   redoButton->setObjectName( QString::fromUtf8( "redoButton" ) );
-  redoButton->setIcon( QgisApp::instance()->getThemeIcon( "mActionRedo.png" ) );
+  redoButton->setIcon( QgsApplication::getThemeIcon( "mActionRedo.png" ) );
 
   gridLayout->addWidget( redoButton, 1, 1, 1, 1 );
 

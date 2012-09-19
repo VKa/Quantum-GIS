@@ -30,9 +30,8 @@ QgsExpressionBuilderWidget::QgsExpressionBuilderWidget( QWidget *parent )
   setupUi( this );
 
   mValueGroupBox->hide();
-  // The open and save button are for future.
-  btnOpen->hide();
-  btnSave->hide();
+  btnLoadAll->hide();
+  btnLoadSample->hide();
   highlighter = new QgsExpressionHighlighter( txtExpressionString->document() );
 
   mModel = new QStandardItemModel( );
@@ -46,7 +45,10 @@ QgsExpressionBuilderWidget::QgsExpressionBuilderWidget( QWidget *parent )
   connect( expressionTree->selectionModel(), SIGNAL( currentChanged( const QModelIndex &, const QModelIndex & ) ),
            this, SLOT( currentChanged( const QModelIndex &, const QModelIndex & ) ) );
 
-  foreach( QPushButton* button, mOperatorsGroupBox->findChildren<QPushButton *>() )
+  connect( btnLoadAll, SIGNAL( pressed() ), this, SLOT( loadAllValues() ) );
+  connect( btnLoadSample, SIGNAL( pressed() ), this, SLOT( loadSampleValues() ) );
+
+  foreach ( QPushButton* button, mOperatorsGroupBox->findChildren<QPushButton *>() )
   {
     connect( button, SIGNAL( pressed() ), this, SLOT( operatorButtonClicked() ) );
   }
@@ -72,11 +74,15 @@ QgsExpressionBuilderWidget::QgsExpressionBuilderWidget( QWidget *parent )
                 .arg( tr( "'Dia' || Diameter" ) ) );
   registerItem( tr( "Operators" ), "LIKE", " LIKE " );
   registerItem( tr( "Operators" ), "ILIKE", " ILIKE " );
-  registerItem( tr( "Operators" ), "IS", " IS NOT " );
+  registerItem( tr( "Operators" ), "IS", " IS " );
   registerItem( tr( "Operators" ), "OR", " OR " );
   registerItem( tr( "Operators" ), "AND", " AND " );
   registerItem( tr( "Operators" ), "NOT", " NOT " );
 
+  QString casestring = "CASE WHEN condition THEN result END";
+  QString caseelsestring = "CASE WHEN condition THEN result ELSE result END";
+  registerItem( tr( "Conditionals" ), "CASE", casestring );
+  registerItem( tr( "Conditionals" ), "CASE ELSE", caseelsestring );
 
   // Load the functions from the QgsExpression class
   int count = QgsExpression::functionCount();
@@ -87,7 +93,11 @@ QgsExpressionBuilderWidget::QgsExpressionBuilderWidget( QWidget *parent )
     if ( func.mParams >= 1 )
       name += "(";
     registerItem( func.mGroup, func.mName, " " + name + " " );
-  };
+  }
+
+#if QT_VERSION >= 0x040700
+  txtSearchEdit->setPlaceholderText( tr( "Search" ) );
+#endif
 }
 
 
@@ -109,14 +119,15 @@ void QgsExpressionBuilderWidget::currentChanged( const QModelIndex &index, const
   if ( item == 0 )
     return;
 
-  // Loading field values are handled with a
-  // right click so we just show the help.
   if ( item->getItemType() != QgsExpressionItem::Field )
   {
-
-    mValueGroupBox->hide();
     mValueListWidget->clear();
   }
+
+  btnLoadAll->setVisible( item->getItemType() == QgsExpressionItem::Field );
+  btnLoadSample->setVisible( item->getItemType() == QgsExpressionItem::Field );
+  mValueGroupBox->setVisible( item->getItemType() == QgsExpressionItem::Field );
+
   // Show the help for the current item.
   QString help = loadFunctionHelp( item );
   txtHelpText->setText( help );
@@ -155,7 +166,7 @@ void QgsExpressionBuilderWidget::loadFieldNames( QgsFieldMap fields )
     return;
 
   QStringList fieldNames;
-  foreach( QgsField field, fields )
+  foreach ( QgsField field, fields )
   {
     QString fieldName = field.name();
     fieldNames << fieldName;
@@ -178,7 +189,7 @@ void QgsExpressionBuilderWidget::fillFieldValues( int fieldIndex, int countLimit
 
   QList<QVariant> values;
   mLayer->uniqueValues( fieldIndex, values, countLimit );
-  foreach( QVariant value, values )
+  foreach ( QVariant value, values )
   {
     if ( value.isNull() )
       mValueListWidget->addItem( "NULL" );
@@ -373,9 +384,9 @@ void QgsExpressionBuilderWidget::setExpressionState( bool state )
   mExpressionValid = state;
 }
 
-QString QgsExpressionBuilderWidget::loadFunctionHelp( QgsExpressionItem* functionName )
+QString QgsExpressionBuilderWidget::loadFunctionHelp( QgsExpressionItem* expressionItem )
 {
-  if ( functionName == NULL )
+  if ( expressionItem == NULL )
     return "";
 
   // set up the path to the help file
@@ -403,9 +414,9 @@ QString QgsExpressionBuilderWidget::loadFunctionHelp( QgsExpressionItem* functio
     lang = "en_US";
   }
 
-  QString name = functionName->text();
+  QString name = expressionItem->text();
 
-  if ( functionName->getItemType() == QgsExpressionItem::Field )
+  if ( expressionItem->getItemType() == QgsExpressionItem::Field )
     name = "Field";
 
   QString fullHelpPath = helpFilesPath + name + "-" + lang;
@@ -427,7 +438,7 @@ QString QgsExpressionBuilderWidget::loadFunctionHelp( QgsExpressionItem* functio
       missingError += tr( "It was neither available in your language (%1) nor English." ).arg( lang );
 
       // try en_US next
-      fullHelpPath = helpFilesPath + functionName->text() + "-en_US";
+      fullHelpPath = helpFilesPath + name + "-en_US";
       file.setFileName( fullHelpPath );
     }
   }
@@ -442,11 +453,7 @@ QString QgsExpressionBuilderWidget::loadFunctionHelp( QgsExpressionItem* functio
   {
     QTextStream in( &file );
     in.setCodec( "UTF-8" ); // Help files must be in Utf-8
-    while ( !in.atEnd() )
-    {
-      QString line = in.readLine();
-      helpContents += line;
-    }
+    helpContents = in.readAll();
   }
 
   file.close();

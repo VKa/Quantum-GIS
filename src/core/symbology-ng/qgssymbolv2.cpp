@@ -1,3 +1,17 @@
+/***************************************************************************
+    qgssymbolv2.cpp
+    ---------------------
+    begin                : November 2009
+    copyright            : (C) 2009 by Martin Dobias
+    email                : wonder.sk at gmail.com
+ ***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
 
 #include "qgsrenderer.h"
 #include "qgssymbolv2.h"
@@ -9,6 +23,9 @@
 
 #include "qgslogger.h"
 #include "qgsrendercontext.h" // for bigSymbolPreview
+
+#include "qgsproject.h"
+#include "qgsstylev2.h"
 
 #include <QColor>
 #include <QImage>
@@ -46,19 +63,50 @@ QgsSymbolV2::~QgsSymbolV2()
 
 QgsSymbolV2* QgsSymbolV2::defaultSymbol( QGis::GeometryType geomType )
 {
-  QgsSymbolV2* s;
+  QgsSymbolV2* s = 0;
+
+  // override global default if project has a default for this type
+  QString defaultSymbol;
   switch ( geomType )
   {
-    case QGis::Point: s = new QgsMarkerSymbolV2(); break;
-    case QGis::Line:  s = new QgsLineSymbolV2(); break;
-    case QGis::Polygon: s = new QgsFillSymbolV2(); break;
-    default: QgsDebugMsg( "unknown layer's geometry type" ); return NULL;
+    case QGis::Point :
+      defaultSymbol = QgsProject::instance()->readEntry( "DefaultStyles", "/Marker", "" );
+      break;
+    case QGis::Line :
+      defaultSymbol = QgsProject::instance()->readEntry( "DefaultStyles", "/Line", "" );
+      break;
+    case QGis::Polygon :
+      defaultSymbol = QgsProject::instance()->readEntry( "DefaultStyles", "/Fill", "" );
+      break;
+    default: defaultSymbol = ""; break;
+  }
+  if ( defaultSymbol != "" )
+    s = QgsStyleV2::defaultStyle()->symbol( defaultSymbol );
+
+  // if no default found for this type, get global default (as previously)
+  if ( ! s )
+  {
+    switch ( geomType )
+    {
+      case QGis::Point: s = new QgsMarkerSymbolV2(); break;
+      case QGis::Line:  s = new QgsLineSymbolV2(); break;
+      case QGis::Polygon: s = new QgsFillSymbolV2(); break;
+      default: QgsDebugMsg( "unknown layer's geometry type" ); return NULL;
+    }
   }
 
-  s->setColor( QColor::fromHsv( rand() % 360, 64 + rand() % 192, 128 + rand() % 128 ) );
+  // set alpha transparency
+  s->setAlpha( QgsProject::instance()->readDoubleEntry( "DefaultStyles", "/AlphaInt", 255 ) / 255.0 );
+
+  // set random color, it project prefs allow
+  if ( defaultSymbol == "" ||
+       QgsProject::instance()->readBoolEntry( "DefaultStyles", "/RandomColors", true ) )
+  {
+    s->setColor( QColor::fromHsv( rand() % 360, 64 + rand() % 192, 128 + rand() % 128 ) );
+  }
+
   return s;
 }
-
 
 QgsSymbolLayerV2* QgsSymbolV2::symbolLayer( int layer )
 {
@@ -377,12 +425,14 @@ QgsMarkerSymbolV2::QgsMarkerSymbolV2( QgsSymbolLayerV2List layers )
     mLayers.append( new QgsSimpleMarkerSymbolLayerV2() );
 }
 
-void QgsMarkerSymbolV2::setAngle( double angle )
+void QgsMarkerSymbolV2::setAngle( double ang )
 {
+  double origAngle = angle();
+  double angleDiff = ang - origAngle;
   for ( QgsSymbolLayerV2List::iterator it = mLayers.begin(); it != mLayers.end(); ++it )
   {
     QgsMarkerSymbolLayerV2* layer = ( QgsMarkerSymbolLayerV2* ) * it;
-    layer->setAngle( angle );
+    layer->setAngle( layer->angle() + angleDiff );
   }
 }
 
@@ -394,7 +444,7 @@ double QgsMarkerSymbolV2::angle()
     return 0;
 
   // return angle of the first symbol layer
-  const QgsMarkerSymbolLayerV2 *layer = static_cast<const QgsMarkerSymbolLayerV2 *>( *it );
+  const QgsMarkerSymbolLayerV2* layer = static_cast<const QgsMarkerSymbolLayerV2 *>( *it );
   return layer->angle();
 }
 
@@ -428,6 +478,28 @@ double QgsMarkerSymbolV2::size()
       maxSize = lsize;
   }
   return maxSize;
+}
+
+
+void QgsMarkerSymbolV2::setScaleMethod( QgsSymbolV2::ScaleMethod scaleMethod )
+{
+  for ( QgsSymbolLayerV2List::iterator it = mLayers.begin(); it != mLayers.end(); ++it )
+  {
+    QgsMarkerSymbolLayerV2* layer = static_cast<QgsMarkerSymbolLayerV2*>( *it );
+    layer->setScaleMethod( scaleMethod );
+  }
+}
+
+QgsSymbolV2::ScaleMethod QgsMarkerSymbolV2::scaleMethod()
+{
+  QgsSymbolLayerV2List::const_iterator it = mLayers.begin();
+
+  if ( it == mLayers.end() )
+    return DEFAULT_SCALE_METHOD;
+
+  // return scale method of the first symbol layer
+  const QgsMarkerSymbolLayerV2* layer = static_cast<const QgsMarkerSymbolLayerV2 *>( *it );
+  return layer->scaleMethod();
 }
 
 void QgsMarkerSymbolV2::renderPoint( const QPointF& point, const QgsFeature* f, QgsRenderContext& context, int layer, bool selected )

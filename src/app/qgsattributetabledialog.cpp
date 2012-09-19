@@ -86,18 +86,18 @@ QgsAttributeTableDialog::QgsAttributeTableDialog( QgsVectorLayer *theLayer, QWid
 
   updateTitle();
 
-  mRemoveSelectionButton->setIcon( QgisApp::getThemeIcon( "/mActionUnselectAttributes.png" ) );
-  mSelectedToTopButton->setIcon( QgisApp::getThemeIcon( "/mActionSelectedToTop.png" ) );
-  mCopySelectedRowsButton->setIcon( QgisApp::getThemeIcon( "/mActionCopySelected.png" ) );
-  mZoomMapToSelectedRowsButton->setIcon( QgisApp::getThemeIcon( "/mActionZoomToSelected.png" ) );
-  mPanMapToSelectedRowsButton->setIcon( QgisApp::getThemeIcon( "/mActionPanToSelected.png" ) );
-  mInvertSelectionButton->setIcon( QgisApp::getThemeIcon( "/mActionInvertSelection.png" ) );
-  mToggleEditingButton->setIcon( QgisApp::getThemeIcon( "/mActionToggleEditing.png" ) );
-  mSaveEditsButton->setIcon( QgisApp::getThemeIcon( "/mActionSaveEdits.png" ) );
-  mDeleteSelectedButton->setIcon( QgisApp::getThemeIcon( "/mActionDeleteSelected.png" ) );
-  mOpenFieldCalculator->setIcon( QgisApp::getThemeIcon( "/mActionCalculateField.png" ) );
-  mAddAttribute->setIcon( QgisApp::getThemeIcon( "/mActionNewAttribute.png" ) );
-  mRemoveAttribute->setIcon( QgisApp::getThemeIcon( "/mActionDeleteAttribute.png" ) );
+  mRemoveSelectionButton->setIcon( QgsApplication::getThemeIcon( "/mActionUnselectAttributes.png" ) );
+  mSelectedToTopButton->setIcon( QgsApplication::getThemeIcon( "/mActionSelectedToTop.png" ) );
+  mCopySelectedRowsButton->setIcon( QgsApplication::getThemeIcon( "/mActionCopySelected.png" ) );
+  mZoomMapToSelectedRowsButton->setIcon( QgsApplication::getThemeIcon( "/mActionZoomToSelected.png" ) );
+  mPanMapToSelectedRowsButton->setIcon( QgsApplication::getThemeIcon( "/mActionPanToSelected.png" ) );
+  mInvertSelectionButton->setIcon( QgsApplication::getThemeIcon( "/mActionInvertSelection.png" ) );
+  mToggleEditingButton->setIcon( QgsApplication::getThemeIcon( "/mActionToggleEditing.png" ) );
+  mSaveEditsButton->setIcon( QgsApplication::getThemeIcon( "/mActionSaveEdits.png" ) );
+  mDeleteSelectedButton->setIcon( QgsApplication::getThemeIcon( "/mActionDeleteSelected.png" ) );
+  mOpenFieldCalculator->setIcon( QgsApplication::getThemeIcon( "/mActionCalculateField.png" ) );
+  mAddAttribute->setIcon( QgsApplication::getThemeIcon( "/mActionNewAttribute.png" ) );
+  mRemoveAttribute->setIcon( QgsApplication::getThemeIcon( "/mActionDeleteAttribute.png" ) );
 
   // toggle editing
   bool canChangeAttributes = mLayer->dataProvider()->capabilities() & QgsVectorDataProvider::ChangeAttributeValues;
@@ -111,7 +111,7 @@ QgsAttributeTableDialog::QgsAttributeTableDialog( QgsVectorLayer *theLayer, QWid
   mToggleEditingButton->setEnabled( canChangeAttributes && !mLayer->isReadOnly() );
 
   mSaveEditsButton->setEnabled( canChangeAttributes && mLayer->isEditable() );
-  mOpenFieldCalculator->setEnabled( canChangeAttributes && mLayer->isEditable() );
+  mOpenFieldCalculator->setEnabled(( canChangeAttributes || canAddAttributes ) && mLayer->isEditable() );
   mDeleteSelectedButton->setEnabled( canDeleteFeatures && mLayer->isEditable() );
   mAddAttribute->setEnabled( canAddAttributes && mLayer->isEditable() );
   mRemoveAttribute->setEnabled( canDeleteAttributes && mLayer->isEditable() );
@@ -263,6 +263,8 @@ void QgsAttributeTableDialog::columnBoxInit()
 {
   QgsFieldMap fieldMap = mLayer->pendingFields();
   QgsFieldMap::Iterator it = fieldMap.begin();
+
+  mColumnBox->clear();
 
   for ( ; it != fieldMap.end(); ++it )
     if ( mLayer->editType( it.key() ) != QgsVectorLayer::Hidden )
@@ -674,37 +676,14 @@ void QgsAttributeTableDialog::editingToggled()
   bool canAddAttributes = mLayer->dataProvider()->capabilities() & QgsVectorDataProvider::AddAttributes;
   bool canDeleteAttributes = mLayer->dataProvider()->capabilities() & QgsVectorDataProvider::DeleteAttributes;
   bool canAddFeatures = mLayer->dataProvider()->capabilities() & QgsVectorDataProvider::AddFeatures;
-  mOpenFieldCalculator->setEnabled( canChangeAttributes && mLayer->isEditable() );
+  mOpenFieldCalculator->setEnabled(( canChangeAttributes || canAddAttributes ) && mLayer->isEditable() );
   mDeleteSelectedButton->setEnabled( canDeleteFeatures && mLayer->isEditable() );
   mAddAttribute->setEnabled( canAddAttributes && mLayer->isEditable() );
   mRemoveAttribute->setEnabled( canDeleteAttributes && mLayer->isEditable() );
   mAddFeature->setEnabled( canAddFeatures && mLayer->isEditable() && mLayer->geometryType() == QGis::NoGeometry );
 
-  // (probably reload data if user stopped editing - possible revert)
-  mModel->reload( mModel->index( 0, 0 ), mModel->index( mModel->rowCount() - 1, mModel->columnCount() - 1 ) );
-
   // not necessary to set table read only if layer is not editable
   // because model always reflects actual state when returning item flags
-}
-
-// not used now
-void QgsAttributeTableDialog::startEditing()
-{
-  mLayer->startEditing();
-}
-
-// not used now
-void QgsAttributeTableDialog::submit()
-{
-  mLayer->commitChanges();
-}
-
-// not used now
-void QgsAttributeTableDialog::revert()
-{
-  mLayer->rollBack();
-  mModel->revert();
-  mModel->reload( mModel->index( 0, 0 ), mModel->index( mModel->rowCount() - 1, mModel->columnCount() - 1 ) );
 }
 
 void QgsAttributeTableDialog::on_mAddAttribute_clicked()
@@ -729,6 +708,7 @@ void QgsAttributeTableDialog::on_mAddAttribute_clicked()
     }
     // update model - a field has been added or updated
     mModel->reload( mModel->index( 0, 0 ), mModel->index( mModel->rowCount() - 1, mModel->columnCount() - 1 ) );
+    columnBoxInit();
   }
 }
 
@@ -770,6 +750,7 @@ void QgsAttributeTableDialog::on_mRemoveAttribute_clicked()
     }
     // update model - a field has been added or updated
     mModel->reload( mModel->index( 0, 0 ), mModel->index( mModel->rowCount() - 1, mModel->columnCount() - 1 ) );
+    columnBoxInit();
   }
 }
 
@@ -783,6 +764,7 @@ void QgsAttributeTableDialog::on_mOpenFieldCalculator_clicked()
     if ( col >= 0 )
     {
       mModel->reload( mModel->index( 0, col ), mModel->index( mModel->rowCount() - 1, col ) );
+      columnBoxInit();
     }
   }
 }

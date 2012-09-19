@@ -25,6 +25,7 @@
 #include <QMouseEvent>
 
 #include "qgisapp.h"
+#include "qgsapplication.h"
 
 QgsMapToolRotateLabel::QgsMapToolRotateLabel( QgsMapCanvas* canvas ): QgsMapToolLabel( canvas ), mRotationItem( 0 ), mRotationPreviewBox( 0 )
 {
@@ -63,7 +64,7 @@ void QgsMapToolRotateLabel::canvasPressEvent( QMouseEvent *e )
 
 
     bool hasRotationValue;
-    if ( dataDefinedRotation( vlayer, mCurrentLabelPos.featureId, mCurrentRotation, hasRotationValue ) )
+    if ( dataDefinedRotation( vlayer, mCurrentLabelPos.featureId, mCurrentRotation, hasRotationValue, true ) )
     {
       if ( !hasRotationValue )
       {
@@ -76,7 +77,7 @@ void QgsMapToolRotateLabel::canvasPressEvent( QMouseEvent *e )
 
       mRotationItem = new QgsPointRotationItem( mCanvas );
       mRotationItem->setOrientation( QgsPointRotationItem::Counterclockwise );
-      mRotationItem->setSymbol( QgisApp::instance()->getThemePixmap( "mActionRotatePointSymbols.png" ).toImage() );
+      mRotationItem->setSymbol( QgsApplication::getThemePixmap( "mActionRotatePointSymbols.png" ).toImage() );
       mRotationItem->setPointLocation( mRotationPoint );
       mRotationItem->setSymbolRotation( mCurrentRotation );
     }
@@ -163,64 +164,6 @@ void QgsMapToolRotateLabel::canvasReleaseEvent( QMouseEvent *e )
   vlayer->changeAttributeValue( mCurrentLabelPos.featureId, rotationCol, rotation, false );
   vlayer->endEditCommand();
   mCanvas->refresh();
-}
-
-bool QgsMapToolRotateLabel::layerIsRotatable( const QgsMapLayer* layer, int& rotationCol ) const
-{
-  const QgsVectorLayer* vlayer = dynamic_cast<const QgsVectorLayer*>( layer );
-  if ( !vlayer || !vlayer->isEditable() )
-  {
-    return false;
-  }
-
-  QVariant rotation = layer->customProperty( "labeling/dataDefinedProperty14" );
-  if ( !rotation.isValid() )
-  {
-    return false;
-  }
-
-  bool rotationOk;
-  rotationCol = rotation.toInt( &rotationOk );
-  if ( !rotationOk )
-  {
-    return false;
-  }
-  return true;
-}
-
-bool QgsMapToolRotateLabel::dataDefinedRotation( QgsVectorLayer* vlayer, int featureId, double& rotation, bool& rotationSuccess )
-{
-  rotationSuccess = false;
-  if ( !vlayer )
-  {
-    return false;
-  }
-
-  int rotationCol;
-  if ( !layerIsRotatable( vlayer, rotationCol ) )
-  {
-    return false;
-  }
-
-  QgsFeature f;
-  if ( !vlayer->featureAtId( featureId, f, false, true ) )
-  {
-    return false;
-  }
-
-  QgsAttributeMap attributes = f.attributeMap();
-
-  //test, if data defined x- and y- values are not null. Otherwise, the position is determined by PAL and the rotation cannot be fixed
-  int xCol, yCol;
-  double x, y;
-  bool xSuccess, ySuccess;
-  if ( !dataDefinedPosition( vlayer, featureId, x, xSuccess, y, ySuccess, xCol, yCol ) || !xSuccess || !ySuccess )
-  {
-    return false;
-  }
-
-  rotation = attributes[rotationCol].toDouble( &rotationSuccess );
-  return true;
 }
 
 int QgsMapToolRotateLabel::roundTo15Degrees( double n )

@@ -19,7 +19,6 @@
 #include "qgsmaprenderer.h"
 #include "qgscoordinatetransform.h"
 #include "qgsvectorlayer.h"
-#include <QPainter>
 
 /*!
   \class QgsHighlight
@@ -69,11 +68,6 @@ void QgsHighlight::paintPoint( QPainter *p, QgsPoint point )
 {
   QPolygonF r( 5 );
 
-  if ( mLayer )
-  {
-    point = mMapCanvas->mapRenderer()->layerToMapCoordinates( mLayer, point );
-  }
-
   double d = mMapCanvas->extent().width() * 0.005;
   r[0] = toCanvasCoordinates( point + QgsVector( -d, -d ) ) - pos();
   r[1] = toCanvasCoordinates( point + QgsVector( d, -d ) ) - pos();
@@ -90,11 +84,6 @@ void QgsHighlight::paintLine( QPainter *p, QgsPolyline line )
 
   for ( int i = 0; i < line.size(); i++ )
   {
-    if ( mLayer )
-    {
-      line[i] = mMapCanvas->mapRenderer()->layerToMapCoordinates( mLayer, line[i] );
-    }
-
     polygon[i] = toCanvasCoordinates( line[i] ) - pos();
   }
 
@@ -103,11 +92,11 @@ void QgsHighlight::paintLine( QPainter *p, QgsPolyline line )
 
 void QgsHighlight::paintPolygon( QPainter *p, QgsPolygon polygon )
 {
-  QPolygonF poly;
+  // OddEven fill rule by default
+  QPainterPath path;
 
-  // just ring outlines, no fill
   p->setPen( mPen );
-  p->setBrush( Qt::NoBrush );
+  p->setBrush( mBrush );
 
   for ( int i = 0; i < polygon.size(); i++ )
   {
@@ -115,28 +104,15 @@ void QgsHighlight::paintPolygon( QPainter *p, QgsPolygon polygon )
 
     for ( int j = 0; j < polygon[i].size(); j++ )
     {
-      if ( mLayer )
-      {
-        polygon[i][j] = mMapCanvas->mapRenderer()->layerToMapCoordinates( mLayer, polygon[i][j] );
-      }
-
       ring[ j ] = toCanvasCoordinates( polygon[i][j] ) - pos();
     }
 
     ring[ polygon[i].size()] = ring[ 0 ];
 
-    p->drawPolygon( ring );
-
-    if ( i == 0 )
-      poly = ring;
-    else
-      poly = poly.subtracted( ring );
+    path.addPolygon( ring );
   }
 
-  // just fill, no outline
-  p->setPen( Qt::NoPen );
-  p->setBrush( mBrush );
-  p->drawPolygon( poly );
+  p->drawPath( path );
 }
 
 /*!

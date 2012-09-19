@@ -20,7 +20,7 @@ set -e
 if [ -d .svn ]; then
 	MODIFIED=$(svn status | sed -ne "s/^[MA] *//p")
 elif [ -d .git ]; then
-	MODIFIED=$(git status | sed -rne "s/^#	(modified|new file): *//p" | sort -u)
+	MODIFIED=$(git status --porcelain| sed -ne "s/^ *[MA]  *//p" | sort -u)
 else
 	echo No working copy
 	exit 1
@@ -34,10 +34,10 @@ fi
 # save original changes
 if [ -d .svn ]; then
 	REV=r$(svn info | sed -ne "s/Revision: //p")
-	svn diff >$REV.diff
+	svn diff >rev-$REV.diff
 elif [ -d .git ]; then
 	REV=$(git log -n1 --pretty=%H)
-	git diff >$REV.diff
+	git diff >sha-$REV.diff
 fi
 
 ASTYLEDIFF=astyle.$REV.diff

@@ -1,3 +1,17 @@
+/***************************************************************************
+    qgsbrowserdockwidget.cpp
+    ---------------------
+    begin                : July 2011
+    copyright            : (C) 2011 by Martin Dobias
+    email                : wonder.sk at gmail.com
+ ***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
 #include "qgsbrowserdockwidget.h"
 
 #include <QHeaderView>
@@ -74,7 +88,7 @@ QgsBrowserDockWidget::QgsBrowserDockWidget( QWidget * parent ) :
   mBrowserView = new QgsBrowserTreeView( this );
 
   QToolButton* refreshButton = new QToolButton( this );
-  refreshButton->setIcon( QgisApp::instance()->getThemeIcon( "mActionDraw.png" ) );
+  refreshButton->setIcon( QgsApplication::getThemeIcon( "mActionDraw.png" ) );
   // remove this to save space
   refreshButton->setToolButtonStyle( Qt::ToolButtonTextBesideIcon );
   refreshButton->setText( tr( "Refresh" ) );
@@ -83,7 +97,7 @@ QgsBrowserDockWidget::QgsBrowserDockWidget( QWidget * parent ) :
   connect( refreshButton, SIGNAL( clicked() ), this, SLOT( refresh() ) );
 
   QToolButton* addLayersButton = new QToolButton( this );
-  addLayersButton->setIcon( QgisApp::instance()->getThemeIcon( "mActionAddLayer.png" ) );
+  addLayersButton->setIcon( QgsApplication::getThemeIcon( "mActionAddLayer.png" ) );
   // remove this to save space
   addLayersButton->setToolButtonStyle( Qt::ToolButtonTextBesideIcon );
   addLayersButton->setText( tr( "Add Selection" ) );
@@ -92,7 +106,7 @@ QgsBrowserDockWidget::QgsBrowserDockWidget( QWidget * parent ) :
   connect( addLayersButton, SIGNAL( clicked() ), this, SLOT( addSelectedLayers() ) );
 
   QToolButton* collapseButton = new QToolButton( this );
-  collapseButton->setIcon( QgisApp::instance()->getThemeIcon( "mActionCollapseTree.png" ) );
+  collapseButton->setIcon( QgsApplication::getThemeIcon( "mActionCollapseTree.png" ) );
   collapseButton->setToolTip( tr( "Collapse All" ) );
   collapseButton->setAutoRaise( true );
   connect( collapseButton, SIGNAL( clicked() ), mBrowserView, SLOT( collapseAll() ) );
@@ -289,37 +303,11 @@ void QgsBrowserDockWidget::addLayer( QgsLayerItem *layerItem )
   QgsDebugMsg( providerKey + " : " + uri );
   if ( type == QgsMapLayer::VectorLayer )
   {
-    QgisApp::instance()->addVectorLayer( uri, layerItem->name(), providerKey );
+    QgisApp::instance()->addVectorLayer( uri, layerItem->layerName(), providerKey );
   }
   if ( type == QgsMapLayer::RasterLayer )
   {
-    // This should go to WMS provider
-    QStringList URIParts = uri.split( "|" );
-    QString rasterLayerPath = URIParts.at( 0 );
-    QStringList layers;
-    QStringList styles;
-    QString format;
-    QString crs;
-    for ( int i = 1 ; i < URIParts.size(); i++ )
-    {
-      QString part = URIParts.at( i );
-      int pos = part.indexOf( "=" );
-      QString field = part.left( pos );
-      QString value = part.mid( pos + 1 );
-
-      if ( field == "layers" )
-        layers = value.split( "," );
-      if ( field == "styles" )
-        styles = value.split( "," );
-      if ( field == "format" )
-        format = value;
-      if ( field == "crs" )
-        crs = value;
-    }
-    QgsDebugMsg( "rasterLayerPath = " + rasterLayerPath );
-    QgsDebugMsg( "layers = " + layers.join( " " ) );
-
-    QgisApp::instance()->addRasterLayer( rasterLayerPath, layerItem->name(), providerKey, layers, styles, format, crs );
+    QgisApp::instance()->addRasterLayer( uri, layerItem->layerName(), providerKey );
   }
 }
 
@@ -399,7 +387,7 @@ void QgsBrowserDockWidget::showProperties( )
       {
         QgsDebugMsg( "creating raster layer" );
         // should copy code from addLayer() to split uri ?
-        QgsRasterLayer* layer = new QgsRasterLayer( 0, layerItem->uri(), layerItem->uri(), layerItem->providerKey() );
+        QgsRasterLayer* layer = new QgsRasterLayer( layerItem->uri(), layerItem->uri(), layerItem->providerKey() );
         if ( layer != NULL )
         {
           layerCrs = layer->crs();

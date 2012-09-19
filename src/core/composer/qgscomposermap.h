@@ -29,6 +29,7 @@ class QDomNode;
 class QDomDocument;
 class QGraphicsView;
 class QPainter;
+class QgsFillSymbolV2;
 
 /** \ingroup MapComposer
  *  \class QgsComposerMap
@@ -66,7 +67,8 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     enum GridAnnotationPosition
     {
       InsideMapFrame = 0,
-      OutsideMapFrame
+      OutsideMapFrame,
+      Disabled
     };
 
     enum GridAnnotationDirection
@@ -75,6 +77,28 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
       Vertical,
       HorizontalAndVertical,
       BoundaryDirection
+    };
+
+    enum GridAnnotationFormat
+    {
+      Decimal = 0,
+      DegreeMinute,
+      DegreeMinuteSecond
+    };
+
+    enum GridFrameStyle
+    {
+      NoGridFrame = 0,
+      Zebra //black / white pattern
+    };
+
+    /**Enum for different frame borders*/
+    enum Border
+    {
+      Left,
+      Right,
+      Bottom,
+      Top
     };
 
     /**This function is deprecated*/
@@ -227,20 +251,29 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     void setShowGridAnnotation( bool show ) {mShowGridAnnotation = show;}
     bool showGridAnnotation() const {return mShowGridAnnotation;}
 
-    /**Sets position of grid annotations. Possibilities are inside or outside of the map frame
-    @note this function was added in version 1.4*/
-    void setGridAnnotationPosition( GridAnnotationPosition p ) {mGridAnnotationPosition = p;}
-    GridAnnotationPosition gridAnnotationPosition() const {return mGridAnnotationPosition;}
+    void setGridAnnotationPosition( GridAnnotationPosition p, QgsComposerMap::Border border );
+    GridAnnotationPosition gridAnnotationPosition( QgsComposerMap::Border border ) const;
 
     /**Sets distance between map frame and annotations
     @note this function was added in version 1.4*/
     void setAnnotationFrameDistance( double d ) {mAnnotationFrameDistance = d;}
     double annotationFrameDistance() const {return mAnnotationFrameDistance;}
 
-    /**Sets grid annotation direction. Can be horizontal, vertical, direction of axis and horizontal and vertical
-    @note this function was added in version 1.4*/
-    void setGridAnnotationDirection( GridAnnotationDirection d ) {mGridAnnotationDirection = d;}
-    GridAnnotationDirection gridAnnotationDirection() const {return mGridAnnotationDirection;}
+    void setGridAnnotationDirection( GridAnnotationDirection d, QgsComposerMap::Border border );
+    GridAnnotationDirection gridAnnotationDirection( QgsComposerMap::Border border ) const;
+
+    void setGridAnnotationFormat( GridAnnotationFormat f ) { mGridAnnotationFormat = f; }
+    GridAnnotationFormat gridAnnotationFormat() const { return mGridAnnotationFormat; }
+
+    /**Set grid frame style (NoGridFrame or Zebra)
+        @note: this function was added in version 1.9*/
+    void setGridFrameStyle( GridFrameStyle style ) { mGridFrameStyle = style; }
+    GridFrameStyle gridFrameStyle() const { return mGridFrameStyle; }
+
+    /**Set grid frame width
+        @note: this function was added in version 1.9*/
+    void setGridFrameWidth( double w ) { mGridFrameWidth = w; }
+    double gridFrameWidth() const { return mGridFrameWidth; }
 
     /**In case of annotations, the bounding rectangle can be larger than the map item rectangle
     @note this function was added in version 1.4*/
@@ -267,6 +300,20 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     /**Returns the conversion factor map units -> mm*/
     double mapUnitsToMM() const;
 
+    /**Sets overview frame map. -1 disables the overview frame
+    @note: this function was added in version 1.9*/
+    void setOverviewFrameMap( int mapId );
+    /**Returns id of overview frame (or -1 if no overfiew frame)
+    @note: this function was added in version 1.9*/
+    int overviewFrameMapId() const { return mOverviewFrameMapId; }
+
+    void setOverviewFrameMapSymbol( QgsFillSymbolV2* symbol );
+    QgsFillSymbolV2* overviewFrameMapSymbol() { return mOverviewFrameMapSymbol; }
+
+    /**Sets mId to a number not yet used in the composition. mId is kept if it is not in use.
+        Usually, this function is called before adding the composer map to the composition*/
+    void assignFreeId();
+
   signals:
     void extentChanged();
 
@@ -279,13 +326,10 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
 
   private:
 
-    /**Enum for different frame borders*/
-    enum Border
+    enum AnnotationCoordinate
     {
-      Left,
-      Right,
-      Bottom,
-      Top
+      Longitude = 0,
+      Latitude
     };
 
     // Pointer to map renderer of the QGIS main map. Note that QgsComposerMap uses a different map renderer,
@@ -326,6 +370,11 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     /**Stored layer list (used if layer live-link mKeepLayerSet is disabled)*/
     QStringList mLayerSet;
 
+    /**Id of map which displays its extent rectangle into this composer map (overview map functionality). -1 if not present*/
+    int mOverviewFrameMapId;
+    /**Drawing style for overview farme*/
+    QgsFillSymbolV2* mOverviewFrameMapSymbol;
+
     /**Establishes signal/slot connection for update in case of layer change*/
     void connectUpdateSlot();
 
@@ -352,12 +401,33 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     int mGridAnnotationPrecision;
     /**True if coordinate values should be drawn*/
     bool mShowGridAnnotation;
-    /**Annotation position inside or outside of map frame*/
-    GridAnnotationPosition mGridAnnotationPosition;
+
+    /**Annotation position for left map side (inside / outside / not shown)*/
+    GridAnnotationPosition mLeftGridAnnotationPosition;
+    /**Annotation position for right map side (inside / outside / not shown)*/
+    GridAnnotationPosition mRightGridAnnotationPosition;
+    /**Annotation position for top map side (inside / outside / not shown)*/
+    GridAnnotationPosition mTopGridAnnotationPosition;
+    /**Annotation position for bottom map side (inside / outside / not shown)*/
+    GridAnnotationPosition mBottomGridAnnotationPosition;
+
     /**Distance between map frame and annotation*/
     double mAnnotationFrameDistance;
-    /**Annotation can be horizontal / vertical or different for axes*/
-    GridAnnotationDirection mGridAnnotationDirection;
+
+    /**Annotation direction on left side ( horizontal or vertical )*/
+    GridAnnotationDirection mLeftGridAnnotationDirection;
+    /**Annotation direction on right side ( horizontal or vertical )*/
+    GridAnnotationDirection mRightGridAnnotationDirection;
+    /**Annotation direction on top side ( horizontal or vertical )*/
+    GridAnnotationDirection mTopGridAnnotationDirection;
+    /**Annotation direction on bottom side ( horizontal or vertical )*/
+    GridAnnotationDirection mBottomGridAnnotationDirection;
+
+    GridAnnotationFormat mGridAnnotationFormat;
+
+    GridFrameStyle mGridFrameStyle;
+    double mGridFrameWidth;
+
     /**Current bounding rectangle. This is used to check if notification to the graphics scene is necessary*/
     QRectF mCurrentRectangle;
     /**The length of the cross sides for mGridStyle Cross*/
@@ -368,9 +438,10 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
 
     /**Draws the map grid*/
     void drawGrid( QPainter* p );
+    void drawGridFrame( QPainter* p, const QList< QPair< double, QLineF > >& hLines, const QList< QPair< double, QLineF > >& vLines );
     /**Draw coordinates for mGridAnnotationType Coordinate
         @param p drawing painter
-    @param hLines horizontal coordinate lines in item coordinates
+        @param hLines horizontal coordinate lines in item coordinates
         @param vLines vertical coordinate lines in item coordinates*/
     void drawCoordinateAnnotations( QPainter* p, const QList< QPair< double, QLineF > >& hLines, const QList< QPair< double, QLineF > >& vLines );
     void drawCoordinateAnnotation( QPainter* p, const QPointF& pos, QString annotationString );
@@ -380,6 +451,7 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
         @param rotation text rotation
         @param annotationText the text to draw*/
     void drawAnnotation( QPainter* p, const QPointF& pos, int rotation, const QString& annotationText );
+    QString gridAnnotationString( double value, AnnotationCoordinate coord ) const;
     /**Returns the grid lines with associated coordinate value
         @return 0 in case of success*/
     int xGridLines( QList< QPair< double, QLineF > >& lines ) const;
@@ -409,6 +481,12 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     void drawCanvasItems( QPainter* painter, const QStyleOptionGraphicsItem* itemStyle );
     void drawCanvasItem( QGraphicsItem* item, QPainter* painter, const QStyleOptionGraphicsItem* itemStyle );
     QPointF composerMapPosForItem( const QGraphicsItem* item ) const;
+    void sortGridLinesOnBorders( const QList< QPair< double, QLineF > >& hLines, const QList< QPair< double, QLineF > >& vLines,  QMap< double, double >& leftFrameEntries,
+                                 QMap< double, double >& rightFrameEntries, QMap< double, double >& topFrameEntries, QMap< double, double >& bottomFrameEntries ) const;
+    void drawGridFrameBorder( QPainter* p, const QMap< double, double >& borderPos, Border border );
+    void drawOverviewMapExtent( QPainter* p );
+    void createDefaultOverviewFrameSymbol();
+    void initGridAnnotationFormatFromProject();
 };
 
 #endif

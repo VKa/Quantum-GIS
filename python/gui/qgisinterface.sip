@@ -46,7 +46,7 @@ class QgisInterface : QObject
     //! Add a raster layer given a raster layer file name
     virtual QgsRasterLayer* addRasterLayer(QString rasterLayerPath, QString baseName = QString())=0;
     //! Add a WMS layer
-    virtual QgsRasterLayer* addRasterLayer(const QString& url, const QString& layerName, const QString& providerKey, const QStringList& layers, const QStringList& styles, const QString& format, const QString& crs) = 0;
+    virtual QgsRasterLayer* addRasterLayer(const QString& uri, const QString& baseName, const QString& providerKey) = 0;
 
     //! Add a project
     virtual bool addProject(QString theProject)=0;
@@ -108,6 +108,9 @@ class QgisInterface : QObject
 
     /** Return a pointer to the main window (instance of QgisApp in case of QGIS) */
     virtual QWidget * mainWindow()=0;
+
+    /** Return the message bar of the main app */
+    virtual QgsMessageBar * messageBar() = 0;
 
     /** Return pointers to the composer views of the running instance (currently only one)*/
     //virtual QList<QgsComposerView*> composerViews()=0;
@@ -289,6 +292,7 @@ class QgisInterface : QObject
 
     //! View menu actions
     virtual QAction *actionPan() = 0;
+    virtual QAction *actionTouch() = 0;
     virtual QAction *actionPanToSelected() = 0;
     virtual QAction *actionZoomIn() = 0;
     virtual QAction *actionZoomOut() = 0;

@@ -39,6 +39,11 @@ class QgsComposition: QGraphicsScene
     /**Returns width of paper item*/
     double paperWidth() const;
 
+    /**Note: added in version 1.9*/
+    void setNumPages( int pages );
+    /**Note: added in version 1.9*/
+    int numPages() const;
+
     void setSnapToGridEnabled( bool b );
     bool snapToGridEnabled() const;
 
@@ -102,6 +107,11 @@ class QgsComposition: QGraphicsScene
     /**Reads settings from xml file*/
     bool readXML( const QDomElement& compositionElem, const QDomDocument& doc );
 
+    /**Load a template document
+        @param doc template document
+        @param substitutionMap map with text to replace. Text needs to be enclosed by brackets (e.g. '[text]' )*/
+    bool loadFromTemplate( const QDomDocument& doc, QMap<QString, QString>* substitutionMap = 0, bool addUndoCommands = false );
+
     /**Add items from XML representation to the graphics scene (for project file reading, pasting items from clipboard)
       @param elem items parent element, e.g. <Composer> or <ComposerItemClipboard>
       @param doc xml document
@@ -150,6 +160,10 @@ class QgsComposition: QGraphicsScene
     /**Deletes current command*/
     void cancelCommand();
 
+    /**Adds multiframe. The object is owned by QgsComposition until removeMultiFrame is called*/
+    void addMultiFrame( QgsComposerMultiFrame* multiFrame );
+    /**Removes multi frame (but does not delete it)*/
+    void removeMultiFrame( QgsComposerMultiFrame* multiFrame );
     /**Adds an arrow item to the graphics scene and advices composer to create a widget for it (through signal)*/
     //void addComposerArrow( QgsComposerArrow* arrow );
     /**Adds label to the graphics scene and advices composer to create a widget for it (through signal)*/
@@ -172,4 +186,18 @@ class QgsComposition: QGraphicsScene
 
     /**Convenience function to create a QgsAddRemoveItemCommand, connect its signals and push it to the undo stack*/
     void pushAddRemoveCommand( QgsComposerItem* item, const QString& text, QgsAddRemoveItemCommand::State state );
+
+    //printing
+
+    void exportAsPDF( const QString& file );
+
+    void print( QPrinter &printer );
+
+    //! print composer page to image
+    //! If the image does not fit into memory, a null image is returned
+    QImage printPageAsRaster( int page );
+
+    /**Render a page to a paint device
+        @note added in version 1.9*/
+    void renderPage( QPainter* p, int page );
 };

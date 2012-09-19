@@ -1,3 +1,18 @@
+/***************************************************************************
+    qgssymbollayerv2widget.h - symbol layer widgets
+
+    ---------------------
+    begin                : November 2009
+    copyright            : (C) 2009 by Martin Dobias
+    email                : wonder.sk at gmail.com
+ ***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
 
 #ifndef QGSSYMBOLLAYERV2WIDGET_H
 #define QGSSYMBOLLAYERV2WIDGET_H
@@ -146,14 +161,11 @@ class GUI_EXPORT QgsMarkerLineSymbolLayerV2Widget : public QgsSymbolLayerV2Widge
   public slots:
 
     void setInterval( double val );
-    void setMarker();
     void setRotate();
     void setOffset();
     void setPlacement();
 
   protected:
-
-    void updateMarker();
 
     QgsMarkerLineSymbolLayerV2* mLayer;
 };
@@ -180,6 +192,7 @@ class GUI_EXPORT QgsSvgMarkerSymbolLayerV2Widget : public QgsSymbolLayerV2Widget
 
   public slots:
     void setName( const QModelIndex& idx );
+    void populateIcons( const QModelIndex& idx );
     void setSize();
     void setAngle();
     void setOffset();
@@ -258,6 +271,7 @@ class GUI_EXPORT QgsSVGFillSymbolLayerWidget : public QgsSymbolLayerV2Widget, pr
     void on_mTextureWidthSpinBox_valueChanged( double d );
     void on_mSVGLineEdit_textChanged( const QString & text );
     void setFile( const QModelIndex& item );
+    void populateIcons( const QModelIndex& item );
     void on_mChangeOutlinePushButton_clicked();
     void on_mRotationSpinBox_valueChanged( double d );
     void on_mChangeColorButton_clicked();
@@ -314,14 +328,12 @@ class GUI_EXPORT QgsPointPatternFillSymbolLayerWidget: public QgsSymbolLayerV2Wi
 
   protected:
     QgsPointPatternFillSymbolLayer* mLayer;
-    void updateMarkerIcon();
 
   private slots:
     void on_mHorizontalDistanceSpinBox_valueChanged( double d );
     void on_mVerticalDistanceSpinBox_valueChanged( double d );
     void on_mHorizontalDisplacementSpinBox_valueChanged( double d );
     void on_mVerticalDisplacementSpinBox_valueChanged( double d );
-    void on_mChangeMarkerButton_clicked();
 };
 
 /////////
@@ -377,12 +389,7 @@ class GUI_EXPORT QgsCentroidFillSymbolLayerV2Widget : public QgsSymbolLayerV2Wid
     virtual void setSymbolLayer( QgsSymbolLayerV2* layer );
     virtual QgsSymbolLayerV2* symbolLayer();
 
-  public slots:
-    void setMarker();
-
   protected:
-    void updateMarker();
-
     QgsCentroidFillSymbolLayerV2* mLayer;
 };
 

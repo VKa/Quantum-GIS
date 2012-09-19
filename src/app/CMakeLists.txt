@@ -19,15 +19,20 @@ SET(QGIS_APP_SRCS
   qgsconfigureshortcutsdialog.cpp
   qgscustomization.cpp
   qgscustomprojectiondialog.cpp
+  qgsdecorationitem.cpp
   qgsdecorationcopyright.cpp
   qgsdecorationcopyrightdialog.cpp
   qgsdecorationnortharrow.cpp
   qgsdecorationnortharrowdialog.cpp
   qgsdecorationscalebar.cpp
   qgsdecorationscalebardialog.cpp
+  qgsdecorationgrid.cpp
+  qgsdecorationgriddialog.cpp
   qgsembedlayerdialog.cpp
   qgsformannotationdialog.cpp
+  qgshtmlannotationdialog.cpp
   qgsdelattrdialog.cpp
+  qgsdiagramproperties.cpp
   qgsdisplayangle.cpp
   qgsfieldcalculator.cpp
   qgsgraduatedsymboldialog.cpp
@@ -52,6 +57,9 @@ SET(QGIS_APP_SRCS
   qgsmaptooledit.cpp
   qgsmaptoolfeatureaction.cpp
   qgsmaptoolformannotation.cpp
+  qgsmaptoolhtmlannotation.cpp
+  qgsmaptoolpinlabels.cpp
+  qgsmaptoolshowhidelabels.cpp
   qgsmaptoolidentify.cpp
   qgsmaptoollabel.cpp
   qgsmaptoolmeasureangle.cpp
@@ -95,7 +103,6 @@ SET(QGIS_APP_SRCS
   qgssinglesymboldialog.cpp
   qgssnappingdialog.cpp
   qgsundowidget.cpp
-  qgstilescalewidget.cpp
   qgstipgui.cpp
   qgstipfactory.cpp
   qgsuniquevaluedialog.cpp
@@ -106,6 +113,7 @@ SET(QGIS_APP_SRCS
   composer/qgsattributeselectiondialog.cpp
   composer/qgscomposer.cpp
   composer/qgscomposerarrowwidget.cpp
+  composer/qgscomposerhtmlwidget.cpp
   composer/qgscomposeritemwidget.cpp
   composer/qgscomposerlabelwidget.cpp
   composer/qgscomposerpicturewidget.cpp
@@ -168,18 +176,23 @@ SET (QGIS_APP_MOC_HDRS
   qgscontinuouscolordialog.h
   qgscustomization.h
   qgscustomprojectiondialog.h
+  qgsdecorationitem.h
   qgsdecorationcopyright.h
   qgsdecorationcopyrightdialog.h
   qgsdecorationnortharrow.h
   qgsdecorationnortharrowdialog.h
   qgsdecorationscalebar.h
   qgsdecorationscalebardialog.h
+  qgsdecorationgrid.h
+  qgsdecorationgriddialog.h
   qgsdelattrdialog.h
+  qgsdiagramproperties.h
   qgsdisplayangle.h
   qgsembedlayerdialog.h
   qgsfeatureaction.h
   qgsfieldcalculator.h
   qgsformannotationdialog.h
+  qgshtmlannotationdialog.h
   qgsgraduatedsymboldialog.h
   qgsidentifyresults.h
   qgslabeldialog.h
@@ -198,6 +211,8 @@ SET (QGIS_APP_MOC_HDRS
   qgsmaptooldeletering.h
   qgsmaptooldeletevertex.h
   qgsmaptoolfeatureaction.h
+  qgsmaptoolpinlabels.h
+  qgsmaptoolshowhidelabels.h
   qgsmaptoolidentify.h
   qgsmaptoolmeasureangle.h
   qgsmaptoolmovefeature.h
@@ -232,7 +247,6 @@ SET (QGIS_APP_MOC_HDRS
   qgssnappingdialog.h
   qgssponsors.h
   qgstextannotationdialog.h
-  qgstilescalewidget.h
   qgstipgui.h
   qgstipfactory.h
   qgsundowidget.h
@@ -243,6 +257,7 @@ SET (QGIS_APP_MOC_HDRS
   composer/qgsattributeselectiondialog.h
   composer/qgscomposer.h
   composer/qgscomposerarrowwidget.h
+  composer/qgscomposerhtmlwidget.h
   composer/qgscomposeritemwidget.h
   composer/qgscomposerlabelwidget.h
   composer/qgscomposerlegendwidget.h
@@ -396,7 +411,7 @@ INCLUDE_DIRECTORIES(
   ../core
   ../core/gps ../core/gps/qextserialport
   ../core/composer ../core/raster ../core/renderer ../core/symbology ../core/symbology-ng
-  ../gui ../gui/symbology-ng ../gui/attributetable
+  ../gui ../gui/symbology-ng ../gui/attributetable ../gui/raster
   ../plugins
   ../python
   gps

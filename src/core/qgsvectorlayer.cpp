@@ -70,6 +70,7 @@
 #include "qgssymbollayerv2.h"
 #include "qgssinglesymbolrendererv2.h"
 #include "qgsdiagramrendererv2.h"
+#include "qgsstylev2.h"
 
 #ifdef TESTPROVIDERLIB
 #include <dlfcn.h>
@@ -104,6 +105,7 @@ QgsVectorLayer::QgsVectorLayer( QString vectorLayerPath,
     , mJoinBuffer( 0 )
     , mDiagramRenderer( 0 )
     , mDiagramLayerSettings( 0 )
+    , mValidExtent( false )
 {
   mActions = new QgsAttributeAction( this );
 
@@ -336,7 +338,7 @@ void QgsVectorLayer::drawLabels( QgsRenderContext& rendererContext )
     }
     else if ( mRendererV2 )
     {
-      foreach( QString attrName, mRendererV2->usedAttributes() )
+      foreach ( QString attrName, mRendererV2->usedAttributes() )
       {
         int attrNum = fieldNameIndex( attrName );
         attributes.append( attrNum );
@@ -362,7 +364,7 @@ void QgsVectorLayer::drawLabels( QgsRenderContext& rendererContext )
       while ( nextFeature( fet ) )
       {
         if (( mRenderer && mRenderer->willRenderFeature( &fet ) )
-            || ( mRendererV2 && mRendererV2->symbolForFeature( fet ) != NULL ) )
+            || ( mRendererV2 && mRendererV2->willRenderFeature( fet ) ) )
         {
           bool sel = mSelectedFeatureIds.contains( fet.id() );
           mLabel->renderLabel( rendererContext, fet, sel, 0 );
@@ -731,20 +733,26 @@ void QgsVectorLayer::drawRendererV2( QgsRenderContext& rendererContext, bool lab
       {
         break;
       }
-
 #ifndef Q_WS_MAC //MH: disable this on Mac for now to avoid problems with resizing
-      if ( mUpdateThreshold > 0 && 0 == featureCount % mUpdateThreshold )
+#ifdef Q_WS_X11
+      if ( !mEnableBackbuffer ) // do not handle events, as we're already inside a paint event
       {
-        emit screenUpdateRequested();
-        // emit drawingProgress( featureCount, totalFeatures );
-        qApp->processEvents();
+#endif // Q_WS_X11
+        if ( mUpdateThreshold > 0 && 0 == featureCount % mUpdateThreshold )
+        {
+          emit screenUpdateRequested();
+          // emit drawingProgress( featureCount, totalFeatures );
+          qApp->processEvents();
+        }
+        else if ( featureCount % 1000 == 0 )
+        {
+          // emit drawingProgress( featureCount, totalFeatures );
+          qApp->processEvents();
+        }
+#ifdef Q_WS_X11
       }
-      else if ( featureCount % 1000 == 0 )
-      {
-        // emit drawingProgress( featureCount, totalFeatures );
-        qApp->processEvents();
-      }
-#endif //Q_WS_MAC
+#endif // Q_WS_X11
+#endif // Q_WS_MAC
 
       bool sel = mSelectedFeatureIds.contains( fet.id() );
       bool drawMarker = ( mEditable && ( !vertexMarkerOnlyForSelection || sel ) );
@@ -953,6 +961,9 @@ bool QgsVectorLayer::draw( QgsRenderContext& rendererContext )
   //set update threshold before each draw to make sure the current setting is picked up
   QSettings settings;
   mUpdateThreshold = settings.value( "Map/updateThreshold", 0 ).toInt();
+#ifdef Q_WS_X11
+  mEnableBackbuffer = settings.value( "/Map/enableBackbuffer", 1 ).toBool();
+#endif
 
   if ( mUsingRendererV2 )
   {
@@ -972,7 +983,7 @@ bool QgsVectorLayer::draw( QgsRenderContext& rendererContext )
     }
 
     QgsAttributeList attributes;
-    foreach( QString attrName, mRendererV2->usedAttributes() )
+    foreach ( QString attrName, mRendererV2->usedAttributes() )
     {
       int attrNum = fieldNameIndex( attrName );
       attributes.append( attrNum );
@@ -1398,7 +1409,7 @@ QgsRectangle QgsVectorLayer::boundingBoxOfSelected()
   QgsFeature fet;
   if ( mDataProvider->capabilities() & QgsVectorDataProvider::SelectAtId )
   {
-    foreach( QgsFeatureId fid, mSelectedFeatureIds )
+    foreach ( QgsFeatureId fid, mSelectedFeatureIds )
     {
       if ( featureAtId( fid, fet, true, false ) && fet.geometry() )
       {
@@ -1460,10 +1471,24 @@ long QgsVectorLayer::updateFeatureCount() const
 
 void QgsVectorLayer::updateExtents()
 {
-  if ( !hasGeometryType() )
-    return;
+  mValidExtent = false;
+}
 
-  mLayerExtent.setMinimal();
+void QgsVectorLayer::setExtent( const QgsRectangle &r )
+{
+  QgsMapLayer::setExtent( r );
+  mValidExtent = true;
+}
+
+QgsRectangle QgsVectorLayer::extent()
+{
+  if ( mValidExtent )
+    return QgsMapLayer::extent();
+
+  QgsRectangle rect;
+
+  if ( !hasGeometryType() )
+    return rect;
 
   if ( !mDataProvider )
   {
@@ -1479,13 +1504,13 @@ void QgsVectorLayer::updateExtents()
     if ( mDataProvider->featureCount() != 0 )
     {
       QgsRectangle r = mDataProvider->extent();
-      mLayerExtent.combineExtentWith( &r );
+      rect.combineExtentWith( &r );
     }
 
     for ( QgsFeatureList::iterator it = mAddedFeatures.begin(); it != mAddedFeatures.end(); it++ )
     {
       QgsRectangle r = it->geometry()->boundingBox();
-      mLayerExtent.combineExtentWith( &r );
+      rect.combineExtentWith( &r );
     }
   }
   else
@@ -1498,19 +1523,23 @@ void QgsVectorLayer::updateExtents()
       if ( fet.geometry() )
       {
         QgsRectangle bb = fet.geometry()->boundingBox();
-        mLayerExtent.combineExtentWith( &bb );
+        rect.combineExtentWith( &bb );
       }
     }
   }
 
-  if ( mLayerExtent.xMinimum() > mLayerExtent.xMaximum() && mLayerExtent.yMinimum() > mLayerExtent.yMaximum() )
+  if ( rect.xMinimum() > rect.xMaximum() && rect.yMinimum() > rect.yMaximum() )
   {
     // special case when there are no features in provider nor any added
-    mLayerExtent = QgsRectangle(); // use rectangle with zero coordinates
+    rect = QgsRectangle(); // use rectangle with zero coordinates
   }
+
+  setExtent( rect );
 
   // Send this (hopefully) up the chain to the map canvas
   emit recalculateExtents();
+
+  return rect;
 }
 
 QString QgsVectorLayer::subsetString()
@@ -1828,6 +1857,11 @@ bool QgsVectorLayer::nextFeature( QgsFeature &f )
     {
       updateFeatureAttributes( f ); //check joined attributes / changed attributes
     }
+    if ( mEditable && mFetchGeometry )
+    {
+      updateFeatureGeometry( f );
+    }
+
     return true;
   }
 
@@ -1985,7 +2019,7 @@ bool QgsVectorLayer::updateFeature( QgsFeature &f )
   const QgsAttributeMap &fa = f.attributeMap();
   const QgsAttributeMap &ca = current.attributeMap();
 
-  foreach( int attr, fa.keys() )
+  foreach ( int attr, fa.keys() )
   {
     if ( fa.contains( attr ) && ca.contains( attr ) && fa[attr] != ca[attr] )
     {
@@ -2403,7 +2437,24 @@ int QgsVectorLayer::splitFeatures( const QList<QgsPoint>& splitLine, bool topolo
         newGeometry = newGeometries.at( i );
         QgsFeature newFeature;
         newFeature.setGeometry( newGeometry );
-        newFeature.setAttributeMap( select_it->attributeMap() );
+
+        if ( mDataProvider )
+        {
+          //use default value where possible (primary key issue), otherwise the value from the original (split) feature
+          QgsAttributeMap newAttributes = select_it->attributeMap();
+          QVariant defaultValue;
+          foreach ( int j, newAttributes.keys() )
+          {
+            defaultValue = mDataProvider->defaultValue( j );
+            if ( !defaultValue.isNull() )
+            {
+              newAttributes.insert( j, defaultValue );
+            }
+          }
+
+          newFeature.setAttributeMap( newAttributes );
+        }
+
         newFeatures.append( newFeature );
       }
 
@@ -2796,10 +2847,7 @@ bool QgsVectorLayer::setDataProvider( QString const & provider )
       QString s = mbr.toString();
       QgsDebugMsg( "Extent of layer: " +  s );
       // store the extent
-      mLayerExtent.setXMaximum( mbr.xMaximum() );
-      mLayerExtent.setXMinimum( mbr.xMinimum() );
-      mLayerExtent.setYMaximum( mbr.yMaximum() );
-      mLayerExtent.setYMinimum( mbr.yMinimum() );
+      setExtent( mbr );
 
       // get and store the feature type
       mWkbType = mDataProvider->geometryType();
@@ -3111,7 +3159,10 @@ bool QgsVectorLayer::readSymbology( const QDomNode& node, QString& errorMessage 
           QString value = editTypeElement.attribute( "value" );
           bool allowNull = editTypeElement.attribute( "allowNull" ) == "true";
           bool orderByValue = editTypeElement.attribute( "orderByValue" ) == "true";
-          mValueRelations[ name ] = ValueRelationData( id, key, value, allowNull, orderByValue );
+          bool allowMulti = editTypeElement.attribute( "allowMulti", "false" ) == "true";
+          QString filterAttributeColumn = editTypeElement.attribute( "filterAttributeColumn", QString::null );
+          QString filterAttributeValue = editTypeElement.attribute( "filterAttributeValue", QString::null );
+          mValueRelations[ name ] = ValueRelationData( id, key, value, allowNull, orderByValue, allowMulti, filterAttributeColumn, filterAttributeValue );
         }
         break;
 
@@ -3198,8 +3249,8 @@ bool QgsVectorLayer::writeSymbology( QDomNode& node, QDomDocument& doc, QString&
     {
       // use scale dependent visibility flag
       mapLayerNode.setAttribute( "scaleBasedLabelVisibilityFlag", mLabel->scaleBasedVisibility() ? 1 : 0 );
-      mapLayerNode.setAttribute( "minLabelScale", mLabel->minScale() );
-      mapLayerNode.setAttribute( "maxLabelScale", mLabel->maxScale() );
+      mapLayerNode.setAttribute( "minLabelScale", QString::number( mLabel->minScale() ) );
+      mapLayerNode.setAttribute( "maxLabelScale", QString::number( mLabel->maxScale() ) );
 
       //classification field(s)
       QgsAttributeList attributes = mRenderer->classificationAttributes();
@@ -3332,6 +3383,11 @@ bool QgsVectorLayer::writeSymbology( QDomNode& node, QDomDocument& doc, QString&
             editTypeElement.setAttribute( "value", data.mValue );
             editTypeElement.setAttribute( "allowNull", data.mAllowNull ? "true" : "false" );
             editTypeElement.setAttribute( "orderByValue", data.mOrderByValue ? "true" : "false" );
+            editTypeElement.setAttribute( "allowMulti", data.mAllowMulti ? "true" : "false" );
+            if ( !data.mFilterAttributeColumn.isNull() )
+              editTypeElement.setAttribute( "filterAttributeColumn", data.mFilterAttributeColumn );
+            if ( !data.mFilterAttributeValue.isNull() )
+              editTypeElement.setAttribute( "filterAttributeValue", data.mFilterAttributeValue );
           }
           break;
 
@@ -3847,7 +3903,7 @@ bool QgsVectorLayer::commitChanges()
       if ( cap & QgsVectorDataProvider::AddFeatures )
       {
         QList<QgsFeatureId> ids;
-        foreach( const QgsFeature &f, mAddedFeatures )
+        foreach ( const QgsFeature &f, mAddedFeatures )
         {
           ids << f.id();
         }
@@ -4022,7 +4078,7 @@ QgsFeatureList QgsVectorLayer::selectedFeatures()
 {
   QgsFeatureList features;
 
-  foreach( QgsFeatureId fid, mSelectedFeatureIds )
+  foreach ( QgsFeatureId fid, mSelectedFeatureIds )
   {
     features.push_back( QgsFeature() );
     featureAtId( fid, features.back(), geometryType() != QGis::NoGeometry, true );
@@ -4264,7 +4320,7 @@ void QgsVectorLayer::snapToGeometry( const QgsPoint& startPoint,
   {
     if ( geometryType() != QGis::Point ) // cannot snap to segment for points/multipoints
     {
-      sqrDistSegmentSnap = geom->closestSegmentWithContext( startPoint, snappedPoint, afterVertex );
+      sqrDistSegmentSnap = geom->closestSegmentWithContext( startPoint, snappedPoint, afterVertex, NULL, crs().geographicFlag() ? 1e-12 : 1e-8 );
 
       if ( sqrDistSegmentSnap < sqrSnappingTolerance )
       {
@@ -4280,7 +4336,6 @@ void QgsVectorLayer::snapToGeometry( const QgsPoint& startPoint,
       }
     }
   }
-
 }
 
 int QgsVectorLayer::insertSegmentVerticesForSnap( const QList<QgsSnappingResult>& snapResults )
@@ -5680,7 +5735,7 @@ QgsVectorLayer::ValueRelationData &QgsVectorLayer::valueRelation( int idx )
   const QgsFieldMap &fields = pendingFields();
 
   // FIXME: throw an exception!?
-  if ( fields.contains( idx ) )
+  if ( !fields.contains( idx ) )
   {
     QgsDebugMsg( QString( "field %1 not found" ).arg( idx ) );
   }

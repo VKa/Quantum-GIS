@@ -1,3 +1,17 @@
+/***************************************************************************
+    qgssymbollayerv2.h
+    ---------------------
+    begin                : November 2009
+    copyright            : (C) 2009 by Martin Dobias
+    email                : wonder.sk at gmail.com
+ ***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
 #ifndef QGSSYMBOLLAYERV2_H
 #define QGSSYMBOLLAYERV2_H
 
@@ -91,6 +105,9 @@ class CORE_EXPORT QgsMarkerSymbolLayerV2 : public QgsSymbolLayerV2
     void setSize( double size ) { mSize = size; }
     double size() const { return mSize; }
 
+    void setScaleMethod( QgsSymbolV2::ScaleMethod scaleMethod ) { mScaleMethod = scaleMethod; }
+    QgsSymbolV2::ScaleMethod scaleMethod() const { return mScaleMethod; }
+
     void setOffset( QPointF offset ) { mOffset = offset; }
     QPointF offset() { return mOffset; }
 
@@ -105,6 +122,7 @@ class CORE_EXPORT QgsMarkerSymbolLayerV2 : public QgsSymbolLayerV2
     double mAngle;
     double mSize;
     QPointF mOffset;
+    QgsSymbolV2::ScaleMethod mScaleMethod;
 };
 
 class CORE_EXPORT QgsLineSymbolLayerV2 : public QgsSymbolLayerV2

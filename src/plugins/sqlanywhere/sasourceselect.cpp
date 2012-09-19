@@ -26,9 +26,8 @@
 
 #include "sasourceselect.h"
 #include "sanewconnection.h"
-#include "saquerybuilder.h"
+#include "qgsquerybuilder.h"
 
-#include "qgisapp.h"
 #include "qgslogger.h"
 #include "qgsapplication.h"
 #include "qgscontexthelp.h"
@@ -464,7 +463,7 @@ void SaSourceSelect::setSql( const QModelIndex &index )
   }
 
   // create a query builder object
-  SaQueryBuilder *qb = new SaQueryBuilder( vlayer, this );
+  QgsQueryBuilder *qb = new QgsQueryBuilder( vlayer, this );
   if ( qb->exec() )
   {
     mTableModel.setSql( mProxyModel.mapToSource( index ), qb->sql() );

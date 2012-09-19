@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>QgsSingleBandGrayRendererWidgetBase</class>
+ <widget class="QWidget" name="QgsSingleBandGrayRendererWidgetBase">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>258</width>
+    <height>203</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QHBoxLayout" name="horizontalLayout">
+   <item>
+    <layout class="QGridLayout" name="gridLayout">
+     <item row="3" column="0">
+      <widget class="QLabel" name="mContrastEnhancementLabel">
+       <property name="text">
+        <string>Contrast enhancement</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QLineEdit" name="mMinLineEdit"/>
+     </item>
+     <item row="3" column="1">
+      <widget class="QComboBox" name="mContrastEnhancementComboBox"/>
+     </item>
+     <item row="0" column="0">
+      <widget class="QLabel" name="mGrayBandLabel">
+       <property name="text">
+        <string>Gray band</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="mMinLabel">
+       <property name="text">
+        <string>Min</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QComboBox" name="mGrayBandComboBox"/>
+     </item>
+     <item row="2" column="0">
+      <widget class="QLabel" name="mMaxLabel">
+       <property name="text">
+        <string>Max</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="1">
+      <widget class="QLineEdit" name="mMaxLineEdit"/>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

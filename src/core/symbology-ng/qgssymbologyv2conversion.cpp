@@ -1,3 +1,17 @@
+/***************************************************************************
+    qgssymbologyv2conversion.cpp
+    ---------------------
+    begin                : December 2009
+    copyright            : (C) 2009 by Martin Dobias
+    email                : wonder.sk at gmail.com
+ ***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
 #include "qgssymbologyv2conversion.h"
 
 #include "qgssinglesymbolrenderer.h"
@@ -177,7 +191,7 @@ void QgsSymbologyV2Conversion::rendererV1toV2( QgsVectorLayer* layer )
     }
 
     QgsRangeList ranges;
-    foreach( const QgsSymbol* sym, gsr->symbols() )
+    foreach ( const QgsSymbol* sym, gsr->symbols() )
     {
       double lowerValue = sym->lowerValue().toDouble();
       double upperValue = sym->upperValue().toDouble();
@@ -219,7 +233,7 @@ void QgsSymbologyV2Conversion::rendererV1toV2( QgsVectorLayer* layer )
     }
 
     QgsCategoryList cats;
-    foreach( QgsSymbol* sym, uvr->symbols() )
+    foreach ( QgsSymbol* sym, uvr->symbols() )
     {
       QVariant value = QVariant( sym->lowerValue() );
       QString label = sym->label();
@@ -281,7 +295,7 @@ void QgsSymbologyV2Conversion::rendererV2toV1( QgsVectorLayer* layer )
 
     r->setClassificationField( layer->fieldNameIndex( gsr2->classAttribute() ) );
 
-    foreach( QgsRendererRangeV2 range, gsr2->ranges() )
+    foreach ( QgsRendererRangeV2 range, gsr2->ranges() )
     {
       QgsSymbol* s = symbolV2toV1( range.symbol() );
       s->setLowerValue( QString::number( range.lowerValue(), 'f', 5 ) );
@@ -300,7 +314,7 @@ void QgsSymbologyV2Conversion::rendererV2toV1( QgsVectorLayer* layer )
 
     r->setClassificationField( layer->fieldNameIndex( csr2->classAttribute() ) );
 
-    foreach( QgsRendererCategoryV2 cat, csr2->categories() )
+    foreach ( QgsRendererCategoryV2 cat, csr2->categories() )
     {
       QgsSymbol* s = symbolV2toV1( cat.symbol() );
       QString val = cat.value().toString();

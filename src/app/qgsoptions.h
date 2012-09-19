@@ -25,6 +25,7 @@
 
 #include <qgscoordinatereferencesystem.h>
 
+#include <QList>
 
 /**
  * \class QgsOptions
@@ -50,10 +51,19 @@ class QgsOptions : public QDialog, private Ui::QgsOptionsBase
     QString theme();
 
   public slots:
+    void on_cbxProjectDefaultNew_toggled( bool checked );
+    void on_pbnProjectDefaultSetCurrent_clicked();
+    void on_pbnProjectDefaultReset_clicked();
+    void on_pbnTemplateFolderBrowse_pressed();
+    void on_pbnTemplateFolderReset_pressed();
     //! Slot called when user chooses to change the project wide projection.
     void on_pbnSelectProjection_clicked();
     //! Slot called when user chooses to change the default 'on the fly' projection.
     void on_pbnSelectOtfProjection_clicked();
+    void on_lstGdalDrivers_itemDoubleClicked( QTreeWidgetItem * item, int column );
+    void on_pbnEditCreateOptions_pressed();
+    void on_pbnEditPyramidsOptions_pressed();
+    void editGdalDriver( const QString& driverName );
     void saveOptions();
     //! Slot to change the theme this is handled when the user
     // activates or highlights a theme name in the drop-down list
@@ -63,7 +73,9 @@ class QgsOptions : public QDialog, private Ui::QgsOptionsBase
 
     void fontSizeChanged( const QString &fontSize );
 
-    void toggleStandardDeviation( int );
+    //! Slot to change backbuffering. This is handled when the user changes
+    // the value of the checkbox
+    void toggleEnableBackbuffer( int );
 
     /**
      * Return the desired state of newly added layers. If a layer
@@ -103,7 +115,7 @@ class QgsOptions : public QDialog, private Ui::QgsOptionsBase
      */
     void on_mBtnAddPluginPath_clicked();
 
-    /* Let the user remove a path to the list of search paths
+    /* Let the user remove a path from the list of search paths
      * used for finding Plugin libs.
      * @note added in QGIS 1.7
      */
@@ -115,7 +127,7 @@ class QgsOptions : public QDialog, private Ui::QgsOptionsBase
      */
     void on_mBtnAddSVGPath_clicked();
 
-    /* Let the user remove a path to the list of search paths
+    /* Let the user remove a path from the list of search paths
      * used for finding SVG files.
      * @note added in QGIS 1.4
      */
@@ -125,6 +137,39 @@ class QgsOptions : public QDialog, private Ui::QgsOptionsBase
 
     void on_mBrowseCacheDirectory_clicked();
     void on_mClearCache_clicked();
+
+    /** Let the user add a scale to the list of scales
+     * used in scale combobox
+     * @note added in QGIS 2.0
+     */
+    void on_pbnAddScale_clicked();
+
+    /** Let the user remove a scale from the list of scales
+     * used in scale combobox
+     * @note added in QGIS 2.0
+     */
+    void on_pbnRemoveScale_clicked();
+
+    /** Let the user restore default scales
+     * used in scale combobox
+     * @note added in QGIS 2.0
+     */
+    void on_pbnDefaultScaleValues_clicked();
+
+    /** Let the user load scales from file
+     * @note added in QGIS 2.0
+     */
+    void on_pbnImportScales_clicked();
+
+    /** Let the user load scales from file
+     * @note added in QGIS 2.0
+     */
+    void on_pbnExportScales_clicked();
+
+    /** Auto slot executed when the active page in the main widget stack is changed
+     * @note added in 2.0
+     */
+    void on_tabWidget_currentChanged( int theTab );
 
     /* Load the list of drivers available in GDAL
      * @note added in 2.0
@@ -136,17 +181,35 @@ class QgsOptions : public QDialog, private Ui::QgsOptionsBase
      */
     void saveGdalDriverList();
 
-  protected:
-    //! Populates combo box with ellipsoids
-    void getEllipsoidList();
-
-    QString getEllipsoidAcronym( QString theEllipsoidName );
-    QString getEllipsoidName( QString theEllipsoidAcronym );
+    /* Update ComboBox accorindg to the selected new index
+     * Also sets the new selected Ellipsoid.
+     * @note added in 2.0
+     */
+    void updateEllipsoidUI( int newIndex );
 
   private:
     QStringList i18nList();
+    void initContrastEnhancement( QComboBox *cbox, QString name, QString defaultVal );
+    void saveContrastEnhancement( QComboBox *cbox, QString name );
     QgsCoordinateReferenceSystem mDefaultCrs;
     QgsCoordinateReferenceSystem mLayerDefaultCrs;
+    bool mLoadedGdalDriverList;
+
+    // List for all ellispods, also None and Custom
+    struct EllipsoidDefs
+    {
+      QString acronym;
+      QString description;
+      double semiMajor;
+      double semiMinor;
+    };
+    QList<EllipsoidDefs> mEllipsoidList;
+    int mEllipsoidIndex;
+
+    //! Populates list with ellipsoids from Sqlite3 db
+    void populateEllipsoidList();
+
+    static const char * GEO_NONE_DESC;
 };
 
 #endif // #ifndef QGSOPTIONS_H

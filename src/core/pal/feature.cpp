@@ -254,7 +254,7 @@ namespace pal
     return f->uid;
   }
 
-  int FeaturePart::setPositionOverPoint( double x, double y, double scale, LabelPosition ***lPos, double delta_width )
+  int FeaturePart::setPositionOverPoint( double x, double y, double scale, LabelPosition ***lPos, double delta_width, double angle )
   {
     Q_UNUSED( scale );
     Q_UNUSED( delta_width );
@@ -269,20 +269,19 @@ namespace pal
     double ly = y - label_y / 2;
     double cost = 0.0001;
     int id = 0;
-    double alpha = 0;
 
     double offset = label_x / 4;
 
     // at the center
-    ( *lPos )[0] = new LabelPosition( id, lx, ly, label_x, label_y, alpha, cost,  this );
+    ( *lPos )[0] = new LabelPosition( id, lx, ly, label_x, label_y, angle, cost, this );
     // shifted to the sides - with higher cost
     cost = 0.0021;
-    ( *lPos )[1] = new LabelPosition( id, lx + offset, ly, label_x, label_y, alpha, cost,  this );
-    ( *lPos )[2] = new LabelPosition( id, lx - offset, ly, label_x, label_y, alpha, cost,  this );
+    ( *lPos )[1] = new LabelPosition( id, lx + offset, ly, label_x, label_y, angle, cost, this );
+    ( *lPos )[2] = new LabelPosition( id, lx - offset, ly, label_x, label_y, angle, cost, this );
     return nbp;
   }
 
-  int FeaturePart::setPositionForPoint( double x, double y, double scale, LabelPosition ***lPos, double delta_width )
+  int FeaturePart::setPositionForPoint( double x, double y, double scale, LabelPosition ***lPos, double delta_width, double angle )
   {
 
 #ifdef _DEBUG_
@@ -426,7 +425,7 @@ namespace pal
       else
         cost =  0.0001 + 0.0020 * double( icost ) / double( nbp - 1 );
 
-      ( *lPos )[i] = new LabelPosition( i, lx, ly, xrm, yrm, 0, cost,  this );
+      ( *lPos )[i] = new LabelPosition( i, lx, ly, xrm, yrm, angle, cost,  this );
 
       icost += inc;
 
@@ -887,7 +886,6 @@ namespace pal
       flags = FLAG_ON_LINE; // default flag
 
     // generate curved labels
-    std::cerr << "------" << std::endl;
     for ( int i = 0; i*delta < total_distance; i++ )
     {
       LabelPosition* slp = curvedPlacementAtOffset( mapShape, path_distances, 0, 1, i * delta );
@@ -914,7 +912,7 @@ namespace pal
           tmp = tmp->getNextPart();
         }
 
-        double angle_diff_avg = angle_diff / ( f->labelInfo->char_num - 1 ); // <0, pi> but pi/8 is much already
+        double angle_diff_avg = f->labelInfo->char_num > 1 ? ( angle_diff / ( f->labelInfo->char_num - 1 ) ) : 0; // <0, pi> but pi/8 is much already
         double cost = angle_diff_avg / 100; // <0, 0.031 > but usually <0, 0.003 >
         if ( cost < 0.0001 ) cost = 0.0001;
 
@@ -1054,7 +1052,7 @@ namespace pal
 
           if (( box->length * box->width ) > ( xmax - xmin ) *( ymax - ymin ) *5 )
           {
-            std::cout << "Very Large BBOX (should never occurs : bug-report please)" << std::endl;
+            std::cout << "Very Large BBOX (should never occur : bug-report please)" << std::endl;
             std::cout << "   Box size:  " << box->length << "/" << box->width << std::endl;
             std::cout << "   Alpha:     " << alpha << "   " << alpha * 180 / M_PI << std::endl;
             std::cout << "   Dx;Dy:     " << dx << "   " << dy  << std::endl;
@@ -1248,16 +1246,12 @@ namespace pal
     bbox[3] = bbox_max[1];
 
     double delta = bbox_max[0] - bbox_min[0];
+    double angle = f->fixedRotation ? f->fixedAngle : 0.0;
 
     if ( f->fixedPosition() )
     {
       nbp = 1;
       *lPos = new LabelPosition *[nbp];
-      double angle = 0.0;
-      if ( f->fixedRotation )
-      {
-        angle = f->fixedAngle;
-      }
       ( *lPos )[0] = new LabelPosition( 0, f->fixedPosX, f->fixedPosY, f->label_x, f->label_y, angle, 0.0,  this );
     }
     else
@@ -1266,9 +1260,9 @@ namespace pal
       {
         case GEOS_POINT:
           if ( f->layer->getArrangement() == P_POINT_OVER )
-            nbp = setPositionOverPoint( x[0], y[0], scale, lPos, delta );
+            nbp = setPositionOverPoint( x[0], y[0], scale, lPos, delta, angle );
           else
-            nbp = setPositionForPoint( x[0], y[0], scale, lPos, delta );
+            nbp = setPositionForPoint( x[0], y[0], scale, lPos, delta, angle );
           break;
         case GEOS_LINESTRING:
           if ( f->layer->getArrangement() == P_CURVED )
@@ -1285,9 +1279,9 @@ namespace pal
               double cx, cy;
               mapShape->getCentroid( cx, cy );
               if ( f->layer->getArrangement() == P_POINT_OVER )
-                nbp = setPositionOverPoint( cx, cy, scale, lPos, delta );
+                nbp = setPositionOverPoint( cx, cy, scale, lPos, delta, angle );
               else
-                nbp = setPositionForPoint( cx, cy, scale, lPos, delta );
+                nbp = setPositionForPoint( cx, cy, scale, lPos, delta, angle );
               break;
             case P_LINE:
               nbp = setPositionForLine( scale, lPos, mapShape, delta );

@@ -31,6 +31,7 @@
 #include <QTextEdit>
 #include <QFileDialog>
 #include <QComboBox>
+#include <QListWidget>
 #include <QCheckBox>
 #include <QSpinBox>
 #include <QCompleter>
@@ -61,7 +62,6 @@ void QgsAttributeEditor::selectFileName()
   if ( fileName.isNull() )
     return;
 
-  //le->setText( fileName );
   le->setText( QDir::toNativeSeparators( fileName ) );
 }
 
@@ -103,7 +103,7 @@ void QgsAttributeEditor::selectDate()
 
 QComboBox *QgsAttributeEditor::comboBox( QWidget *editor, QWidget *parent )
 {
-  QComboBox *cb = NULL;
+  QComboBox *cb = 0;
   if ( editor )
     cb = qobject_cast<QComboBox *>( editor );
   else
@@ -112,12 +112,23 @@ QComboBox *QgsAttributeEditor::comboBox( QWidget *editor, QWidget *parent )
   return cb;
 }
 
+QListWidget *QgsAttributeEditor::listWidget( QWidget *editor, QWidget *parent )
+{
+  QListWidget *lw = 0;
+  if ( editor )
+    lw = qobject_cast<QListWidget *>( editor );
+  else
+    lw = new QListWidget( parent );
+
+  return lw;
+}
+
 QWidget *QgsAttributeEditor::createAttributeEditor( QWidget *parent, QWidget *editor, QgsVectorLayer *vl, int idx, const QVariant &value )
 {
   if ( !vl )
-    return NULL;
+    return 0;
 
-  QWidget *myWidget = NULL;
+  QWidget *myWidget = 0;
   QgsVectorLayer::EditType editType = vl->editType( idx );
   const QgsField &field = vl->pendingFields()[idx];
   QVariant::Type myFieldType = field.type();
@@ -139,6 +150,7 @@ QWidget *QgsAttributeEditor::createAttributeEditor( QWidget *parent, QWidget *ed
 
         myWidget = cb;
       }
+
     }
     break;
 
@@ -187,37 +199,81 @@ QWidget *QgsAttributeEditor::createAttributeEditor( QWidget *parent, QWidget *ed
 
       QgsVectorLayer *layer = qobject_cast<QgsVectorLayer*>( QgsMapLayerRegistry::instance()->mapLayer( data.mLayer ) );
       QMap< QString, QString > map;
+
+      int fi = -1;
       if ( layer )
       {
         int ki = layer->fieldNameIndex( data.mOrderByValue ? data.mValue : data.mKey );
         int vi = layer->fieldNameIndex( data.mOrderByValue ? data.mKey : data.mValue );
+
+        if ( !data.mFilterAttributeColumn.isNull() )
+          fi = layer->fieldNameIndex( data.mFilterAttributeColumn );
 
         if ( data.mAllowNull )
           map.insert( nullValue, tr( "(no selection)" ) );
 
         if ( ki >= 0 && vi >= 0 )
         {
-          layer->select( QgsAttributeList() << ki << vi, QgsRectangle(), false );
+          QgsAttributeList attributes;
+          attributes << ki;
+          attributes << vi;
+          if ( fi >= 0 )
+            attributes << fi;
+          layer->select( attributes, QgsRectangle(), false );
           QgsFeature f;
           while ( layer->nextFeature( f ) )
           {
+            if ( fi >= 0 && f.attributeMap()[ fi ].toString() != data.mFilterAttributeValue )
+              continue;
+
             map.insert( f.attributeMap()[ ki ].toString(), f.attributeMap()[ vi ].toString() );
           }
         }
       }
 
-      QComboBox *cb = comboBox( editor, parent );
-      if ( cb )
+      if ( !data.mAllowMulti )
       {
-        for ( QMap< QString, QString >::const_iterator it = map.begin(); it != map.end(); it++ )
+        QComboBox *cb = comboBox( editor, parent );
+        if ( cb )
         {
-          if ( data.mOrderByValue )
-            cb->addItem( it.key(), it.value() );
-          else
-            cb->addItem( it.value(), it.key() );
-        }
+          for ( QMap< QString, QString >::const_iterator it = map.begin(); it != map.end(); it++ )
+          {
+            if ( data.mOrderByValue )
+              cb->addItem( it.key(), it.value() );
+            else
+              cb->addItem( it.value(), it.key() );
+          }
 
-        myWidget = cb;
+          myWidget = cb;
+        }
+      }
+      else
+      {
+        QListWidget *lw = listWidget( editor, parent );
+        if ( lw )
+        {
+          QStringList checkList = value.toString().remove( QChar( '{' ) ).remove( QChar( '}' ) ).split( "," );
+
+          for ( QMap< QString, QString >::const_iterator it = map.begin(); it != map.end(); it++ )
+          {
+            QListWidgetItem *item;
+            if ( data.mOrderByValue )
+            {
+              item = new QListWidgetItem( it.key() );
+              item->setData( Qt::UserRole, it.value() );
+              item->setCheckState( checkList.contains( it.value() ) ? Qt::Checked : Qt::Unchecked );
+            }
+            else
+            {
+              item = new QListWidgetItem( it.value() );
+              item->setData( Qt::UserRole, it.key() );
+              item->setCheckState( checkList.contains( it.key() ) ? Qt::Checked : Qt::Unchecked );
+            }
+            lw->addItem( item );
+          }
+
+          myWidget = lw;
+        }
       }
     }
     break;
@@ -282,7 +338,7 @@ QWidget *QgsAttributeEditor::createAttributeEditor( QWidget *parent, QWidget *ed
 
         if ( editType == QgsVectorLayer::EditRange )
         {
-          QSpinBox *sb = NULL;
+          QSpinBox *sb = 0;
 
           if ( editor )
             sb = qobject_cast<QSpinBox *>( editor );
@@ -299,7 +355,7 @@ QWidget *QgsAttributeEditor::createAttributeEditor( QWidget *parent, QWidget *ed
         }
         else
         {
-          QAbstractSlider *sl = NULL;
+          QAbstractSlider *sl = 0;
 
           if ( editor )
           {
@@ -326,7 +382,7 @@ QWidget *QgsAttributeEditor::createAttributeEditor( QWidget *parent, QWidget *ed
       }
       else if ( myFieldType == QVariant::Double )
       {
-        QDoubleSpinBox *dsb = NULL;
+        QDoubleSpinBox *dsb = 0;
         if ( editor )
           dsb = qobject_cast<QDoubleSpinBox*>( editor );
         else
@@ -349,7 +405,7 @@ QWidget *QgsAttributeEditor::createAttributeEditor( QWidget *parent, QWidget *ed
 
     case QgsVectorLayer::CheckBox:
     {
-      QCheckBox *cb = NULL;
+      QCheckBox *cb = 0;
       if ( editor )
         cb = qobject_cast<QCheckBox*>( editor );
       else
@@ -370,9 +426,9 @@ QWidget *QgsAttributeEditor::createAttributeEditor( QWidget *parent, QWidget *ed
     case QgsVectorLayer::UniqueValuesEditable:
     case QgsVectorLayer::Immutable:
     {
-      QLineEdit *le = NULL;
-      QTextEdit *te = NULL;
-      QPlainTextEdit *pte = NULL;
+      QLineEdit *le = 0;
+      QTextEdit *te = 0;
+      QPlainTextEdit *pte = 0;
 
       if ( editor )
       {
@@ -434,13 +490,13 @@ QWidget *QgsAttributeEditor::createAttributeEditor( QWidget *parent, QWidget *ed
     break;
 
     case QgsVectorLayer::Hidden:
-      myWidget = NULL;
+      myWidget = 0;
       break;
 
     case QgsVectorLayer::FileName:
     case QgsVectorLayer::Calendar:
     {
-      QPushButton *pb = NULL;
+      QPushButton *pb = 0;
       QLineEdit *le = qobject_cast<QLineEdit *>( editor );
       if ( le )
       {
@@ -547,6 +603,33 @@ bool QgsAttributeEditor::retrieveValue( QWidget *widget, QgsVectorLayer *vl, int
     else
     {
       text = cb->currentText();
+    }
+    modified = true;
+  }
+
+  QListWidget *lw = qobject_cast<QListWidget *>( widget );
+  if ( lw )
+  {
+    if ( editType == QgsVectorLayer::ValueRelation )
+    {
+      text = '{';
+      for ( int i = 0, n = 0; i < lw->count(); i++ )
+      {
+        if ( lw->item( i )->checkState() == Qt::Checked )
+        {
+          if ( n > 0 )
+          {
+            text.append( ',' );
+          }
+          text.append( lw->item( i )->data( Qt::UserRole ).toString() );
+          n++;
+        }
+      }
+      text.append( '}' );
+    }
+    else
+    {
+      text = QString::null;
     }
     modified = true;
   }
@@ -679,7 +762,7 @@ bool QgsAttributeEditor::setValue( QWidget *editor, QgsVectorLayer *vl, int idx,
     {
       QVariant v = value;
       QComboBox *cb = qobject_cast<QComboBox *>( editor );
-      if ( cb == NULL )
+      if ( !cb )
         return false;
 
       if ( v.isNull() )
@@ -704,14 +787,14 @@ bool QgsAttributeEditor::setValue( QWidget *editor, QgsVectorLayer *vl, int idx,
         if ( editType == QgsVectorLayer::EditRange )
         {
           QSpinBox *sb = qobject_cast<QSpinBox *>( editor );
-          if ( sb == NULL )
+          if ( !sb )
             return false;
           sb->setValue( value.toInt() );
         }
         else
         {
           QAbstractSlider *sl = qobject_cast<QAbstractSlider *>( editor );
-          if ( sl == NULL )
+          if ( !sl )
             return false;
           sl->setValue( value.toInt() );
         }
@@ -720,7 +803,7 @@ bool QgsAttributeEditor::setValue( QWidget *editor, QgsVectorLayer *vl, int idx,
       else if ( myFieldType == QVariant::Double )
       {
         QDoubleSpinBox *dsb = qobject_cast<QDoubleSpinBox *>( editor );
-        if ( dsb == NULL )
+        if ( !dsb )
           return false;
         dsb->setValue( value.toDouble() );
       }

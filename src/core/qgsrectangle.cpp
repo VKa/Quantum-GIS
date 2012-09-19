@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <QRectF>
 #include <QString>
 #include <QTextStream>
 #include <qnumeric.h>
@@ -35,6 +36,14 @@ QgsRectangle::QgsRectangle( double newxmin, double newymin, double newxmax, doub
 QgsRectangle::QgsRectangle( QgsPoint const & p1, QgsPoint const & p2 )
 {
   set( p1, p2 );
+}
+
+QgsRectangle::QgsRectangle( QRectF const & qRectF )
+{
+  xmin = qRectF.topLeft().x();
+  ymin = qRectF.topLeft().y();
+  xmax = qRectF.bottomRight().x();
+  ymax = qRectF.bottomRight().y();
 }
 
 QgsRectangle::QgsRectangle( const QgsRectangle &r )
@@ -104,29 +113,6 @@ void QgsRectangle::scale( double scaleFactor, const QgsPoint * cp )
   xmax = centerX + newWidth / 2.0;
   ymin = centerY - newHeight / 2.0;
   ymax = centerY + newHeight / 2.0;
-}
-
-void QgsRectangle::expand( double scaleFactor, const QgsPoint * cp )
-{
-  // scale from the center
-  double centerX, centerY;
-  if ( cp )
-  {
-    centerX = cp->x();
-    centerY = cp->y();
-  }
-  else
-  {
-    centerX = xmin + width() / 2;
-    centerY = ymin + height() / 2;
-  }
-
-  double newWidth = width() * scaleFactor;
-  double newHeight = height() * scaleFactor;
-  xmin = centerX - newWidth;
-  xmax = centerX + newWidth;
-  ymin = centerY - newHeight;
-  ymax = centerY + newHeight;
 }
 
 QgsRectangle QgsRectangle::intersect( const QgsRectangle * rect ) const
@@ -205,6 +191,32 @@ QString QgsRectangle::asWktCoordinates() const
     QString::number( ymax, 'f', 16 );
 
   return rep;
+}
+
+QString QgsRectangle::asWktPolygon() const
+{
+  QString rep =
+    QString( "POLYGON((" ) +
+    QString::number( xmin, 'f', 16 ) + " " +
+    QString::number( ymin, 'f', 16 ) + ", " +
+    QString::number( xmax, 'f', 16 ) + " " +
+    QString::number( ymin, 'f', 16 ) + ", " +
+    QString::number( xmax, 'f', 16 ) + " " +
+    QString::number( ymax, 'f', 16 ) + ", " +
+    QString::number( xmin, 'f', 16 ) + " " +
+    QString::number( ymax, 'f', 16 ) + ", " +
+    QString::number( xmin, 'f', 16 ) + " " +
+    QString::number( ymin, 'f', 16 ) +
+    QString( "))" );
+
+  return rep;
+}
+
+//! returns a QRectF with same coordinates.
+//@note added in 2.0
+QRectF QgsRectangle::toRectF() const
+{
+  return QRectF(( qreal )xmin, ( qreal )ymin, ( qreal )xmax - xmin, ( qreal )ymax - ymin );
 }
 
 // Return a string representation of the rectangle with automatic or high precision

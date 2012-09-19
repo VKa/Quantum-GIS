@@ -1,3 +1,17 @@
+/***************************************************************************
+    qgsrendererv2.cpp
+    ---------------------
+    begin                : November 2009
+    copyright            : (C) 2009 by Martin Dobias
+    email                : wonder.sk at gmail.com
+ ***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
 
 #include "qgsrendererv2.h"
 #include "qgssymbolv2.h"
@@ -63,7 +77,7 @@ unsigned char* QgsFeatureRendererV2::_getLineString( QPolygonF& pts, QgsRenderCo
   const QgsMapToPixel& mtp = context.mapToPixel();
 
   //apply clipping for large lines to achieve a better rendering performance
-  if ( nPoints > 100 )
+  if ( nPoints > 1 )
   {
     const QgsRectangle& e = context.extent();
     double cw = e.width() / 10; double ch = e.height() / 10;
@@ -503,21 +517,21 @@ void QgsFeatureRendererV2::renderVertexMarker( QPointF& pt, QgsRenderContext& co
 
 void QgsFeatureRendererV2::renderVertexMarkerPolyline( QPolygonF& pts, QgsRenderContext& context )
 {
-  foreach( QPointF pt, pts )
-  renderVertexMarker( pt, context );
+  foreach ( QPointF pt, pts )
+    renderVertexMarker( pt, context );
 }
 
 void QgsFeatureRendererV2::renderVertexMarkerPolygon( QPolygonF& pts, QList<QPolygonF>* rings, QgsRenderContext& context )
 {
-  foreach( QPointF pt, pts )
-  renderVertexMarker( pt, context );
+  foreach ( QPointF pt, pts )
+    renderVertexMarker( pt, context );
 
   if ( rings )
   {
-    foreach( QPolygonF ring, *rings )
+    foreach ( QPolygonF ring, *rings )
     {
-      foreach( QPointF pt, ring )
-      renderVertexMarker( pt, context );
+      foreach ( QPointF pt, ring )
+        renderVertexMarker( pt, context );
     }
   }
 }

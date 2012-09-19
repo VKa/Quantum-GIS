@@ -39,7 +39,8 @@
 #include "qgsrendererv2.h"
 #include "qgslegendmodel.h"
 #include "qgscomposerlegenditem.h"
-#include "qgslogger.h"
+#include "qgspaintenginehack.h"
+
 #include <QImage>
 #include <QPainter>
 #include <QStringList>
@@ -71,7 +72,7 @@ QgsWMSServer::QgsWMSServer()
 
 void QgsWMSServer::appendFormats( QDomDocument &doc, QDomElement &elem, const QStringList &formats )
 {
-  foreach( QString format, formats )
+  foreach ( QString format, formats )
   {
     QDomElement formatElem = doc.createElement( "Format"/*wms:Format*/ );
     formatElem.appendChild( doc.createTextNode( format ) );
@@ -88,10 +89,12 @@ QDomDocument QgsWMSServer::getCapabilities( QString version )
   if ( version == "1.1.1" )
   {
     doc = QDomDocument( "WMT_MS_Capabilities SYSTEM 'http://schemas.opengis.net/wms/1.1.1/WMS_MS_Capabilities.dtd'" );  //WMS 1.1.1 needs DOCTYPE  "SYSTEM http://schemas.opengis.net/wms/1.1.1/WMS_MS_Capabilities.dtd"
+    addXMLDeclaration( doc );
     wmsCapabilitiesElement = doc.createElement( "WMT_MS_Capabilities"/*wms:WMS_Capabilities*/ );
   }
   else // 1.3.0 as default
   {
+    addXMLDeclaration( doc );
     wmsCapabilitiesElement = doc.createElement( "WMS_Capabilities"/*wms:WMS_Capabilities*/ );
     wmsCapabilitiesElement.setAttribute( "xmlns", "http://www.opengis.net/wms" );
     wmsCapabilitiesElement.setAttribute( "xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance" );
@@ -125,58 +128,11 @@ QDomDocument QgsWMSServer::getCapabilities( QString version )
   requestElement.appendChild( elem );
 
   //Prepare url
-  //Some client requests already have http://<SERVER_NAME> in the REQUEST_URI variable
-  QString hrefString;
-  QString requestUrl = getenv( "REQUEST_URI" );
-  QUrl mapUrl( requestUrl );
-  mapUrl.setHost( getenv( "SERVER_NAME" ) );
-
-  //Add non-default ports to url
-  QString portString = getenv( "SERVER_PORT" );
-  if ( !portString.isEmpty() )
+  QString hrefString = mConfigParser->serviceUrl();
+  if ( hrefString.isEmpty() )
   {
-    bool portOk;
-    int portNumber = portString.toInt( &portOk );
-    if ( portOk )
-    {
-      if ( portNumber != 80 )
-      {
-        mapUrl.setPort( portNumber );
-      }
-    }
+    hrefString = serviceUrl();
   }
-
-  if ( QString( getenv( "HTTPS" ) ).compare( "on", Qt::CaseInsensitive ) == 0 )
-  {
-    mapUrl.setScheme( "https" );
-  }
-  else
-  {
-    mapUrl.setScheme( "http" );
-  }
-
-  QList<QPair<QString, QString> > queryItems = mapUrl.queryItems();
-  QList<QPair<QString, QString> >::const_iterator queryIt = queryItems.constBegin();
-  for ( ; queryIt != queryItems.constEnd(); ++queryIt )
-  {
-    if ( queryIt->first.compare( "REQUEST", Qt::CaseInsensitive ) == 0 )
-    {
-      mapUrl.removeQueryItem( queryIt->first );
-    }
-    else if ( queryIt->first.compare( "VERSION", Qt::CaseInsensitive ) == 0 )
-    {
-      mapUrl.removeQueryItem( queryIt->first );
-    }
-    else if ( queryIt->first.compare( "SERVICE", Qt::CaseInsensitive ) == 0 )
-    {
-      mapUrl.removeQueryItem( queryIt->first );
-    }
-    else if ( queryIt->first.compare( "_DC", Qt::CaseInsensitive ) == 0 )
-    {
-      mapUrl.removeQueryItem( queryIt->first );
-    }
-  }
-  hrefString = mapUrl.toString();
 
 
   // SOAP platform
@@ -199,7 +155,6 @@ QDomDocument QgsWMSServer::getCapabilities( QString version )
   QDomElement olResourceElement = doc.createElement( "OnlineResource"/*wms:OnlineResource*/ );
   olResourceElement.setAttribute( "xmlns:xlink", "http://www.w3.org/1999/xlink" );
   olResourceElement.setAttribute( "xlink:type", "simple" );
-  requestUrl.truncate( requestUrl.indexOf( "?" ) + 1 );
   olResourceElement.setAttribute( "xlink:href", hrefString );
   getElement.appendChild( olResourceElement );
 
@@ -505,38 +460,6 @@ QDomDocument QgsWMSServer::getStyle()
   return mConfigParser->getStyle( styleName, layerName );
 }
 
-// Hack to workaround Qt #5114 by disabling PatternTransform
-class QgsPaintEngineHack : public QPaintEngine
-{
-  public:
-    void fixFlags()
-    {
-      gccaps = 0;
-      gccaps |= ( QPaintEngine::PrimitiveTransform
-                  // | QPaintEngine::PatternTransform
-                  | QPaintEngine::PixmapTransform
-                  | QPaintEngine::PatternBrush
-                  // | QPaintEngine::LinearGradientFill
-                  // | QPaintEngine::RadialGradientFill
-                  // | QPaintEngine::ConicalGradientFill
-                  | QPaintEngine::AlphaBlend
-                  // | QPaintEngine::PorterDuff
-                  | QPaintEngine::PainterPaths
-                  | QPaintEngine::Antialiasing
-                  | QPaintEngine::BrushStroke
-                  | QPaintEngine::ConstantOpacity
-                  | QPaintEngine::MaskedBrush
-                  // | QPaintEngine::PerspectiveTransform
-                  | QPaintEngine::BlendModes
-                  // | QPaintEngine::ObjectBoundingModeGradients
-#if QT_VERSION >= 0x040500
-                  | QPaintEngine::RasterOpModes
-#endif
-                  | QPaintEngine::PaintOutsidePaintEvent
-                );
-    }
-};
-
 QByteArray* QgsWMSServer::getPrint( const QString& formatString )
 {
   QStringList layersList, stylesList, layerIdList;
@@ -583,34 +506,24 @@ QByteArray* QgsWMSServer::getPrint( const QString& formatString )
     generator.setResolution( c->printResolution() ); //because the rendering is done in mm, convert the dpi
 
     QPainter p( &generator );
-    QRectF sourceArea( 0, 0, c->paperWidth(), c->paperHeight() );
-    QRectF targetArea( 0, 0, width, height );
     if ( c->printAsRaster() ) //embed one raster into the svg
     {
-      QImage* img = printCompositionToImage( c );
-      if ( img )
-      {
-        p.drawImage( targetArea, *img, QRectF( 0, 0, img->width(), img->height() ) );
-      }
-      delete img;
+      QImage img = c->printPageAsRaster( 0 );
+      p.drawImage( QRect( 0, 0, width, height ), img, QRectF( 0, 0, img.width(), img.height() ) );
     }
     else
     {
-      c->render( &p, targetArea, sourceArea );
+      c->renderPage( &p, 0 );
     }
     p.end();
   }
   else if ( formatString.compare( "png", Qt::CaseInsensitive ) == 0 || formatString.compare( "jpg", Qt::CaseInsensitive ) == 0 )
   {
-    QImage* image = printCompositionToImage( c );
-    if ( image )
-    {
-      ba = new QByteArray();
-      QBuffer buffer( ba );
-      buffer.open( QIODevice::WriteOnly );
-      image->save( &buffer, formatString.toLocal8Bit().data(), -1 );
-    }
-    delete image;
+    QImage image = c->printPageAsRaster( 0 ); //can only return the first page if pixmap is requested
+    ba = new QByteArray();
+    QBuffer buffer( ba );
+    buffer.open( QIODevice::WriteOnly );
+    image.save( &buffer, formatString.toLocal8Bit().data(), -1 );
   }
   else if ( formatString.compare( "pdf", Qt::CaseInsensitive ) == 0 )
   {
@@ -623,38 +536,7 @@ QByteArray* QgsWMSServer::getPrint( const QString& formatString )
       return 0;
     }
 
-    QPrinter printer;
-    printer.setResolution( c->printResolution() );
-    printer.setFullPage( true );
-    printer.setOutputFormat( QPrinter::PdfFormat );
-    printer.setOutputFileName( tempFile.fileName() );
-    printer.setPaperSize( QSizeF( c->paperWidth(), c->paperHeight() ), QPrinter::Millimeter );
-    QRectF paperRectMM = printer.pageRect( QPrinter::Millimeter );
-    QRectF paperRectPixel = printer.pageRect( QPrinter::DevicePixel );
-
-    QPaintEngine *engine = printer.paintEngine();
-    if ( engine )
-    {
-      QgsPaintEngineHack *hack = static_cast<QgsPaintEngineHack*>( engine );
-      hack->fixFlags();
-    }
-
-    QPainter p( &printer );
-    if ( c->printAsRaster() ) //embed one raster into the pdf
-    {
-      QImage* img = printCompositionToImage( c );
-      if ( img )
-      {
-        p.drawImage( paperRectPixel, *img, QRectF( 0, 0, img->width(), img->height() ) );
-      }
-      delete img;
-    }
-    else //vector pdf
-    {
-      c->render( &p, paperRectPixel, paperRectMM );
-    }
-    p.end();
-
+    c->exportAsPDF( tempFile.fileName() );
     ba = new QByteArray();
     *ba = tempFile.readAll();
   }
@@ -923,10 +805,10 @@ int QgsWMSServer::getFeatureInfo( QDomDocument& result, QString version )
   {
     QDomElement bBoxElem = result.createElement( "BoundingBox" );
     bBoxElem.setAttribute( "CRS", mMapRenderer->destinationCrs().authid() );
-    bBoxElem.setAttribute( "minx", featuresRect->xMinimum() );
-    bBoxElem.setAttribute( "maxx", featuresRect->xMaximum() );
-    bBoxElem.setAttribute( "miny", featuresRect->yMinimum() );
-    bBoxElem.setAttribute( "maxy", featuresRect->yMaximum() );
+    bBoxElem.setAttribute( "minx", QString::number( featuresRect->xMinimum() ) );
+    bBoxElem.setAttribute( "maxx", QString::number( featuresRect->xMaximum() ) );
+    bBoxElem.setAttribute( "miny", QString::number( featuresRect->yMinimum() ) );
+    bBoxElem.setAttribute( "maxy", QString::number( featuresRect->yMaximum() ) );
     getFeatureInfoElement.insertBefore( bBoxElem, QDomNode() ); //insert as first child
   }
 
@@ -1262,7 +1144,16 @@ int QgsWMSServer::featureInfoFromVectorLayer( QgsVectorLayer* layer,
   //info point could be 0 in case there is only an attribute filter
   if ( infoPoint )
   {
-    double searchRadius = ( layerRect.xMaximum() - layerRect.xMinimum() ) / 100;
+    double searchRadius = 0;
+    if ( layer->geometryType() == QGis::Polygon )
+    {
+      searchRadius = layerRect.width() / 400;
+    }
+    else
+    {
+      searchRadius = layerRect.width() / 200;
+    }
+
     searchRect.set( infoPoint->x() - searchRadius, infoPoint->y() - searchRadius,
                     infoPoint->x() + searchRadius, infoPoint->y() + searchRadius );
   }
@@ -1373,10 +1264,10 @@ int QgsWMSServer::featureInfoFromVectorLayer( QgsVectorLayer* layer,
       //append feature bounding box to feature info xml
       QDomElement bBoxElem = infoDocument.createElement( "BoundingBox" );
       bBoxElem.setAttribute( version == "1.1.1" ? "SRS" : "CRS", mapRender->destinationCrs().authid() );
-      bBoxElem.setAttribute( "minx", box.xMinimum() );
-      bBoxElem.setAttribute( "maxx", box.xMaximum() );
-      bBoxElem.setAttribute( "miny", box.yMinimum() );
-      bBoxElem.setAttribute( "maxy", box.yMaximum() );
+      bBoxElem.setAttribute( "minx", QString::number( box.xMinimum() ) );
+      bBoxElem.setAttribute( "maxx", QString::number( box.xMaximum() ) );
+      bBoxElem.setAttribute( "miny", QString::number( box.yMinimum() ) );
+      bBoxElem.setAttribute( "maxy", QString::number( box.yMaximum() ) );
       featureElement.appendChild( bBoxElem );
     }
   }
@@ -1783,7 +1674,7 @@ QMap<QString, QString> QgsWMSServer::applyRequestedLayerFilters( const QStringLi
       //we need to find the maplayer objects matching the layer name
       QList<QgsMapLayer*> layersToFilter;
 
-      foreach( QgsMapLayer *layer, QgsMapLayerRegistry::instance()->mapLayers() )
+      foreach ( QgsMapLayer *layer, QgsMapLayerRegistry::instance()->mapLayers() )
       {
         if ( layer && layer->name() == eqSplit.at( 0 ) )
         {
@@ -1791,7 +1682,7 @@ QMap<QString, QString> QgsWMSServer::applyRequestedLayerFilters( const QStringLi
         }
       }
 
-      foreach( QgsMapLayer *filter, layersToFilter )
+      foreach ( QgsMapLayer *filter, layersToFilter )
       {
         QgsVectorLayer* filteredLayer = dynamic_cast<QgsVectorLayer*>( filter );
         if ( filteredLayer )
@@ -1969,7 +1860,7 @@ QStringList QgsWMSServer::applyFeatureSelections( const QStringList& layerList )
     return layersWithSelections;
   }
 
-  foreach( QString selectionLayer, selectionString.split( ";" ) )
+  foreach ( QString selectionLayer, selectionString.split( ";" ) )
   {
     //separate layer name from id list
     QStringList layerIdSplit = selectionLayer.split( ":" );
@@ -1982,7 +1873,7 @@ QStringList QgsWMSServer::applyFeatureSelections( const QStringList& layerList )
     QString layerName = layerIdSplit.at( 0 );
     QgsVectorLayer* vLayer = 0;
 
-    foreach( QgsMapLayer *layer, QgsMapLayerRegistry::instance()->mapLayers() )
+    foreach ( QgsMapLayer *layer, QgsMapLayerRegistry::instance()->mapLayers() )
     {
       if ( layer && layer->name() == layerName )
       {
@@ -2000,7 +1891,7 @@ QStringList QgsWMSServer::applyFeatureSelections( const QStringList& layerList )
     QStringList idList = layerIdSplit.at( 1 ).split( "," );
     QgsFeatureIds selectedIds;
 
-    foreach( QString id, idList )
+    foreach ( QString id, idList )
     {
       selectedIds.insert( STRING_TO_FID( id ) );
     }
@@ -2016,7 +1907,7 @@ void QgsWMSServer::clearFeatureSelections( const QStringList& layerIds ) const
 {
   QMap<QString, QgsMapLayer*>& layerMap = QgsMapLayerRegistry::instance()->mapLayers();
 
-  foreach( QString id, layerIds )
+  foreach ( QString id, layerIds )
   {
     QgsVectorLayer *layer = qobject_cast< QgsVectorLayer * >( layerMap.value( id, 0 ) );
     if ( !layer )
@@ -2054,4 +1945,63 @@ bool QgsWMSServer::checkMaximumWidthHeight() const
     }
   }
   return true;
+}
+
+QString QgsWMSServer::serviceUrl() const
+{
+  QUrl mapUrl( getenv( "REQUEST_URI" ) );
+  mapUrl.setHost( getenv( "SERVER_NAME" ) );
+
+  //Add non-default ports to url
+  QString portString = getenv( "SERVER_PORT" );
+  if ( !portString.isEmpty() )
+  {
+    bool portOk;
+    int portNumber = portString.toInt( &portOk );
+    if ( portOk )
+    {
+      if ( portNumber != 80 )
+      {
+        mapUrl.setPort( portNumber );
+      }
+    }
+  }
+
+  if ( QString( getenv( "HTTPS" ) ).compare( "on", Qt::CaseInsensitive ) == 0 )
+  {
+    mapUrl.setScheme( "https" );
+  }
+  else
+  {
+    mapUrl.setScheme( "http" );
+  }
+
+  QList<QPair<QString, QString> > queryItems = mapUrl.queryItems();
+  QList<QPair<QString, QString> >::const_iterator queryIt = queryItems.constBegin();
+  for ( ; queryIt != queryItems.constEnd(); ++queryIt )
+  {
+    if ( queryIt->first.compare( "REQUEST", Qt::CaseInsensitive ) == 0 )
+    {
+      mapUrl.removeQueryItem( queryIt->first );
+    }
+    else if ( queryIt->first.compare( "VERSION", Qt::CaseInsensitive ) == 0 )
+    {
+      mapUrl.removeQueryItem( queryIt->first );
+    }
+    else if ( queryIt->first.compare( "SERVICE", Qt::CaseInsensitive ) == 0 )
+    {
+      mapUrl.removeQueryItem( queryIt->first );
+    }
+    else if ( queryIt->first.compare( "_DC", Qt::CaseInsensitive ) == 0 )
+    {
+      mapUrl.removeQueryItem( queryIt->first );
+    }
+  }
+  return mapUrl.toString();
+}
+
+void QgsWMSServer::addXMLDeclaration( QDomDocument& doc ) const
+{
+  QDomProcessingInstruction xmlDeclaration = doc.createProcessingInstruction( "xml", "version=\"1.0\"" );
+  doc.appendChild( xmlDeclaration );
 }

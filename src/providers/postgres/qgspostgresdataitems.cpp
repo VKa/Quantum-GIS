@@ -1,3 +1,17 @@
+/***************************************************************************
+    qgspostgresdataitems.cpp
+    ---------------------
+    begin                : October 2011
+    copyright            : (C) 2011 by Martin Dobias
+    email                : wonder.sk at gmail.com
+ ***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
 #include "qgspostgresdataitems.h"
 
 #include "qgspostgresconn.h"
@@ -5,6 +19,7 @@
 #include "qgscolumntypethread.h"
 #include "qgslogger.h"
 #include "qgsdatasourceuri.h"
+#include "qgsapplication.h"
 
 #include <QMessageBox>
 
@@ -14,7 +29,7 @@ QGISEXTERN bool deleteLayer( const QString& uri, QString& errCause );
 QgsPGConnectionItem::QgsPGConnectionItem( QgsDataItem* parent, QString name, QString path )
     : QgsDataCollectionItem( parent, name, path )
 {
-  mIcon = QIcon( getThemePixmap( "mIconConnect.png" ) );
+  mIcon = QgsApplication::getThemeIcon( "mIconConnect.png" );
 }
 
 QgsPGConnectionItem::~QgsPGConnectionItem()
@@ -49,7 +64,7 @@ QVector<QgsDataItem*> QgsPGConnectionItem::createChildren()
 
   QgsGeomColumnTypeThread *columnTypeThread = 0;
 
-  foreach( QgsPostgresLayerProperty layerProperty, layerProperties )
+  foreach ( QgsPostgresLayerProperty layerProperty, layerProperties )
   {
     QgsPGSchemaItem *schemaItem = mSchemaMap.value( layerProperty.schemaName, 0 );
     if ( !schemaItem )
@@ -174,7 +189,7 @@ bool QgsPGConnectionItem::handleDrop( const QMimeData * data, Qt::DropAction )
   QStringList importResults;
   bool hasError = false;
   QgsMimeDataUtils::UriList lst = QgsMimeDataUtils::decodeUriList( data );
-  foreach( const QgsMimeDataUtils::Uri& u, lst )
+  foreach ( const QgsMimeDataUtils::Uri& u, lst )
   {
     if ( u.layerType != "vector" )
     {
@@ -290,7 +305,7 @@ QString QgsPGLayerItem::createUri()
 QgsPGSchemaItem::QgsPGSchemaItem( QgsDataItem* parent, QString name, QString path )
     : QgsDataCollectionItem( parent, name, path )
 {
-  mIcon = QIcon( getThemePixmap( "mIconDbSchema.png" ) );
+  mIcon = QgsApplication::getThemeIcon( "mIconDbSchema.png" );
 }
 
 QVector<QgsDataItem*> QgsPGSchemaItem::createChildren()
@@ -350,7 +365,7 @@ void QgsPGSchemaItem::addLayer( QgsPostgresLayerProperty layerProperty )
 QgsPGRootItem::QgsPGRootItem( QgsDataItem* parent, QString name, QString path )
     : QgsDataCollectionItem( parent, name, path )
 {
-  mIcon = QIcon( getThemePixmap( "mIconPostgis.png" ) );
+  mIcon = QgsApplication::getThemeIcon( "mIconPostgis.png" );
   populate();
 }
 
@@ -361,7 +376,7 @@ QgsPGRootItem::~QgsPGRootItem()
 QVector<QgsDataItem*> QgsPGRootItem::createChildren()
 {
   QVector<QgsDataItem*> connections;
-  foreach( QString connName, QgsPostgresConn::connectionList() )
+  foreach ( QString connName, QgsPostgresConn::connectionList() )
   {
     connections << new QgsPGConnectionItem( this, connName, mPath + "/" + connName );
   }

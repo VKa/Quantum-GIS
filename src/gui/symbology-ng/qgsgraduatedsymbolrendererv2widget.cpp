@@ -1,3 +1,17 @@
+/***************************************************************************
+    qgsgraduatedsymbolrendererv2widget.cpp
+    ---------------------
+    begin                : November 2009
+    copyright            : (C) 2009 by Martin Dobias
+    email                : wonder.sk at gmail.com
+ ***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
 #include "qgsgraduatedsymbolrendererv2widget.h"
 
 #include "qgssymbolv2.h"
@@ -10,6 +24,8 @@
 #include "qgssymbolv2selectordialog.h"
 
 #include "qgsludialog.h"
+
+#include "qgsproject.h"
 
 #include <QMenu>
 #include <QMessageBox>
@@ -47,6 +63,15 @@ QgsGraduatedSymbolRendererV2Widget::QgsGraduatedSymbolRendererV2Widget( QgsVecto
 
   cboGraduatedColorRamp->populate( mStyle );
 
+  // set project default color ramp
+  QString defaultColorRamp = QgsProject::instance()->readEntry( "DefaultStyles", "/ColorRamp", "" );
+  if ( defaultColorRamp != "" )
+  {
+    int index = cboGraduatedColorRamp->findText( defaultColorRamp, Qt::MatchCaseSensitive );
+    if ( index >= 0 )
+      cboGraduatedColorRamp->setCurrentIndex( index );
+  }
+
   QStandardItemModel* mg = new QStandardItemModel( this );
   QStringList labels;
   labels << tr( "Range" ) << tr( "Label" );
@@ -78,9 +103,10 @@ QgsGraduatedSymbolRendererV2Widget::QgsGraduatedSymbolRendererV2Widget( QgsVecto
   advMenu->addAction( tr( "Symbol levels..." ), this, SLOT( showSymbolLevels() ) );
 
   mDataDefinedMenus = new QgsRendererV2DataDefinedMenus( advMenu, mLayer->pendingFields(),
-      mRenderer->rotationField(), mRenderer->sizeScaleField() );
+      mRenderer->rotationField(), mRenderer->sizeScaleField(), mRenderer->scaleMethod() );
   connect( mDataDefinedMenus, SIGNAL( rotationFieldChanged( QString ) ), this, SLOT( rotationFieldChanged( QString ) ) );
   connect( mDataDefinedMenus, SIGNAL( sizeScaleFieldChanged( QString ) ), this, SLOT( sizeScaleFieldChanged( QString ) ) );
+  connect( mDataDefinedMenus, SIGNAL( scaleMethodChanged( QgsSymbolV2::ScaleMethod ) ), this, SLOT( scaleMethodChanged( QgsSymbolV2::ScaleMethod ) ) );
   btnAdvanced->setMenu( advMenu );
 }
 
@@ -190,6 +216,10 @@ void QgsGraduatedSymbolRendererV2Widget::classifyGraduated()
     QMessageBox::critical( this, tr( "Error" ), tr( "Renderer creation has failed." ) );
     return;
   }
+
+  r->setSizeScaleField( mRenderer->sizeScaleField() );
+  r->setRotationField( mRenderer->rotationField() );
+  r->setScaleMethod( mRenderer->scaleMethod() );
 
   delete mRenderer;
   mRenderer = r;
@@ -311,8 +341,8 @@ void QgsGraduatedSymbolRendererV2Widget::changeRange( int rangeIdx )
   QgsLUDialog dialog( this );
 
   const QgsRendererRangeV2& range = mRenderer->ranges()[rangeIdx];
-  dialog.setLowerValue( QString( "%1" ).arg( range.lowerValue() ) );
-  dialog.setUpperValue( QString( "%1" ).arg( range.upperValue() ) );
+  dialog.setLowerValue( QString::number( range.lowerValue(), 'f', 4 ) );
+  dialog.setUpperValue( QString::number( range.upperValue(), 'f', 4 ) );
 
   if ( dialog.exec() == QDialog::Accepted )
   {
@@ -356,6 +386,11 @@ void QgsGraduatedSymbolRendererV2Widget::rotationFieldChanged( QString fldName )
 void QgsGraduatedSymbolRendererV2Widget::sizeScaleFieldChanged( QString fldName )
 {
   mRenderer->setSizeScaleField( fldName );
+}
+
+void QgsGraduatedSymbolRendererV2Widget::scaleMethodChanged( QgsSymbolV2::ScaleMethod scaleMethod )
+{
+  mRenderer->setScaleMethod( scaleMethod );
 }
 
 QList<QgsSymbolV2*> QgsGraduatedSymbolRendererV2Widget::selectedSymbols()

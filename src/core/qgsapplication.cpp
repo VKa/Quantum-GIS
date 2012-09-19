@@ -26,6 +26,8 @@
 #include <QMessageBox>
 #include <QPalette>
 #include <QSettings>
+#include <QIcon>
+#include <QPixmap>
 
 #ifndef Q_WS_WIN
 #include <netinet/in.h>
@@ -75,41 +77,38 @@ QgsApplication::QgsApplication( int & argc, char ** argv, bool GUIenabled, QStri
 {
   init( customConfigPath ); // init can also be called directly by e.g. unit tests that don't inherit QApplication.
 }
+
 void QgsApplication::init( QString customConfigPath )
 {
   if ( customConfigPath.isEmpty() )
   {
     customConfigPath = QDir::homePath() + QString( "/.qgis/" );
   }
+
   qRegisterMetaType<QgsGeometry::Error>( "QgsGeometry::Error" );
 
+  QString prefixPath( getenv( "QGIS_PREFIX_PATH" ) ? getenv( "QGIS_PREFIX_PATH" ) : applicationDirPath() );
+
   // check if QGIS is run from build directory (not the install directory)
-  QDir appDir( applicationDirPath() );
-#ifndef _MSC_VER
-#define SOURCE_PATH "source_path.txt"
-#else
-#define SOURCE_PATH "../source_path.txt"
-#endif
-  if ( appDir.exists( SOURCE_PATH ) )
+  QFile f;
+  foreach ( QString path, QStringList() << "" << "/.." << "/bin" )
   {
-    QFile f( applicationDirPath() + "/" + SOURCE_PATH );
-    if ( f.open( QIODevice::ReadOnly ) )
-    {
-      ABISYM( mRunningFromBuildDir ) = true;
-      ABISYM( mBuildSourcePath ) = f.readAll();
-#if _MSC_VER
-      QStringList elems = applicationDirPath().split( "/", QString::SkipEmptyParts );
-      ABISYM( mCfgIntDir ) = elems.last();
-      ABISYM( mBuildOutputPath ) = applicationDirPath() + "/../..";
-#elif defined(Q_WS_MACX)
-      ABISYM( mBuildOutputPath ) = applicationDirPath();
-#else
-      ABISYM( mBuildOutputPath ) = applicationDirPath() + "/.."; // on linux
+    f.setFileName( prefixPath + path + "/path.txt" );
+    if ( f.exists() )
+      break;
+  }
+  if ( f.exists() && f.open( QIODevice::ReadOnly ) )
+  {
+    ABISYM( mRunningFromBuildDir ) = true;
+    ABISYM( mBuildSourcePath ) = f.readLine().trimmed();
+    ABISYM( mBuildOutputPath ) = f.readLine().trimmed();
+    qDebug( "Running from build directory!" );
+    qDebug( "- source directory: %s", ABISYM( mBuildSourcePath ).toUtf8().data() );
+    qDebug( "- output directory of the build: %s", ABISYM( mBuildOutputPath ).toUtf8().data() );
+#ifdef _MSC_VER
+    ABISYM( mCfgIntDir ) = prefixPath.split( "/", QString::SkipEmptyParts ).last();
+    qDebug( "- cfg: %s", ABISYM( mCfgIntDir ).toUtf8().data() );
 #endif
-      qDebug( "Running from build directory!" );
-      qDebug( "- source directory: %s", ABISYM( mBuildSourcePath ).toAscii().data() );
-      qDebug( "- output directory of the build: %s", ABISYM( mBuildOutputPath ).toAscii().data() );
-    }
   }
 
   if ( ABISYM( mRunningFromBuildDir ) )
@@ -127,14 +126,22 @@ void QgsApplication::init( QString customConfigPath )
   }
   else
   {
+    char *prefixPath = getenv( "QGIS_PREFIX_PATH" );
+    if ( !prefixPath )
+    {
 #if defined(Q_WS_MACX) || defined(Q_WS_WIN32) || defined(WIN32)
-    setPrefixPath( applicationDirPath(), true );
+      setPrefixPath( applicationDirPath(), true );
 #else
-    QDir myDir( applicationDirPath() );
-    myDir.cdUp();
-    QString myPrefix = myDir.absolutePath();
-    setPrefixPath( myPrefix, true );
+      QDir myDir( applicationDirPath() );
+      myDir.cdUp();
+      QString myPrefix = myDir.absolutePath();
+      setPrefixPath( myPrefix, true );
 #endif
+    }
+    else
+    {
+      setPrefixPath( prefixPath, true );
+    }
   }
 
   if ( !customConfigPath.isEmpty() )
@@ -200,7 +207,9 @@ bool QgsApplication::event( QEvent * event )
 bool QgsApplication::notify( QObject * receiver, QEvent * event )
 {
   bool done = false;
-  emit preNotify( receiver, event, &done );
+  // Crashes  in customization (especially on Mac), if we're not in the main/UI thread, see #5597
+  if ( thread() == receiver->thread() )
+    emit preNotify( receiver, event, &done );
 
   if ( done )
     return true;
@@ -317,6 +326,43 @@ QString QgsApplication::iconPath( QString iconFile )
 
   // use default theme
   return defaultThemePath() + iconFile;
+}
+
+QIcon QgsApplication::getThemeIcon( const QString theName )
+{
+  QString myPreferredPath = activeThemePath() + QDir::separator() + theName;
+  QString myDefaultPath = defaultThemePath() + QDir::separator() + theName;
+  if ( QFile::exists( myPreferredPath ) )
+  {
+    return QIcon( myPreferredPath );
+  }
+  else if ( QFile::exists( myDefaultPath ) )
+  {
+    //could still return an empty icon if it
+    //doesnt exist in the default theme either!
+    return QIcon( myDefaultPath );
+  }
+  else
+  {
+    return QIcon();
+  }
+}
+
+// TODO: add some caching mechanism ?
+QPixmap QgsApplication::getThemePixmap( const QString theName )
+{
+  QString myPreferredPath = activeThemePath() + QDir::separator() + theName;
+  QString myDefaultPath = defaultThemePath() + QDir::separator() + theName;
+  if ( QFile::exists( myPreferredPath ) )
+  {
+    return QPixmap( myPreferredPath );
+  }
+  else
+  {
+    //could still return an empty icon if it
+    //doesnt exist in the default theme either!
+    return QPixmap( myDefaultPath );
+  }
 }
 
 /*!
@@ -506,12 +552,12 @@ const QString QgsApplication::svgPath()
 
 const QString QgsApplication::userStyleV2Path()
 {
-  return qgisSettingsDirPath() + QString( "symbology-ng-style.xml" );
+  return qgisSettingsDirPath() + QString( "symbology-ng-style.db" );
 }
 
 const QString QgsApplication::defaultStyleV2Path()
 {
-  return ABISYM( mPkgDataPath ) + QString( "/resources/symbology-ng-style.xml" );
+  return ABISYM( mPkgDataPath ) + QString( "/resources/symbology-ng-style.db" );
 }
 
 const QString QgsApplication::libraryPath()
