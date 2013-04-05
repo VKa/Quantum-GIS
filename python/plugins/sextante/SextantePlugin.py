@@ -1,18 +1,43 @@
+# -*- coding: utf-8 -*-
+
+"""
+***************************************************************************
+    SextantePlugin.py
+    ---------------------
+    Date                 : August 2012
+    Copyright            : (C) 2012 by Victor Olaya
+    Email                : volayaf at gmail dot com
+***************************************************************************
+*                                                                         *
+*   This program is free software; you can redistribute it and/or modify  *
+*   it under the terms of the GNU General Public License as published by  *
+*   the Free Software Foundation; either version 2 of the License, or     *
+*   (at your option) any later version.                                   *
+*                                                                         *
+***************************************************************************
+"""
+
+__author__ = 'Victor Olaya'
+__date__ = 'August 2012'
+__copyright__ = '(C) 2012, Victor Olaya'
+# This will get replaced with a git SHA1 when you do a git archive
+__revision__ = '$Format:%H$'
+
+import shutil
+import os, sys
+import inspect
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 from qgis.core import *
-import os, sys
-import inspect
 from sextante.core.Sextante import Sextante
-from sextante.gui.SextanteToolbox import SextanteToolbox
 from sextante.core.QGisLayers import QGisLayers
-from sextante.gui.HistoryDialog import HistoryDialog
 from sextante.core.SextanteUtils import SextanteUtils
+from sextante.gui.SextanteToolbox import SextanteToolbox
+from sextante.gui.HistoryDialog import HistoryDialog
 from sextante.gui.ConfigDialog import ConfigDialog
-from sextante.modeler.ModelerDialog import ModelerDialog
 from sextante.gui.ResultsDialog import ResultsDialog
-from sextante.about.AboutDialog import AboutDialog
-import subprocess
+from sextante.modeler.ModelerDialog import ModelerDialog
+import sextante.resources_rc
 
 cmd_folder = os.path.split(inspect.getfile( inspect.currentframe() ))[0]
 if cmd_folder not in sys.path:
@@ -28,53 +53,41 @@ class SextantePlugin:
 
     def initGui(self):
         self.toolbox = SextanteToolbox(self.iface)
-        self.toolbox.setVisible(False)
+        self.iface.addDockWidget(Qt.RightDockWidgetArea, self.toolbox)
+        self.toolbox.hide()
         Sextante.addAlgListListener(self.toolbox)
 
         self.menu = QMenu(self.iface.mainWindow())
-        self.menu.setTitle("Analysis")
+        self.menu.setTitle(QCoreApplication.translate("SEXTANTE", "Analysis"))
 
-        icon = QIcon(os.path.dirname(__file__) + "/images/toolbox.png")
-        self.toolboxAction = QAction(icon, \
-            "&SEXTANTE Toolbox", self.iface.mainWindow())
-        QObject.connect(self.toolboxAction, SIGNAL("triggered()"), self.openToolbox)
+        self.toolboxAction = self.toolbox.toggleViewAction()
+        self.toolboxAction.setIcon(QIcon(":/sextante/images/toolbox.png"))
+        self.toolboxAction.setText(QCoreApplication.translate("SEXTANTE", "&SEXTANTE toolbox"))
         self.menu.addAction(self.toolboxAction)
 
-        icon = QIcon(os.path.dirname(__file__) + "/images/model.png")
-        self.modelerAction = QAction(icon, \
-            "&SEXTANTE Modeler", self.iface.mainWindow())
-        QObject.connect(self.modelerAction, SIGNAL("triggered()"), self.openModeler)
+        self.modelerAction = QAction(QIcon(":/sextante/images/model.png"),
+            QCoreApplication.translate("SEXTANTE", "&SEXTANTE modeler"),
+            self.iface.mainWindow())
+        self.modelerAction.triggered.connect(self.openModeler)
         self.menu.addAction(self.modelerAction)
 
-        icon = QIcon(os.path.dirname(__file__) + "/images/history.gif")
-        self.historyAction = QAction(icon, \
-            "&SEXTANTE History and log", self.iface.mainWindow())
-        QObject.connect(self.historyAction, SIGNAL("triggered()"), self.openHistory)
+        self.historyAction = QAction(QIcon(":/sextante/images/history.gif"),
+            QCoreApplication.translate("SEXTANTE", "&SEXTANTE history and log"),
+            self.iface.mainWindow())
+        self.historyAction.triggered.connect(self.openHistory)
         self.menu.addAction(self.historyAction)
 
-        icon = QIcon(os.path.dirname(__file__) + "/images/config.png")
-        self.configAction = QAction(icon, \
-            "&SEXTANTE options and configuration", self.iface.mainWindow())
-        QObject.connect(self.configAction, SIGNAL("triggered()"), self.openConfig)
+        self.configAction = QAction(QIcon(":/sextante/images/config.png"),
+            QCoreApplication.translate("SEXTANTE", "&SEXTANTE options and configuration"),
+            self.iface.mainWindow())
+        self.configAction.triggered.connect(self.openConfig)
         self.menu.addAction(self.configAction)
 
-        icon = QIcon(os.path.dirname(__file__) + "/images/results.png")
-        self.resultsAction = QAction(icon, \
-            "&SEXTANTE results viewer", self.iface.mainWindow())
-        QObject.connect(self.resultsAction, SIGNAL("triggered()"), self.openResults)
+        self.resultsAction = QAction(QIcon(":/sextante/images/results.png"),
+            QCoreApplication.translate("SEXTANTE", "&SEXTANTE results viewer"),
+            self.iface.mainWindow())
+        self.resultsAction.triggered.connect(self.openResults)
         self.menu.addAction(self.resultsAction)
-
-        icon = QIcon(os.path.dirname(__file__) + "/images/help.png")
-        self.helpAction = QAction(icon, \
-            "&SEXTANTE help", self.iface.mainWindow())
-        QObject.connect(self.helpAction, SIGNAL("triggered()"), self.openHelp)
-        self.menu.addAction(self.helpAction)
-
-        icon = QIcon(os.path.dirname(__file__) + "/images/info.png")
-        self.aboutAction = QAction(icon, \
-            "&About SEXTANTE", self.iface.mainWindow())
-        QObject.connect(self.aboutAction, SIGNAL("triggered()"), self.openAbout)
-        self.menu.addAction(self.aboutAction)
 
         menuBar = self.iface.mainWindow().menuBar()
         menuBar.insertMenu(menuBar.actions()[-1], self.menu)
@@ -84,17 +97,14 @@ class SextantePlugin:
         self.menu.deleteLater()
         #delete temporary output files
         folder = SextanteUtils.tempFolder()
-        for f in os.listdir(folder):
-            path = os.path.join(folder,f)
-            try:
-                os.unlink(path)
-            except:
-                #leave files that could not be deleted
-                pass
-
+        if QDir(folder).exists():
+            shutil.rmtree(folder, True)
 
     def openToolbox(self):
-        self.toolbox.setVisible(True)
+        if self.toolbox.isVisible():
+            self.toolbox.hide()
+        else:
+            self.toolbox.show()
 
     def openModeler(self):
         dlg = ModelerDialog()
@@ -113,18 +123,4 @@ class SextantePlugin:
     def openConfig(self):
         dlg = ConfigDialog(self.toolbox)
         dlg.exec_()
-
-    def openAbout(self):
-        dlg = AboutDialog()
-        dlg.exec_()
-
-    def openHelp(self):
-        filename = os.path.dirname(__file__) + "/help/index.html"
-        if os.name == "nt":
-            os.startfile(filename)
-        elif sys.platform == "darwin":
-            subprocess.Popen(('open', filename))
-        else:
-            subprocess.call(('xdg-open', filename))
-
 

@@ -1,3 +1,28 @@
+# -*- coding: utf-8 -*-
+
+"""
+***************************************************************************
+    BatchInputSelectionPanel.py
+    ---------------------
+    Date                 : August 2012
+    Copyright            : (C) 2012 by Victor Olaya
+    Email                : volayaf at gmail dot com
+***************************************************************************
+*                                                                         *
+*   This program is free software; you can redistribute it and/or modify  *
+*   it under the terms of the GNU General Public License as published by  *
+*   the Free Software Foundation; either version 2 of the License, or     *
+*   (at your option) any later version.                                   *
+*                                                                         *
+***************************************************************************
+"""
+
+__author__ = 'Victor Olaya'
+__date__ = 'August 2012'
+__copyright__ = '(C) 2012, Victor Olaya'
+# This will get replaced with a git SHA1 when you do a git archive
+__revision__ = '$Format:%H$'
+import os
 from PyQt4 import QtGui, QtCore
 from sextante.parameters.ParameterMultipleInput import ParameterMultipleInput
 
@@ -25,12 +50,25 @@ class BatchInputSelectionPanel(QtGui.QWidget):
         self.setLayout(self.horizontalLayout)
 
     def showSelectionDialog(self):
-        ret = QtGui.QFileDialog.getOpenFileNames(self, "Open file", QtCore.QString(), "All files (*.*)")
+        settings = QtCore.QSettings()
+        text = str(self.text.text())
+        if os.path.isdir(text):
+            path = text
+        elif os.path.isdir(os.path.dirname(text)):
+            path = os.path.dirname(text)
+        elif settings.contains("/SextanteQGIS/LastInputPath"):
+            path = str(settings.value( "/SextanteQGIS/LastInputPath",QtCore.QVariant("")).toString())
+        else:
+            path = ""
+
+        ret = QtGui.QFileDialog.getOpenFileNames(self, "Open file", path, self.param.getFileFilter())
         if ret:
             files = list(ret)
             if len(files) == 1:
+                settings.setValue("/SextanteQGIS/LastInputPath", os.path.dirname(str(files[0])))
                 self.text.setText(str(files[0]))
             else:
+                settings.setValue("/SextanteQGIS/LastInputPath", os.path.dirname(str(files[0])))
                 if isinstance(self.param, ParameterMultipleInput):
                     self.text.setText(";".join(str(f) for f in files))
                 else:

@@ -1,3 +1,28 @@
+# -*- coding: utf-8 -*-
+
+"""
+***************************************************************************
+    ParameterMultipleInput.py
+    ---------------------
+    Date                 : August 2012
+    Copyright            : (C) 2012 by Victor Olaya
+    Email                : volayaf at gmail dot com
+***************************************************************************
+*                                                                         *
+*   This program is free software; you can redistribute it and/or modify  *
+*   it under the terms of the GNU General Public License as published by  *
+*   the Free Software Foundation; either version 2 of the License, or     *
+*   (at your option) any later version.                                   *
+*                                                                         *
+***************************************************************************
+"""
+
+__author__ = 'Victor Olaya'
+__date__ = 'August 2012'
+__copyright__ = '(C) 2012, Victor Olaya'
+# This will get replaced with a git SHA1 when you do a git archive
+__revision__ = '$Format:%H$'
+
 from sextante.parameters.ParameterDataObject import ParameterDataObject
 from sextante.core.QGisLayers import QGisLayers
 from qgis.core import *
@@ -110,7 +135,14 @@ class ParameterMultipleInput(ParameterDataObject):
                         return unicode(layer.source())
                 return s
 
-
+    def getFileFilter(self):
+        if self.datatype == ParameterMultipleInput.TYPE_RASTER:
+            exts = QGisLayers.getSupportedOutputRasterLayerExtensions()
+        else:
+            exts = QGisLayers.getSupportedOutputVectorLayerExtensions()
+        for i in range(len(exts)):
+            exts[i] = exts[i].upper() + " files(*." + exts[i].lower() + ")"
+        return ";;".join(exts)
 
     def serialize(self):
         return self.__module__.split(".")[-1] + "|" + self.name + "|" + self.description +\

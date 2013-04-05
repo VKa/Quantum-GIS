@@ -30,6 +30,7 @@ QgsAppLegendInterface::QgsAppLegendInterface( QgsLegend * legend )
   connect( legend, SIGNAL( itemMovedGroup( QgsLegendItem *, int ) ), this, SIGNAL( groupRelationsChanged() ) );
   // connect( legend, SIGNAL( itemChanged( QTreeWidgetItem*, int ) ), this, SIGNAL( groupRelationsChanged() ) );
   connect( legend, SIGNAL( itemRemoved() ), this, SIGNAL( itemRemoved() ) );
+  connect( legend, SIGNAL( currentLayerChanged( QgsMapLayer * ) ), this, SIGNAL( currentLayerChanged( QgsMapLayer * ) ) );
 }
 
 QgsAppLegendInterface::~QgsAppLegendInterface()
@@ -66,13 +67,13 @@ void QgsAppLegendInterface::updateIndex( QModelIndex oldIndex, QModelIndex newIn
 
 void QgsAppLegendInterface::setGroupExpanded( int groupIndex, bool expand )
 {
-	QTreeWidgetItem * item = getItem (groupIndex);
-	if ( !item ) 
-	{
-		return;
-	}
+  QTreeWidgetItem * item = getItem( groupIndex );
+  if ( !item )
+  {
+    return;
+  }
 
-  item->setExpanded(expand);
+  item->setExpanded( expand );
 }
 
 void QgsAppLegendInterface::setGroupVisible( int groupIndex, bool visible )
@@ -82,34 +83,41 @@ void QgsAppLegendInterface::setGroupVisible( int groupIndex, bool visible )
     return;
   }
 
-	Qt::CheckState state = visible ? Qt::Checked : Qt::Unchecked;
-	getItem (groupIndex)->setCheckState( 0, state );
+  Qt::CheckState state = visible ? Qt::Checked : Qt::Unchecked;
+  getItem( groupIndex )->setCheckState( 0, state );
 }
 
-QTreeWidgetItem *QgsAppLegendInterface::getItem(int itemIndex) 
+QTreeWidgetItem *QgsAppLegendInterface::getItem( int itemIndex )
 {
-	int itemCount = 0;
-	for (QTreeWidgetItem* theItem = mLegend->firstItem(); theItem; theItem = mLegend->nextItem( theItem ) )
-	{
-		QgsLegendItem* legendItem = dynamic_cast<QgsLegendItem *>( theItem );
-		if (legendItem->type() == QgsLegendItem::LEGEND_GROUP) {
-			if (itemCount == itemIndex) 
-			{
-				return theItem;
-			}
-			else 
-			{
-				itemCount = itemCount + 1;
-			}
-		}
-	}
+  int itemCount = 0;
+  for ( QTreeWidgetItem* theItem = mLegend->firstItem(); theItem; theItem = mLegend->nextItem( theItem ) )
+  {
+    QgsLegendItem* legendItem = dynamic_cast<QgsLegendItem *>( theItem );
+    if ( legendItem->type() == QgsLegendItem::LEGEND_GROUP )
+    {
+      if ( itemCount == itemIndex )
+      {
+        return theItem;
+      }
+      else
+      {
+        itemCount = itemCount + 1;
+      }
+    }
+  }
 
-	return NULL;
+  return NULL;
 }
 
 void QgsAppLegendInterface::setLayerVisible( QgsMapLayer * ml, bool visible )
 {
   mLegend->setLayerVisible( ml, visible );
+}
+
+void QgsAppLegendInterface::setLayerExpanded( QgsMapLayer * ml, bool expand )
+{
+  QgsLegendLayer * item = mLegend->findLegendLayer( ml );
+  if ( item ) item->setExpanded( expand );
 }
 
 QStringList QgsAppLegendInterface::groups()
@@ -128,24 +136,24 @@ QList< GroupLayerInfo > QgsAppLegendInterface::groupLayerRelationship()
 
 bool QgsAppLegendInterface::groupExists( int groupIndex )
 {
-	QTreeWidgetItem * item = getItem (groupIndex);
-	QgsLegendItem* legendItem = dynamic_cast<QgsLegendItem *>( item );
+  QTreeWidgetItem * item = getItem( groupIndex );
+  QgsLegendItem* legendItem = dynamic_cast<QgsLegendItem *>( item );
 
-	if ( !legendItem ) 
-	{
-		return false;
-	}
+  if ( !legendItem )
+  {
+    return false;
+  }
 
-	return legendItem->type() == QgsLegendItem::LEGEND_GROUP;
+  return legendItem->type() == QgsLegendItem::LEGEND_GROUP;
 }
 
 bool QgsAppLegendInterface::isGroupExpanded( int groupIndex )
 {
-	QTreeWidgetItem * item = getItem (groupIndex);
-	if ( !item ) 
-	{
-		return false;
-	}
+  QTreeWidgetItem * item = getItem( groupIndex );
+  if ( !item )
+  {
+    return false;
+  }
 
   return item->isExpanded();
 }
@@ -160,9 +168,19 @@ bool QgsAppLegendInterface::isGroupVisible( int groupIndex )
   return ( Qt::Checked == getItem( groupIndex )->checkState( 0 ) );
 }
 
+bool QgsAppLegendInterface::isLayerExpanded( QgsMapLayer * ml )
+{
+  return mLegend->layerIsExpanded( ml );
+}
+
 bool QgsAppLegendInterface::isLayerVisible( QgsMapLayer * ml )
 {
   return ( Qt::Checked == mLegend->layerCheckState( ml ) );
+}
+
+QList<QgsMapLayer *> QgsAppLegendInterface::selectedLayers( bool inDrawOrder ) const
+{
+  return mLegend->selectedLayers( inDrawOrder );
 }
 
 QList< QgsMapLayer * > QgsAppLegendInterface::layers() const
@@ -173,4 +191,30 @@ QList< QgsMapLayer * > QgsAppLegendInterface::layers() const
 void QgsAppLegendInterface::refreshLayerSymbology( QgsMapLayer *ml )
 {
   mLegend->refreshLayerSymbology( ml->id() );
+}
+
+void QgsAppLegendInterface::addLegendLayerAction( QAction* action,
+    QString menu, QString id, QgsMapLayer::LayerType type, bool allLayers )
+{
+  mLegend->addLegendLayerAction( action, menu, id, type, allLayers );
+}
+
+void QgsAppLegendInterface::addLegendLayerActionForLayer( QAction* action, QgsMapLayer* layer )
+{
+  mLegend->addLegendLayerActionForLayer( action, layer );
+}
+
+bool QgsAppLegendInterface::removeLegendLayerAction( QAction* action )
+{
+  return mLegend->removeLegendLayerAction( action );
+}
+
+QgsMapLayer* QgsAppLegendInterface::currentLayer()
+{
+  return mLegend->currentLayer();
+}
+
+bool QgsAppLegendInterface::setCurrentLayer( QgsMapLayer *layer )
+{
+  return mLegend->setCurrentLayer( layer );
 }

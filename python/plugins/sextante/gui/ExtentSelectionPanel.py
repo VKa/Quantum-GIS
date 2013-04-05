@@ -1,3 +1,28 @@
+# -*- coding: utf-8 -*-
+
+"""
+***************************************************************************
+    ExtentSelectionPanel.py
+    ---------------------
+    Date                 : August 2012
+    Copyright            : (C) 2012 by Victor Olaya
+    Email                : volayaf at gmail dot com
+***************************************************************************
+*                                                                         *
+*   This program is free software; you can redistribute it and/or modify  *
+*   it under the terms of the GNU General Public License as published by  *
+*   the Free Software Foundation; either version 2 of the License, or     *
+*   (at your option) any later version.                                   *
+*                                                                         *
+***************************************************************************
+"""
+
+__author__ = 'Victor Olaya'
+__date__ = 'August 2012'
+__copyright__ = '(C) 2012, Victor Olaya'
+# This will get replaced with a git SHA1 when you do a git archive
+__revision__ = '$Format:%H$'
+
 from qgis.core import *
 from PyQt4 import QtGui, QtCore
 from PyQt4.QtCore import *
@@ -68,26 +93,29 @@ class ExtentSelectionPanel(QtGui.QWidget):
         for param in self.params:
             if param.value:
                 if isinstance(param, (ParameterRaster, ParameterVector)):
-                    found = True
                     if isinstance(param.value, (QgsRasterLayer, QgsVectorLayer)):
                         layer = param.value
                     else:
                         layer = QGisLayers.getObjectFromUri(param.value)
-                    self.addToRegion(layer, first)
-                    first = False
+                    if layer:
+                        found = True
+                        self.addToRegion(layer, first)
+                        first = False
                 elif isinstance(param, ParameterMultipleInput):
-                    found = True
                     layers = param.value.split(";")
                     for layername in layers:
                         layer = QGisLayers.getObjectFromUri(layername, first)
-                        self.addToRegion(layer, first)
-                        first = False
+                        if layer:
+                            found = True
+                            self.addToRegion(layer, first)
+                            first = False
         if found:
             return str(self.xmin) + "," + str(self.xmax) + "," + str(self.ymin) + "," + str(self.ymax)
         else:
             return None
 
-
+    def useNewAlg(self, alg):
+        self.params = alg.parameters
 
     def addToRegion(self, layer, first):
         if first:

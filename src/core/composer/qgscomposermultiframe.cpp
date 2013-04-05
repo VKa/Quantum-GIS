@@ -15,6 +15,7 @@
 
 #include "qgscomposermultiframe.h"
 #include "qgscomposerframe.h"
+#include "qgscomposition.h"
 
 QgsComposerMultiFrame::QgsComposerMultiFrame( QgsComposition* c, bool createUndoCommands ): mComposition( c ), mResizeMode( UseExistingFrames ), mCreateUndoCommands( createUndoCommands )
 {
@@ -238,7 +239,7 @@ void QgsComposerMultiFrame::deleteFrames()
   mResizeMode = bkResizeMode;
 }
 
-QgsComposerFrame* QgsComposerMultiFrame::frame( int i )
+QgsComposerFrame* QgsComposerMultiFrame::frame( int i ) const
 {
   if ( i >= mFrameItems.size() )
   {

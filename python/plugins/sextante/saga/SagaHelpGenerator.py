@@ -1,4 +1,29 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+"""
+***************************************************************************
+    SagaHelpGenerator.py
+    ---------------------
+    Date                 : August 2012
+    Copyright            : (C) 2012 by Victor Olaya
+    Email                : volayaf at gmail dot com
+***************************************************************************
+*                                                                         *
+*   This program is free software; you can redistribute it and/or modify  *
+*   it under the terms of the GNU General Public License as published by  *
+*   the Free Software Foundation; either version 2 of the License, or     *
+*   (at your option) any later version.                                   *
+*                                                                         *
+***************************************************************************
+"""
+
+__author__ = 'Victor Olaya'
+__date__ = 'August 2012'
+__copyright__ = '(C) 2012, Victor Olaya'
+# This will get replaced with a git SHA1 when you do a git archive
+__revision__ = '$Format:%H$'
+
 
 import saga_api as saga
 import os
@@ -55,7 +80,7 @@ class Module:
                 except:
                     pass
         return self._parameters
-            
+
 
 class Parameter:
     def __init__(self, params, i):
@@ -80,12 +105,12 @@ class Parameter:
                 if parameterValue.has_Maximum():
                     self.maximum = parameterValue.Get_Maximum()
         self.choices = None
-        if typ == saga.PARAMETER_TYPE_Choice:     
+        if typ == saga.PARAMETER_TYPE_Choice:
             parameterChoice = self.parameter.asChoice()
             self.choices = [parameterChoice.Get_Item(i) for i in
                 range(parameterChoice.Get_Count())]
-        
-        
+
+
 def getLibraryPaths(userPath = None):
     try:
         paths = os.environ['MLB_PATH'].split(':')
@@ -130,7 +155,7 @@ def writeHTML(path, mod):
                 constraints.append("Maximum: " + str(p.maximum))
             if p.choices:
                 constraints.append("Available choices: " + ', '.join(p.choices))
-            
+
             docs += "\t<dt>%s <div class='type'>%s</div></dt>" % (p.name, p.typeName)
             docs += "<dd>%s <div class='constraints'>%s</div></dd>\n" % (p.description, '; '.join(constraints))
         docs += "</dl>"
@@ -148,7 +173,7 @@ if __name__ == '__main__':
     parser.add_argument('-l', dest='libpath', help='Location of SAGA libraries.')
 
     args = parser.parse_args()
-    
+
     libs = list()
     paths = getLibraryPaths(args.libpath)
     for p in paths:
@@ -156,11 +181,11 @@ if __name__ == '__main__':
             libs.append(Library(p))
         except ImportError:
             pass
-            
+
     if not libs:
         print "No saga libraries found"
         exit(1)
-        
+
     print "%i libraries loaded." % len(libs)
     for lib in libs:
         mods = lib.modules()

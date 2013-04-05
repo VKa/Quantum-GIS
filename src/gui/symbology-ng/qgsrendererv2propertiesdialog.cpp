@@ -3,7 +3,7 @@
     ---------------------
     begin                : December 2009
     copyright            : (C) 2009 by Martin Dobias
-    email                : wonder.sk at gmail.com
+    email                : wonder dot sk at gmail dot com
  ***************************************************************************
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -86,6 +86,9 @@ QgsRendererV2PropertiesDialog::QgsRendererV2PropertiesDialog( QgsVectorLayer* la
 
   // initialize registry's widget functions
   _initRendererWidgetFunctions();
+
+  // Blend mode
+  mBlendModeComboBox->setBlendMode( mLayer->blendMode() );
 
   QPixmap pix;
   QgsRendererV2Registry* reg = QgsRendererV2Registry::instance();
@@ -177,6 +180,9 @@ void QgsRendererV2PropertiesDialog::apply()
   {
     mLayer->setRendererV2( renderer->clone() );
   }
+
+  // set the blend mode for the layer
+  mLayer->setBlendMode(( QgsMapRenderer::BlendMode ) mBlendModeComboBox->blendMode() );
 }
 
 void QgsRendererV2PropertiesDialog::onOK()

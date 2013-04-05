@@ -17,7 +17,9 @@
 #define QGSCOMPOSERSCALEBAR_H
 
 #include "qgscomposeritem.h"
+#include <QFont>
 #include <QPen>
+#include <QColor>
 
 class QgsComposerMap;
 class QgsScaleBarStyle;
@@ -27,7 +29,6 @@ class QgsScaleBarStyle;
 
 class CORE_EXPORT QgsComposerScaleBar: public QgsComposerItem
 {
-
     Q_OBJECT
 
   public:
@@ -74,6 +75,9 @@ class CORE_EXPORT QgsComposerScaleBar: public QgsComposerItem
     void setUnitLabeling( const QString& label ) {mUnitLabeling = label;}
 
     QFont font() const;
+
+    QColor fontColor() const {return mFontColor;}
+    void setFontColor( const QColor& c ) {mFontColor = c;}
 
     void setFont( const QFont& font );
 
@@ -173,6 +177,7 @@ class CORE_EXPORT QgsComposerScaleBar: public QgsComposerItem
     QString mUnitLabeling;
     /**Font*/
     QFont mFont;
+    QColor mFontColor;
     /**Outline*/
     QPen mPen;
     /**Fill*/

@@ -17,15 +17,17 @@
 #ifndef QGSCOMPOSERITEM_H
 #define QGSCOMPOSERITEM_H
 
-#include "qgscomposition.h"
+#include "qgscomposeritemcommand.h"
+#include "qgscomposereffect.h"
+#include "qgsmaprenderer.h" // for blend mode functions & enums
 #include <QGraphicsRectItem>
 #include <QObject>
 
+class QgsComposition;
 class QWidget;
 class QDomDocument;
 class QDomElement;
-
-class QqsComposition;
+class QGraphicsLineItem;
 
 /** \ingroup MapComposer
  * A item that forms part of a map composition.
@@ -105,16 +107,16 @@ class CORE_EXPORT QgsComposerItem: public QObject, public QGraphicsRectItem
     virtual void setSelected( bool s );
 
     /** \brief Is selected */
-    virtual bool selected( void ) {return QGraphicsRectItem::isSelected();}
+    virtual bool selected() {return QGraphicsRectItem::isSelected();}
 
     /** stores state in project */
-    virtual bool writeSettings( void );
+    virtual bool writeSettings();
 
     /** read state from project */
-    virtual bool readSettings( void );
+    virtual bool readSettings();
 
     /** delete settings from project file  */
-    virtual bool removeSettings( void );
+    virtual bool removeSettings();
 
     /**Moves item in canvas coordinates*/
     void move( double dx, double dy );
@@ -136,6 +138,11 @@ class CORE_EXPORT QgsComposerItem: public QObject, public QGraphicsRectItem
     /**Sets item position and width / height in one go
       @note: this method was added in version 1.6*/
     void setItemPosition( double x, double y, double width, double height, ItemPositionMode itemPoint = UpperLeft );
+
+    /**Returns item's last used position mode.
+      @note: This property has no effect on actual's item position, which is always the top-left corner.
+      @note: this method was added in version 2.0*/
+    ItemPositionMode lastUsedPositionMode() { return mLastUsedPositionMode; }
 
     /**Sets this items bound in scene coordinates such that 1 item size units
      corresponds to 1 scene size unit*/
@@ -160,22 +167,12 @@ class CORE_EXPORT QgsComposerItem: public QObject, public QGraphicsRectItem
     bool _readXML( const QDomElement& itemElem, const QDomDocument& doc );
 
     /** Whether this item has a frame or not.
-     * @return boolean - true if there is a frame around this item, otherwise false.
-     * @note deprecated since 1.8 don't use!
-     * @see hasFrame
-     */
-    Q_DECL_DEPRECATED bool frame() const {return hasFrame();}
-    /** Whether this item has a frame or not.
      * @returns true if there is a frame around this item, otherwise false.
      * @note introduced since 1.8
+     * @see hasFrame
      */
     bool hasFrame() const {return mFrame;}
-    /** Set whether this item has a frame drawn around it or not.
-     * @returns void
-     * @note deprecated since 1.8 don't use!
-     * @see setFrameEnabled
-     */
-    Q_DECL_DEPRECATED void setFrame( bool drawFrame ) { setFrameEnabled( drawFrame );}
+
     /** Set whether this item has a frame drawn around it or not.
      * @param drawFrame draw frame
      * @returns nothing
@@ -184,11 +181,39 @@ class CORE_EXPORT QgsComposerItem: public QObject, public QGraphicsRectItem
      */
     void setFrameEnabled( bool drawFrame ) {mFrame = drawFrame;}
 
+
+    /** Whether this item has a Background or not.
+     * @returns true if there is a Background around this item, otherwise false.
+     * @note introduced since 2.0
+     * @see hasBackground
+     */
+    bool hasBackground() const {return mBackground;}
+
+    /** Set whether this item has a Background drawn around it or not.
+     * @param drawBackground draw Background
+     * @returns nothing
+     * @note introduced in 2.0
+     * @see hasBackground
+     */
+    void setBackgroundEnabled( bool drawBackground ) {mBackground = drawBackground;}
+
+    /** Returns the item's composition blending mode */
+    QgsMapRenderer::BlendMode blendMode() const {return mBlendMode;}
+
+    /** Sets the item's composition blending mode*/
+    void setBlendMode( QgsMapRenderer::BlendMode blendMode );
+
+    /** Returns the item's transparency */
+    int transparency() const {return mTransparency;}
+    /** Sets the item's transparency */
+    void setTransparency( int transparency );
+
     /**Composite operations for item groups do nothing per default*/
     virtual void addItem( QgsComposerItem* item ) { Q_UNUSED( item ); }
     virtual void removeItems() {}
 
     const QgsComposition* composition() const {return mComposition;}
+    QgsComposition* composition() {return mComposition;}
 
     virtual void beginItemCommand( const QString& text ) { beginCommand( text ); }
 
@@ -210,7 +235,7 @@ class CORE_EXPORT QgsComposerItem: public QObject, public QGraphicsRectItem
     void drawText( QPainter* p, double x, double y, const QString& text, const QFont& font ) const;
 
     /**Like the above, but with a rectangle for multiline text*/
-    void drawText( QPainter* p, const QRectF& rect, const QString& text, const QFont& font, Qt::AlignmentFlag halignement = Qt::AlignLeft, Qt::AlignmentFlag valignement = Qt::AlignTop ) const;
+    void drawText( QPainter* p, const QRectF& rect, const QString& text, const QFont& font, Qt::AlignmentFlag halignment = Qt::AlignLeft, Qt::AlignmentFlag valignment = Qt::AlignTop ) const;
 
     /**Returns the font width in millimeters (considers upscaling and downscaling with FONT_WORKAROUND_SCALE*/
     double textWidthMillimeters( const QFont& font, const QString& text ) const;
@@ -221,6 +246,9 @@ class CORE_EXPORT QgsComposerItem: public QObject, public QGraphicsRectItem
 
     /**Returns the font ascent in Millimeters (considers upscaling and downscaling with FONT_WORKAROUND_SCALE*/
     double fontAscentMillimeters( const QFont& font ) const;
+
+    /**Returns the font ascent in Millimeters (considers upscaling and downscaling with FONT_WORKAROUND_SCALE*/
+    double fontDescentMillimeters( const QFont& font ) const;
 
     /**Calculates font to from point size to pixel size*/
     double pixelFontSize( double pointSize ) const;
@@ -245,15 +273,18 @@ class CORE_EXPORT QgsComposerItem: public QObject, public QGraphicsRectItem
     /**Updates item, with the possibility to do custom update for subclasses*/
     virtual void updateItem() { QGraphicsRectItem::update(); }
 
-    /**Get item identification name
+    /**Get item's id (which is not necessarly unique)
       @note this method was added in version 1.7*/
     QString id() const { return mId; }
 
-    /**Set item identification name
-      @note this method was added in version 1.7
-                     This method was moved from qgscomposerlabel so that every object can have a
-                      id (NathanW)*/
-    void setId( const QString& id ) { mId = id; }
+    /**Set item's id (which is not necessarly unique)
+      @note this method was added in version 1.7*/
+    virtual void setId( const QString& id );
+
+    /**Get item identification name
+      @note this method was added in version 2.0
+      @note there is not setter since one can't manually set the id*/
+    QString uuid() const { return mUuid; }
 
   public slots:
     virtual void setRotation( double r );
@@ -271,9 +302,13 @@ class CORE_EXPORT QgsComposerItem: public QObject, public QGraphicsRectItem
 
     /**Rectangle used during move and resize actions*/
     QGraphicsRectItem* mBoundingResizeRectangle;
+    QGraphicsLineItem* mHAlignSnapItem;
+    QGraphicsLineItem* mVAlignSnapItem;
 
     /**True if item fram needs to be painted*/
     bool mFrame;
+    /**True if item background needs to be painted*/
+    bool mBackground;
 
     /**True if item position  and size cannot be changed with mouse move
     @note: this member was added in version 1.2*/
@@ -284,6 +319,18 @@ class CORE_EXPORT QgsComposerItem: public QObject, public QGraphicsRectItem
 
     /**Item rotation in degrees, clockwise*/
     double mRotation;
+
+    /**Composition blend mode for item*/
+    QgsMapRenderer::BlendMode mBlendMode;
+
+    QgsComposerEffect *mEffect;
+
+    /**Item transparency*/
+    int mTransparency;
+
+    /**The item's position mode
+    @note: this member was added in version 2.0*/
+    ItemPositionMode mLastUsedPositionMode;
 
     //event handlers
     virtual void mouseMoveEvent( QGraphicsSceneMouseEvent * event );
@@ -351,6 +398,14 @@ class CORE_EXPORT QgsComposerItem: public QObject, public QGraphicsRectItem
         @param y in/out: y cooreinate before / after the rotation*/
     void rotate( double angle, double& x, double& y ) const;
 
+    /**Return horizontal align snap item. Creates a new graphics line if 0*/
+    QGraphicsLineItem* hAlignSnapItem();
+    void deleteHAlignSnapItem();
+    /**Return vertical align snap item. Creates a new graphics line if 0*/
+    QGraphicsLineItem* vAlignSnapItem();
+    void deleteVAlignSnapItem();
+    void deleteAlignItems();
+
   signals:
     /**Is emitted on rotation change to notify north arrow pictures*/
     void rotationChanged( double newRotation );
@@ -359,8 +414,10 @@ class CORE_EXPORT QgsComposerItem: public QObject, public QGraphicsRectItem
     /**Emitted if the rectangle changes*/
     void sizeChanged();
   private:
-    // Label id (unique within the same composition)
+    // id (not unique)
     QString mId;
+    // name (unique)
+    QString mUuid;
 
     void init( bool manageZValue );
 };

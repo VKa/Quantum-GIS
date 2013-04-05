@@ -18,6 +18,9 @@
 #include "qgscomposerlabelwidget.h"
 #include "qgscomposerlabel.h"
 #include "qgscomposeritemwidget.h"
+#include "qgscomposition.h"
+#include "qgsexpressionbuilderdialog.h"
+
 #include <QColorDialog>
 #include <QFontDialog>
 #include <QWidget>
@@ -28,12 +31,40 @@ QgsComposerLabelWidget::QgsComposerLabelWidget( QgsComposerLabel* label ): QWidg
 
   //add widget for general composer item properties
   QgsComposerItemWidget* itemPropertiesWidget = new QgsComposerItemWidget( this, label );
-  toolBox->addItem( itemPropertiesWidget, tr( "General options" ) );
+  mainLayout->addWidget( itemPropertiesWidget );
+
 
   if ( mComposerLabel )
   {
     setGuiElementValues();
     connect( mComposerLabel, SIGNAL( itemChanged() ), this, SLOT( setGuiElementValues() ) );
+  }
+}
+
+void QgsComposerLabelWidget::on_mHtmlCheckBox_stateChanged( int state )
+{
+  if ( mComposerLabel )
+  {
+    if ( state )
+    {
+      mFontButton->setEnabled( false );
+      mFontColorButton->setEnabled( false );
+      mAlignementGroup->setEnabled( false );
+    }
+    else
+    {
+      mFontButton->setEnabled( true );
+      mFontColorButton->setEnabled( true );
+      mAlignementGroup->setEnabled( true );
+    }
+
+    mComposerLabel->beginCommand( tr( "Label text HTML state changed" ), QgsComposerMergeCommand::ComposerLabelSetText );
+    mComposerLabel->blockSignals( true );
+    mComposerLabel->setHtmlSate( state );
+    mComposerLabel->setText( mTextEdit->toPlainText() );
+    mComposerLabel->update();
+    mComposerLabel->blockSignals( false );
+    mComposerLabel->endCommand();
   }
 }
 
@@ -96,6 +127,39 @@ void QgsComposerLabelWidget::on_mFontColorButton_clicked()
   mComposerLabel->beginCommand( tr( "Label font changed" ) );
   mComposerLabel->setFontColor( newColor );
   mComposerLabel->endCommand();
+}
+
+void QgsComposerLabelWidget::on_mInsertExpressionButton_clicked()
+{
+  if ( !mComposerLabel )
+  {
+    return;
+  }
+
+  QString selText = mTextEdit->textCursor().selectedText();
+
+  // edit the selected expression if there's one
+  if ( selText.startsWith( "[%" ) && selText.endsWith( "%]" ) )
+    selText = selText.mid( 2, selText.size() - 4 );
+
+  QgsVectorLayer* coverageLayer = 0;
+  // use the atlas coverage layer, if any
+  if ( mComposerLabel->composition()->atlasComposition().enabled() )
+  {
+    coverageLayer = mComposerLabel->composition()->atlasComposition().coverageLayer();
+  }
+  QgsExpressionBuilderDialog exprDlg( coverageLayer, selText, this );
+  exprDlg.setWindowTitle( tr( "Insert expression" ) );
+  if ( exprDlg.exec() == QDialog::Accepted )
+  {
+    QString expression =  exprDlg.expressionText();
+    if ( !expression.isEmpty() )
+    {
+      mComposerLabel->beginCommand( tr( "Insert expression" ) );
+      mTextEdit->insertPlainText( "[%" + expression + "%]" );
+      mComposerLabel->endCommand();
+    }
+  }
 }
 
 void QgsComposerLabelWidget::on_mCenterRadioButton_clicked()
@@ -164,16 +228,6 @@ void QgsComposerLabelWidget::on_mMiddleRadioButton_clicked()
   }
 }
 
-void QgsComposerLabelWidget::on_mLabelIdLineEdit_textChanged( const QString& text )
-{
-  if ( mComposerLabel )
-  {
-    mComposerLabel->beginCommand( tr( "Label id changed" ), QgsComposerMergeCommand::ComposerLabelSetId );
-    mComposerLabel->setId( text );
-    mComposerLabel->endCommand();
-  }
-}
-
 void QgsComposerLabelWidget::on_mRotationSpinBox_valueChanged( double v )
 {
   if ( mComposerLabel )
@@ -188,9 +242,10 @@ void QgsComposerLabelWidget::on_mRotationSpinBox_valueChanged( double v )
 void QgsComposerLabelWidget::setGuiElementValues()
 {
   blockAllSignals( true );
-  mTextEdit->setText( mComposerLabel->text() );
+  mTextEdit->setPlainText( mComposerLabel->text() );
   mTextEdit->moveCursor( QTextCursor::End, QTextCursor::MoveAnchor );
   mMarginDoubleSpinBox->setValue( mComposerLabel->margin() );
+  mHtmlCheckBox->setChecked( mComposerLabel->htmlSate() );
   mTopRadioButton->setChecked( mComposerLabel->vAlign() == Qt::AlignTop );
   mMiddleRadioButton->setChecked( mComposerLabel->vAlign() == Qt::AlignVCenter );
   mBottomRadioButton->setChecked( mComposerLabel->vAlign() == Qt::AlignBottom );
@@ -204,6 +259,7 @@ void QgsComposerLabelWidget::setGuiElementValues()
 void QgsComposerLabelWidget::blockAllSignals( bool block )
 {
   mTextEdit->blockSignals( block );
+  mHtmlCheckBox->blockSignals( block );
   mMarginDoubleSpinBox->blockSignals( block );
   mTopRadioButton->blockSignals( block );
   mMiddleRadioButton->blockSignals( block );

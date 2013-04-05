@@ -49,6 +49,7 @@ class CORE_EXPORT QgsCptCityArchive
     static QString findFileName( const QString & target, const QString & startDir, const QString & baseDir );
     static QMap< QString, QString > copyingInfo( const QString& fileName );
     static QMap< QString, QString > description( const QString& fileName );
+    //! note not available in python bindings
     static QMap< double, QPair<QColor, QColor> > gradientColorMap( const QString& fileName );
 
     // archive management
@@ -89,7 +90,8 @@ class CORE_EXPORT QgsCptCityDataItem : public QObject
       ColorRamp,
       Collection,
       Directory,
-      Selection
+      Selection,
+      AllRamps
     };
 
     QgsCptCityDataItem( QgsCptCityDataItem::Type type, QgsCptCityDataItem* parent,
@@ -139,7 +141,6 @@ class CORE_EXPORT QgsCptCityDataItem : public QObject
 
     // Find child index in vector of items using '==' operator
     static int findItem( QVector<QgsCptCityDataItem*> items, QgsCptCityDataItem * item );
-    /* static QgsCptCityDataItem* dataItem( QString path ); */
 
     // members
 
@@ -193,7 +194,6 @@ class CORE_EXPORT QgsCptCityColorRampItem : public QgsCptCityDataItem
 {
     Q_OBJECT
   public:
-
     QgsCptCityColorRampItem( QgsCptCityDataItem* parent,
                              QString name, QString path,
                              QString variantName = QString() );
@@ -278,6 +278,20 @@ class CORE_EXPORT QgsCptCitySelectionItem : public QgsCptCityCollectionItem
     QStringList mSelectionsList;
 };
 
+/** An "All ramps item", which contains all items in a flat hierarchy */
+class CORE_EXPORT QgsCptCityAllRampsItem : public QgsCptCityCollectionItem
+{
+    Q_OBJECT
+  public:
+    QgsCptCityAllRampsItem( QgsCptCityDataItem* parent, QString name,
+                            QVector<QgsCptCityDataItem*> items );
+    ~QgsCptCityAllRampsItem();
+
+    QVector<QgsCptCityDataItem*> createChildren();
+
+  protected:
+    QVector<QgsCptCityDataItem*> mItems;
+};
 
 
 class CORE_EXPORT QgsCptCityBrowserModel : public QAbstractItemModel

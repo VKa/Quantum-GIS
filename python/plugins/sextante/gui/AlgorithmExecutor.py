@@ -1,3 +1,28 @@
+# -*- coding: utf-8 -*-
+
+"""
+***************************************************************************
+    AlgorithmExecutor.py
+    ---------------------
+    Date                 : August 2012
+    Copyright            : (C) 2012 by Victor Olaya
+    Email                : volayaf at gmail dot com
+***************************************************************************
+*                                                                         *
+*   This program is free software; you can redistribute it and/or modify  *
+*   it under the terms of the GNU General Public License as published by  *
+*   the Free Software Foundation; either version 2 of the License, or     *
+*   (at your option) any later version.                                   *
+*                                                                         *
+***************************************************************************
+"""
+
+__author__ = 'Victor Olaya'
+__date__ = 'August 2012'
+__copyright__ = '(C) 2012, Victor Olaya'
+# This will get replaced with a git SHA1 when you do a git archive
+__revision__ = '$Format:%H$'
+
 from PyQt4.QtGui import *
 from PyQt4.QtCore import *
 from qgis.core import *
@@ -16,6 +41,7 @@ class AlgorithmExecutor(QThread):
     commandSet = pyqtSignal(str)
     debugInfoSet = pyqtSignal(str)
     consoleInfoSet = pyqtSignal(str)
+    algExecuted = pyqtSignal()
     #started & finished inherited from QThread
 
     def __init__(self, alg, iterParam = None, parent = None):
@@ -55,7 +81,7 @@ class AlgorithmExecutor(QThread):
             while provider.nextFeature(feat):
                 output = SextanteUtils.getTempFilename("shp")
                 self.filelist.append(output)
-                writer = QgsVectorFileWriter(output, systemEncoding,provider.fields(), provider.geometryType(), provider.crs() )
+                writer = QgsVectorFileWriter(output, systemEncoding,provider.fields(), provider.geometryType(), layer.crs() )
                 writer.addFeature(feat)
                 del writer
         else:
@@ -68,6 +94,7 @@ class AlgorithmExecutor(QThread):
     def runalg(self):
         try:
             self.algorithm.execute(self.progress)
+            self.algExecuted.emit()
         except GeoAlgorithmExecutionException, e :
             self.error.emit(e.msg)
         except BaseException, e:

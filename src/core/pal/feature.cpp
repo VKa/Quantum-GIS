@@ -62,7 +62,8 @@
 namespace pal
 {
   Feature::Feature( Layer* l, const char* geom_id, PalGeometry* userG, double lx, double ly )
-      : layer( l ), userGeom( userG ), label_x( lx ), label_y( ly ), distlabel( 0 ), labelInfo( NULL ), fixedPos( false ), fixedRotation( false )
+      : layer( l ), userGeom( userG ), label_x( lx ), label_y( ly ), distlabel( 0 ), labelInfo( NULL ), fixedPos( false ),
+      quadOffset( false ), offsetPos( false ), fixedRotation( false ), alwaysShow( false )
   {
     uid = new char[strlen( geom_id ) +1];
     strcpy( uid, geom_id );
@@ -264,13 +265,72 @@ namespace pal
     // get from feature
     double label_x = f->label_x;
     double label_y = f->label_y;
+    double labelW = f->label_x;
+    double labelH = f->label_y;
 
-    double lx = x - label_x / 2;
-    double ly = y - label_y / 2;
+    double xdiff = 0.0;
+    double ydiff = 0.0;
+    double lx = 0.0;
+    double ly = 0.0;
     double cost = 0.0001;
     int id = 0;
 
-    double offset = label_x / 4;
+    xdiff -= label_x / 2.0;
+    ydiff -= label_y / 2.0;
+
+    if ( ! f->fixedPosition() )
+    {
+      if ( angle != 0 )
+      {
+        double xd = xdiff * cos( angle ) - ydiff * sin( angle );
+        double yd = xdiff * sin( angle ) + ydiff * cos( angle );
+        xdiff = xd;
+        ydiff = yd;
+      }
+    }
+
+    if ( angle != 0 )
+    {
+      // use LabelPosition construction to calculate new rotated label dimensions
+      pal::LabelPosition* lp  = new LabelPosition( 1, lx, ly, label_x, label_y, angle, 0.0, this );
+
+      double amin[2], amax[2];
+      lp->getBoundingBox( amin, amax );
+      labelW = amax[0] - amin[0];
+      labelH = amax[1] - amin[1];
+
+      delete lp;
+    }
+
+    if ( f->quadOffset )
+    {
+      if ( f->quadOffsetX != 0 )
+      {
+        xdiff += labelW / 2 * f->quadOffsetX;
+      }
+      if ( f->quadOffsetY != 0 )
+      {
+        ydiff += labelH / 2 * f->quadOffsetY;
+      }
+    }
+
+    if ( f->offsetPos )
+    {
+      if ( f->offsetPosX != 0 )
+      {
+        xdiff += f->offsetPosX;
+      }
+      if ( f->offsetPosY != 0 )
+      {
+        ydiff += f->offsetPosY;
+      }
+    }
+
+    lx = x + xdiff;
+    ly = y + ydiff;
+
+//    double offset = label_x / 4;
+    double offset = 0.0; // don't shift what is supposed to be fixed
 
     // at the center
     ( *lPos )[0] = new LabelPosition( id, lx, ly, label_x, label_y, angle, cost, this );
@@ -777,7 +837,10 @@ namespace pal
       // normalise between -180 and 180
       while ( angle_delta > M_PI ) angle_delta -= 2 * M_PI;
       while ( angle_delta < -M_PI ) angle_delta += 2 * M_PI;
-      if ( f->labelInfo->max_char_angle_delta > 0 && fabs( angle_delta ) > f->labelInfo->max_char_angle_delta*( M_PI / 180 ) )
+      if (( f->labelInfo->max_char_angle_inside > 0 && angle_delta > 0
+            && angle_delta > f->labelInfo->max_char_angle_inside*( M_PI / 180 ) )
+          || ( f->labelInfo->max_char_angle_outside < 0 && angle_delta < 0
+               && angle_delta < f->labelInfo->max_char_angle_outside*( M_PI / 180 ) ) )
       {
         delete slp;
         return NULL;

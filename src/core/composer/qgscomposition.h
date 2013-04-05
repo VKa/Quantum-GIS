@@ -16,17 +16,25 @@
 #ifndef QGSCOMPOSITION_H
 #define QGSCOMPOSITION_H
 
+#include "qgscomposeritem.h"
+#include <memory>
+
 #include <QDomDocument>
 #include <QGraphicsScene>
 #include <QLinkedList>
+#include <QList>
+#include <QPair>
 #include <QSet>
 #include <QUndoStack>
+#include <QPrinter>
+#include <QPainter>
 
 #include "qgsaddremoveitemcommand.h"
 #include "qgscomposeritemcommand.h"
+#include "qgsatlascomposition.h"
 
+class QgisApp;
 class QgsComposerFrame;
-class QgsComposerItem;
 class QgsComposerMap;
 class QgsPaperItem;
 class QGraphicsRectItem;
@@ -44,6 +52,8 @@ class QgsComposerShape;
 class QgsComposerAttributeTable;
 class QgsComposerMultiFrame;
 class QgsComposerMultiFrameCommand;
+class QgsVectorLayer;
+class QgsComposer;
 
 /** \ingroup MapComposer
  * Graphics scene for map printing. The class manages the paper item which always
@@ -109,23 +119,62 @@ class CORE_EXPORT QgsComposition: public QGraphicsScene
     void setGridStyle( GridStyle s );
     GridStyle gridStyle() const {return mGridStyle;}
 
+    void setAlignmentSnap( bool s ) { mAlignmentSnap = s; }
+    bool alignmentSnap() const { return mAlignmentSnap; }
+
+    void setAlignmentSnapTolerance( double t ) { mAlignmentSnapTolerance = t; }
+    double alignmentSnapTolerance() const { return mAlignmentSnapTolerance; }
+
     /**Returns pointer to undo/redo command storage*/
     QUndoStack* undoStack() { return &mUndoStack; }
 
     /**Returns the topmost composer item. Ignores mPaperItem*/
     QgsComposerItem* composerItemAt( const QPointF & position );
 
+    /** Returns the page number (0-bsaed) given a coordinate */
+    int pageNumberAt( const QPointF& position ) const;
+
+    /** Returns on which page number (0-based) is displayed an item */
+    int itemPageNumber( const QgsComposerItem* ) const;
+
     QList<QgsComposerItem*> selectedComposerItems();
 
-    /**Returns pointers to all composer maps in the scene*/
+    /**Returns pointers to all composer maps in the scene
+      @note available in python bindings only with PyQt >= 4.8.4
+      */
     QList<const QgsComposerMap*> composerMapItems() const;
 
-    /**Return composer items of a specific type*/
+    /**Return composer items of a specific type
+      @note not available in python bindings
+     */
     template<class T> void composerItems( QList<T*>& itemList );
 
     /**Returns the composer map with specified id
-     @return id or 0 pointer if the composer map item does not exist*/
+     @return QgsComposerMap or 0 pointer if the composer map item does not exist*/
     const QgsComposerMap* getComposerMapById( int id ) const;
+
+    /*Returns the composer html with specified id (a string as named in the
+      composer user interface item properties).
+      @note Added in QGIS 2.0
+      @param id - A QString representing the id of the item.
+      @return QgsComposerHtml pointer or 0 pointer if no such item exists.
+    */
+    const QgsComposerHtml* getComposerHtmlByItem( QgsComposerItem *item ) const;
+
+    /**Returns a composer item given its text identifier.
+       Ids are not necessarely unique, but this function returns only one element.
+      @note added in 2.0
+      @param theId - A QString representing the identifier of the item to
+        retrieve.
+      @return QgsComposerItem pointer or 0 pointer if no such item exists.
+      **/
+    const QgsComposerItem* getComposerItemById( QString theId ) const;
+
+    /**Returns a composer item given its unique identifier.
+      @note added in 2.0
+      @param theUuid A QString representing the UUID of the item to
+      **/
+    const QgsComposerItem* getComposerItemByUuid( QString theUuid ) const;
 
     int printResolution() const {return mPrintResolution;}
     void setPrintResolution( int dpi ) {mPrintResolution = dpi;}
@@ -168,9 +217,12 @@ class CORE_EXPORT QgsComposition: public QGraphicsScene
       @param doc xml document
       @param mapsToRestore for reading from project file: set preview move 'rectangle' to all maps and save the preview states to show composer maps on demand
       @param addUndoCommands insert AddItem commands if true (e.g. for copy/paste)
-      @param pos item position. Optional, take position from xml if 0*/
+      @param pos item position. Optional, take position from xml if 0
+      @param pasteInPlace wheter the position should be kept but mapped to the page origin. (the page is the page under to the mouse cursor)
+      @note not available in python bindings
+     */
     void addItemsFromXML( const QDomElement& elem, const QDomDocument& doc, QMap< QgsComposerMap*, int >* mapsToRestore = 0,
-                          bool addUndoCommands = false, QPointF* pos = 0 );
+                          bool addUndoCommands = false, QPointF* pos = 0, bool pasteInPlace = false );
 
     /**Adds item to z list. Usually called from constructor of QgsComposerItem*/
     void addItemToZList( QgsComposerItem* item );
@@ -202,6 +254,32 @@ class CORE_EXPORT QgsComposition: public QGraphicsScene
     /**Snaps a scene coordinate point to grid*/
     QPointF snapPointToGrid( const QPointF& scenePoint ) const;
 
+    /**Snaps item position to align with other items (left / middle / right or top / middle / bottom
+    @param item current item
+    @param alignX x-coordinate of align or -1 if not aligned to x
+    @param alignY y-coordinate of align or -1 if not aligned to y
+    @param dx item shift in x direction
+    @param dy item shift in y direction
+    @return new upper left point after the align*/
+    QPointF alignItem( const QgsComposerItem* item, double& alignX, double& alignY, double dx = 0, double dy = 0 );
+
+    /**Snaps position to align with the boundaries of other items
+    @param pos position to snap
+    @param excludeItem item to exclude
+    @param alignX snapped x coordinate or -1 if not snapped
+    @param alignY snapped y coordinate or -1 if not snapped
+    @return snapped position or original position if no snap*/
+    QPointF alignPos( const QPointF& pos, const QgsComposerItem* excludeItem, double& alignX, double& alignY );
+
+    /**Add a custom snap line (can be horizontal or vertical)*/
+    QGraphicsLineItem* addSnapLine();
+    /**Remove custom snap line (and delete the object)*/
+    void removeSnapLine( QGraphicsLineItem* line );
+    /**Get nearest snap line*/
+    QGraphicsLineItem* nearestSnapLine( bool horizontal, double x, double y, double tolerance, QList< QPair< QgsComposerItem*, QgsComposerItem::ItemPositionMode > >& snappedItems );
+    /**Hides / shows custom snap lines*/
+    void setSnapLinesVisible( bool visible );
+
     /**Allocates new item command and saves initial state in it
       @param item target item
       @param commandText descriptive command text
@@ -220,7 +298,8 @@ class CORE_EXPORT QgsComposition: public QGraphicsScene
     void addMultiFrame( QgsComposerMultiFrame* multiFrame );
     /**Removes multi frame (but does not delete it)*/
     void removeMultiFrame( QgsComposerMultiFrame* multiFrame );
-    /**Adds an arrow item to the graphics scene and advices composer to create a widget for it (through signal)*/
+    /**Adds an arrow item to the graphics scene and advices composer to create a widget for it (through signal)
+      @note not available in python bindings*/
     void addComposerArrow( QgsComposerArrow* arrow );
     /**Adds label to the graphics scene and advices composer to create a widget for it (through signal)*/
     void addComposerLabel( QgsComposerLabel* label );
@@ -248,9 +327,18 @@ class CORE_EXPORT QgsComposition: public QGraphicsScene
 
     //printing
 
-    void exportAsPDF( const QString& file );
+    /** Prepare the printer for printing */
+    void beginPrint( QPrinter& printer );
+    /** Prepare the printer for printing in a PDF */
+    void beginPrintAsPDF( QPrinter& printer, const QString& file );
+    /** Print on a preconfigured printer */
+    void doPrint( QPrinter& printer, QPainter& painter );
 
+    /** Convenience function that prepares the printer and prints */
     void print( QPrinter &printer );
+
+    /** Convenience function that prepares the printer for printing in PDF and prints */
+    void exportAsPDF( const QString& file );
 
     //! print composer page to image
     //! If the image does not fit into memory, a null image is returned
@@ -259,6 +347,8 @@ class CORE_EXPORT QgsComposition: public QGraphicsScene
     /**Render a page to a paint device
         @note added in version 1.9*/
     void renderPage( QPainter* p, int page );
+
+    QgsAtlasComposition& atlasComposition() { return mAtlasComposition; }
 
   public slots:
     /**Casts object to the proper subclass type and calls corresponding itemAdded signal*/
@@ -296,10 +386,20 @@ class CORE_EXPORT QgsComposition: public QGraphicsScene
     QPen mGridPen;
     GridStyle mGridStyle;
 
+    /**Parameters for alignment snap*/
+    bool mAlignmentSnap;
+    double mAlignmentSnapTolerance;
+
+    /**Arbitraty snap lines (horizontal and vertical)*/
+    QList< QGraphicsLineItem* > mSnapLines;
+
     QUndoStack mUndoStack;
 
     QgsComposerItemCommand* mActiveItemCommand;
     QgsComposerMultiFrameCommand* mActiveMultiFrameCommand;
+
+    /** The atlas composition object. It is held by the QgsComposition */
+    QgsAtlasComposition mAtlasComposition;
 
     QgsComposition(); //default constructor is forbidden
 
@@ -319,6 +419,19 @@ class CORE_EXPORT QgsComposition: public QGraphicsScene
     void addPaperItem();
     void removePaperItems();
     void deleteAndRemoveMultiFrames();
+
+    static QString encodeStringForXML( const QString& str );
+
+    //helper functions for item align
+    void collectAlignCoordinates( QMap< double, const QgsComposerItem* >& alignCoordsX,
+                                  QMap< double, const QgsComposerItem* >& alignCoordsY, const QgsComposerItem* excludeItem );
+
+    void checkNearestItem( double checkCoord, const QMap< double, const QgsComposerItem* >& alignCoords, double& smallestDiff,
+                           double itemCoordOffset, double& itemCoord, double& alignCoord ) const;
+
+    /**Find nearest item in coordinate map to a double.
+        @return true if item found, false if coords is empty*/
+    static bool nearestItem( const QMap< double, const QgsComposerItem* >& coords, double value, double& nearestValue );
 
   signals:
     void paperSizeChanged();

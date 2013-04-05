@@ -1,3 +1,28 @@
+# -*- coding: utf-8 -*-
+
+"""
+***************************************************************************
+    AlgorithmProvider.py
+    ---------------------
+    Date                 : August 2012
+    Copyright            : (C) 2012 by Victor Olaya
+    Email                : volayaf at gmail dot com
+***************************************************************************
+*                                                                         *
+*   This program is free software; you can redistribute it and/or modify  *
+*   it under the terms of the GNU General Public License as published by  *
+*   the Free Software Foundation; either version 2 of the License, or     *
+*   (at your option) any later version.                                   *
+*                                                                         *
+***************************************************************************
+"""
+
+__author__ = 'Victor Olaya'
+__date__ = 'August 2012'
+__copyright__ = '(C) 2012, Victor Olaya'
+# This will get replaced with a git SHA1 when you do a git archive
+__revision__ = '$Format:%H$'
+
 from sextante.core.SextanteConfig import Setting, SextanteConfig
 import os
 from PyQt4 import QtGui
@@ -60,6 +85,21 @@ class AlgorithmProvider():
         '''Returns the full name of the provider'''
         return "Generic algorithm provider"
 
+    def getPostProcessingErrorMessage(self, wrongLayers):
+        '''Returns the message to be shown to the user when after running an algorithm for this provider,
+        there is a problem loading the resulting layer.
+        This method should analyze if the problem is caused by wrong entry data, a wrong or missing
+        installation of a required 3rd party app, or any other cause, and create an error response accordingly.
+        Message is provided as an HTML code that will be displayed to the user, and which might contains
+        links to installation paths for missing 3rd party apps.
+        - wrongLayers: a list of Output objects that could not be loaded.'''
+
+        html ="<p>Oooops! SEXTANTE could not open the following output layers</p><ul>\n"
+        for layer in wrongLayers:
+            html += '<li>' + layer.description + ': <font size=3 face="Courier New" color="ff0000">' + layer.value + "</font></li>\n"
+        html +="</ul><p>The above files could not be opened, which probably indicates that they were not correctly produced by the executed algorithm</p>"
+        html +="<p>Checking the log information might help you see why those layers were not created as expected</p>"
+        return html
 
     def getIcon(self):
         return QtGui.QIcon(os.path.dirname(__file__) + "/../images/alg.png")
@@ -71,16 +111,15 @@ class AlgorithmProvider():
         formats = QgsVectorFileWriter.supportedFiltersAndFormats()
         extensions = ["shp"]#shp is the default, should be the first
         for extension in formats.keys():
-            extension = str(extension)
+            extension = unicode(extension)
             extension = extension[extension.find('*.') + 2:]
             extension = extension[:extension.find(" ")]
             if extension.lower() != "shp":
                 extensions.append(extension)
         return extensions
-        #return ["shp"]
 
     def getSupportedOutputTableExtensions(self):
-        return ["dbf"]
+        return ["csv"]
 
     def supportsNonFileBasedOutput(self):
         return False

@@ -25,21 +25,24 @@ class QgsRasterResampler;
 
 class QDomElement;
 
+/** \ingroup core
+  * Resample filter pipe for rasters.
+  */
 class CORE_EXPORT QgsRasterResampleFilter : public QgsRasterInterface
 {
   public:
-    QgsRasterResampleFilter( QgsRasterInterface* input = 0 );
+    QgsRasterResampleFilter( QgsRasterInterface *input = 0 );
     ~QgsRasterResampleFilter();
 
     QgsRasterInterface * clone() const;
 
     int bandCount() const;
 
-    QgsRasterInterface::DataType dataType( int bandNo ) const;
+    QGis::DataType dataType( int bandNo ) const;
 
     bool setInput( QgsRasterInterface* input );
 
-    void * readBlock( int bandNo, QgsRectangle  const & extent, int width, int height );
+    QgsRasterBlock *block( int bandNo, const QgsRectangle &extent, int width, int height );
 
     /**Set resampler for zoomed in scales. Takes ownership of the object*/
     void setZoomedInResampler( QgsRasterResampler* r );
@@ -55,7 +58,7 @@ class CORE_EXPORT QgsRasterResampleFilter : public QgsRasterInterface
     void writeXML( QDomDocument& doc, QDomElement& parentElem );
 
     /**Sets base class members from xml. Usually called from create() methods of subclasses*/
-    void readXML( const QDomElement& resamplefilterElem );
+    void readXML( const QDomElement& filterElem );
 
   protected:
     /**Resampler used if screen resolution is higher than raster resolution (zoomed in). 0 means no resampling (nearest neighbour)*/

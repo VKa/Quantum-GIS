@@ -27,7 +27,7 @@
       </widget>
      </item>
      <item row="0" column="1">
-      <widget class="QgsColorButtonV2" name="btnChangeColor">
+      <widget class="QgsColorButton" name="btnChangeColor">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
          <horstretch>0</horstretch>
@@ -35,25 +35,9 @@
         </sizepolicy>
        </property>
        <property name="text">
-        <string>Change</string>
+        <string>Change...</string>
        </property>
       </widget>
-     </item>
-     <item row="0" column="2" rowspan="2">
-      <spacer>
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
-       </property>
-       <property name="sizeType">
-        <enum>QSizePolicy::Preferred</enum>
-       </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>112</width>
-         <height>48</height>
-        </size>
-       </property>
-      </spacer>
      </item>
      <item row="1" column="0">
       <widget class="QLabel" name="label_2">
@@ -78,6 +62,27 @@
        </property>
       </widget>
      </item>
+     <item row="2" column="1">
+      <widget class="QComboBox" name="mWidthUnitComboBox">
+       <item>
+        <property name="text">
+         <string>Millimeter</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Map unit</string>
+        </property>
+       </item>
+      </widget>
+     </item>
+     <item row="2" column="0">
+      <widget class="QLabel" name="mWidthUnitLabel">
+       <property name="text">
+        <string>Width unit</string>
+       </property>
+      </widget>
+     </item>
     </layout>
    </item>
    <item>
@@ -97,7 +102,7 @@
  </widget>
  <customwidgets>
   <customwidget>
-   <class>QgsColorButtonV2</class>
+   <class>QgsColorButton</class>
    <extends>QPushButton</extends>
    <header>qgscolorbutton.h</header>
   </customwidget>

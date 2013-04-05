@@ -1,3 +1,28 @@
+# -*- coding: utf-8 -*-
+
+"""
+***************************************************************************
+    ModelerScene.py
+    ---------------------
+    Date                 : August 2012
+    Copyright            : (C) 2012 by Victor Olaya
+    Email                : volayaf at gmail dot com
+***************************************************************************
+*                                                                         *
+*   This program is free software; you can redistribute it and/or modify  *
+*   it under the terms of the GNU General Public License as published by  *
+*   the Free Software Foundation; either version 2 of the License, or     *
+*   (at your option) any later version.                                   *
+*                                                                         *
+***************************************************************************
+"""
+
+__author__ = 'Victor Olaya'
+__date__ = 'August 2012'
+__copyright__ = '(C) 2012, Victor Olaya'
+# This will get replaced with a git SHA1 when you do a git archive
+__revision__ = '$Format:%H$'
+
 from PyQt4 import QtCore, QtGui
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
@@ -12,6 +37,7 @@ class ModelerScene(QtGui.QGraphicsScene):
         super(ModelerScene, self).__init__(parent)
         self.paramItems = []
         self.algItems = []
+        self.setItemIndexMethod(QtGui.QGraphicsScene.NoIndex);
 
     def getParameterPositions(self):
         pos = []
@@ -91,8 +117,10 @@ class ModelerScene(QtGui.QGraphicsScene):
                     for sourceItem in sourceItems:
                         arrow = ModelerArrowItem(sourceItem, self.algItems[iAlg])
                         self.addItem(arrow)
+            for depend in model.dependencies[iAlg]:
+                arrow = ModelerArrowItem(self.algItems[depend], self.algItems[iAlg])
+                self.addItem(arrow)
             iAlg+=1
-
 
     def mousePressEvent(self, mouseEvent):
         if (mouseEvent.button() != QtCore.Qt.LeftButton):

@@ -4,7 +4,7 @@
   -------------------
          begin                : June 2009
          copyright            : (C) Martin Dobias
-         email                : wonder.sk at gmail.com
+         email                : wonder dot sk at gmail dot com
 
  ***************************************************************************
  *                                                                         *
@@ -81,7 +81,60 @@ class CORE_EXPORT QgsPalLayerSettings
       MapOrientation = 8
     };
 
-    // increment iterator in _writeDataDefinedPropertyMap() when adding more
+    enum UpsideDownLabels
+    {
+      Upright, // upside-down labels (90 <= angle < 270) are shown upright
+      ShowDefined, // show upside down when rotation is layer- or data-defined
+      ShowAll // show upside down for all labels, including dynamic ones
+    };
+
+    enum DirectionSymbols
+    {
+      SymbolLeftRight, // place direction symbols on left/right of label
+      SymbolAbove, // place direction symbols on above label
+      SymbolBelow // place direction symbols on below label
+    };
+
+    enum MultiLineAlign
+    {
+      MultiLeft = 0,
+      MultiCenter,
+      MultiRight
+    };
+
+    enum ShapeType
+    {
+      ShapeRectangle = 0,
+      ShapeSquare,
+      ShapeEllipse,
+      ShapeCircle,
+      ShapeSVG
+    };
+
+    enum SizeType
+    {
+      SizeBuffer = 0,
+      SizeFixed,
+      SizePercent
+    };
+
+    enum RotationType
+    {
+      RotationSync = 0,
+      RotationOffset,
+      RotationFixed
+    };
+
+    /** Units used for option sizes, before being converted to rendered sizes */
+    enum SizeUnit
+    {
+      Points = 0,
+      MM,
+      MapUnits,
+      Percent
+    };
+
+    // update mDataDefinedNames QList in constructor when adding/deleting enum value
     enum DataDefinedProperties
     {
       Size = 0,
@@ -104,7 +157,7 @@ class CORE_EXPORT QgsPalLayerSettings
       MaxScale,
       FontTransp,
       BufferTransp,
-      PropertyCount, // keep last entry
+      AlwaysShow
     };
 
     QString fieldName;
@@ -133,6 +186,7 @@ class CORE_EXPORT QgsPalLayerSettings
     QString textNamedStyle;
     QColor textColor;
     int textTransp;
+    QPainter::CompositionMode blendMode;
     QColor previewBkgrdColor;
     bool enabled;
     int priority; // 0 = low, 10 = high
@@ -144,11 +198,34 @@ class CORE_EXPORT QgsPalLayerSettings
     // disabled if both are zero
     int scaleMin;
     int scaleMax;
-    double bufferSize; //buffer size (in mm)
+    double bufferSize; //buffer size
     QColor bufferColor;
     int bufferTransp;
+    QPainter::CompositionMode bufferBlendMode;
     Qt::PenJoinStyle bufferJoinStyle;
     bool bufferNoFill; //set interior of buffer to 100% transparent
+
+    // shape background
+    bool shapeDraw;
+    ShapeType shapeType;
+    QString shapeSVGFile;
+    SizeType shapeSizeType;
+    QPointF shapeSize;
+    SizeUnit shapeSizeUnits;
+    RotationType shapeRotationType;
+    double shapeRotation;
+    QPointF shapeOffset;
+    SizeUnit shapeOffsetUnits;
+    QPointF shapeRadii;
+    SizeUnit shapeRadiiUnits;
+    QColor shapeFillColor;
+    QColor shapeBorderColor;
+    double shapeBorderWidth;
+    SizeUnit shapeBorderWidthUnits;
+    Qt::PenJoinStyle shapeJoinStyle;
+    int shapeTransparency;
+    QPainter::CompositionMode shapeBlendMode;
+
     bool formatNumbers;
     int decimals;
     bool plusSign;
@@ -156,14 +233,29 @@ class CORE_EXPORT QgsPalLayerSettings
     bool displayAll;  // if true, all features will be labelled even though overlaps occur
     bool mergeLines;
     double minFeatureSize; // minimum feature size to be labelled (in mm)
-    // Adds '<' or '>' to the label string pointing to the direction of the line / polygon ring
+    bool limitNumLabels; // whether to limit the number of labels to be drawn
+    int maxNumLabels; // maximum number of labels to be drawn
+    // Adds '<' or '>', or user-defined symbol to the label string pointing to the
+    // direction of the line / polygon ring
     // Works only if Placement == Line
     bool addDirectionSymbol;
+    QString leftDirectionSymbol;
+    QString rightDirectionSymbol;
+    bool reverseDirectionSymbol;
+    DirectionSymbols placeDirectionSymbol; // whether to place left/right, above or below label
+    unsigned int upsidedownLabels; // whether, or how, to show upsidedown labels
+    double maxCurvedCharAngleIn; // maximum angle between inside curved label characters (defaults to 20.0, range 20.0 to 60.0)
+    double maxCurvedCharAngleOut; // maximum angle between outside curved label characters (defaults to -20.0, range -20.0 to -95.0)
     bool fontSizeInMapUnits; //true if font size is in map units (otherwise in points)
+    bool fontLimitPixelSize; // true is label should be limited by fontMinPixelSize/fontMaxPixelSize
+    int fontMinPixelSize; // minimum pixel size for showing rendered map unit labels (1 - 1000)
+    int fontMaxPixelSize; // maximum pixel size for showing rendered map unit labels (1 - 10000)
     bool bufferSizeInMapUnits; //true if buffer is in map units (otherwise in mm)
     bool labelOffsetInMapUnits; //true if label offset is in map units (otherwise in mm)
     bool distInMapUnits; //true if distance is in map units (otherwise in mm)
     QString wrapChar;
+    double multilineHeight; //0.0 to 10.0, leading between lines as multiplyer of line height
+    MultiLineAlign multilineAlign; // horizontal alignment of multi-line labels
     // called from register feature hook
     void calculateLabelSize( const QFontMetricsF* fm, QString text, double& labelX, double& labelY );
 
@@ -174,37 +266,60 @@ class CORE_EXPORT QgsPalLayerSettings
     void writeToLayer( QgsVectorLayer* layer );
 
     /**Set a property as data defined*/
-    void setDataDefinedProperty( DataDefinedProperties p, int attributeIndex );
+    void setDataDefinedProperty( DataDefinedProperties p, QString attributeName );
     /**Set a property to static instead data defined*/
     void removeDataDefinedProperty( DataDefinedProperties p );
 
-    /**Stores field indices for data defined layer properties*/
-    QMap< DataDefinedProperties, int > dataDefinedProperties;
+    /**Stores field names for data defined layer properties*/
+    //! @note not available in python bindings
+    QMap< DataDefinedProperties, QString > dataDefinedProperties;
 
     bool preserveRotation; // preserve predefined rotation data during label pin/unpin operations
 
-    /**Calculates pixel size (considering output size should be in pixel or map units, scale factors and oversampling)
-     @param size size to convert
-     @param c rendercontext
-     @param buffer whether it buffer size being calculated
-     @return font pixel size*/
-    int sizeToPixel( double size, const QgsRenderContext& c , bool buffer = false ) const;
+    /** Calculates pixel size (considering output size should be in pixel or map units, scale factors and optionally oversampling)
+     * @param size size to convert
+     * @param c rendercontext
+     * @param unit SizeUnit enum value of size
+     * @param rasterfactor whether to consider oversampling
+     * @return font pixel size
+     */
+    int sizeToPixel( double size, const QgsRenderContext& c , SizeUnit unit, bool rasterfactor = false ) const;
 
-    // temporary stuff: set when layer gets prepared
+    /** List of data defined enum names
+     * @note adding in 1.9
+     */
+    QList<QString> dataDefinedNames() const { return mDataDefinedNames; }
+
+    // temporary stuff: set when layer gets prepared or labeled
     pal::Layer* palLayer;
     int fieldIndex;
-    QFontMetricsF* fontMetrics;
     const QgsMapToPixel* xform;
     const QgsCoordinateTransform* ct;
     QgsPoint ptZero, ptOne;
     QList<QgsPalGeometry*> geometries;
     QgsGeometry* extentGeom;
+    int mFeaturesToLabel; // total features that will probably be labeled, may be less (figured before PAL)
+    int mFeatsSendingToPal; // total features tested for sending into PAL (relative to maxNumLabels)
+    int mFeatsRegPal; // number of features registered in PAL, when using limitNumLabels
 
   private:
+    void readDataDefinedPropertyMap( QgsVectorLayer* layer,
+                                     QMap < QgsPalLayerSettings::DataDefinedProperties,
+                                     QString > & propertyMap );
+    void writeDataDefinedPropertyMap( QgsVectorLayer* layer,
+                                      const QMap < QgsPalLayerSettings::DataDefinedProperties,
+                                      QString > & propertyMap );
+    void readDataDefinedProperty( QgsVectorLayer* layer,
+                                  QgsPalLayerSettings::DataDefinedProperties p,
+                                  QMap < QgsPalLayerSettings::DataDefinedProperties,
+                                  QString > & propertyMap );
+
     /**Checks if a feature is larger than a minimum size (in mm)
     @return true if above size, false if below*/
     bool checkMinimumSizeMM( const QgsRenderContext& ct, QgsGeometry* geom, double minSize ) const;
+
     QgsExpression* expression;
+    QList<QString> mDataDefinedNames;
 
     QFontDatabase mFontDB;
     /**Updates layer font with one of its named styles */
@@ -223,6 +338,15 @@ class CORE_EXPORT QgsLabelCandidate
 class CORE_EXPORT QgsPalLabeling : public QgsLabelingEngineInterface
 {
   public:
+    enum DrawLabelType
+    {
+      LabelText = 0,
+      LabelBuffer,
+      LabelShape,
+      LabelSVG,
+      LabelShadow
+    };
+
     QgsPalLabeling();
     ~QgsPalLabeling();
 
@@ -268,15 +392,25 @@ class CORE_EXPORT QgsPalLabeling : public QgsLabelingEngineInterface
     //! called when passing engine among map renderers
     virtual QgsLabelingEngineInterface* clone();
 
+    //! @note not available in python bindings
     void drawLabelCandidateRect( pal::LabelPosition* lp, QPainter* painter, const QgsMapToPixel* xform );
     //!drawLabel
-    void drawLabel( pal::LabelPosition* label, QPainter* painter, const QFont& f, const QColor& c, const QgsMapToPixel* xform, double bufferSize = -1,
-                    const QColor& bufferColor = QColor( 255, 255, 255 ), bool drawBuffer = false );
-    static void drawLabelBuffer( QPainter* p, QString text, const QFont& font, double size, QColor color , Qt::PenJoinStyle joinstyle = Qt::BevelJoin, bool noFill = false );
+    //! @note not available in python bindings
+    void drawLabel( pal::LabelPosition* label, QgsRenderContext& context, QgsPalLayerSettings& tmpLyr, DrawLabelType drawType );
 
-  protected:
+    static void drawLabelBuffer( QgsRenderContext& context, QString text, const QgsPalLayerSettings& tmpLyr );
 
-    void initPal();
+    static void drawLabelBackground( QgsRenderContext& context,
+                                     const QgsPoint& centerPt, double labelRotation, double labelWidth, double labelHeight,
+                                     const QgsPalLayerSettings& tmpLyr );
+
+    //! load/save engine settings to project file
+    //! @note added in QGIS 1.9
+    void loadEngineSettings();
+    void saveEngineSettings();
+    void clearEngineSettings();
+    bool isStoredWithProject() const { return mSavedWithProject; }
+    void setStoredWithProject( bool store ) { mSavedWithProject = store; }
 
   protected:
     // hashtable of layer settings, being filled during labeling
@@ -296,6 +430,8 @@ class CORE_EXPORT QgsPalLabeling : public QgsLabelingEngineInterface
     bool mShowingCandidates;
 
     bool mShowingAllLabels; // whether to avoid collisions or not
+
+    bool mSavedWithProject; // whether engine settings have been read from project file
 
     QgsLabelSearchTree* mLabelSearchTree;
 };

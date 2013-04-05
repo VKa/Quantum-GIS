@@ -3,7 +3,7 @@
     ---------------------
     begin                : May 2010
     copyright            : (C) 2010 by Martin Dobias
-    email                : wonder.sk at gmail.com
+    email                : wonder dot sk at gmail dot com
  ***************************************************************************
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -20,6 +20,7 @@
 #include "qgsrendercontext.h"
 #include "qgsvectorlayer.h"
 #include "qgslogger.h"
+#include "qgsogcutils.h"
 
 #include <QSet>
 
@@ -140,6 +141,8 @@ bool QgsRuleBasedRendererV2::Rule::isFilterOK( QgsFeature& f ) const
 
 bool QgsRuleBasedRendererV2::Rule::isScaleOK( double scale ) const
 {
+  if ( scale == 0 ) // so that we can count features in classes without scale context
+    return true;
   if ( mScaleMinDenom == 0 && mScaleMaxDenom == 0 )
     return true;
   if ( mScaleMinDenom != 0 && mScaleMinDenom > scale )
@@ -413,6 +416,22 @@ QgsSymbolV2List QgsRuleBasedRendererV2::Rule::symbolsForFeature( QgsFeature& fea
   return lst;
 }
 
+QgsRuleBasedRendererV2::RuleList QgsRuleBasedRendererV2::Rule::rulesForFeature( QgsFeature& feat )
+{
+  RuleList lst;
+  if ( !isFilterOK( feat ) )
+    return lst;
+
+  if ( mSymbol )
+    lst.append( this );
+
+  for ( QList<Rule*>::iterator it = mActiveChildren.begin(); it != mActiveChildren.end(); ++it )
+  {
+    Rule* rule = *it;
+    lst += rule->rulesForFeature( feat );
+  }
+  return lst;
+}
 
 void QgsRuleBasedRendererV2::Rule::stopRender( QgsRenderContext& context )
 {
@@ -520,7 +539,7 @@ QgsRuleBasedRendererV2::Rule* QgsRuleBasedRendererV2::Rule::createFromSld( QDomE
     }
     else if ( childElem.localName() == "Filter" )
     {
-      QgsExpression *filter = QgsExpression::createFromOgcFilter( childElem );
+      QgsExpression *filter = QgsOgcUtils::expressionFromOgcFilter( childElem );
       if ( filter )
       {
         if ( filter->hasParserError() )

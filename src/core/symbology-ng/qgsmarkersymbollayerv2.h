@@ -3,7 +3,7 @@
     ---------------------
     begin                : November 2009
     copyright            : (C) 2009 by Martin Dobias
-    email                : wonder.sk at gmail.com
+    email                : wonder dot sk at gmail dot com
  ***************************************************************************
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -17,6 +17,7 @@
 #define QGSMARKERSYMBOLLAYERV2_H
 
 #include "qgssymbollayerv2.h"
+#include "qgsvectorlayer.h"
 
 #define DEFAULT_SIMPLEMARKER_NAME         "circle"
 #define DEFAULT_SIMPLEMARKER_COLOR        QColor(255,0,0)
@@ -62,22 +63,40 @@ class CORE_EXPORT QgsSimpleMarkerSymbolLayerV2 : public QgsMarkerSymbolLayerV2
 
     void writeSldMarker( QDomDocument &doc, QDomElement &element, QgsStringMap props ) const;
 
+    QString ogrFeatureStyle( double mmScaleFactor, double mapUnitScaleFactor ) const;
+
     QString name() const { return mName; }
     void setName( QString name ) { mName = name; }
 
     QColor borderColor() const { return mBorderColor; }
     void setBorderColor( QColor color ) { mBorderColor = color; }
 
+    double outlineWidth() const { return mOutlineWidth; }
+    void setOutlineWidth( double w ) { mOutlineWidth = w; }
+
+    QgsSymbolV2::OutputUnit outlineWidthUnit() const { return mOutlineWidthUnit; }
+    void setOutlineWidthUnit( QgsSymbolV2::OutputUnit u ) { mOutlineWidthUnit = u; }
+
+    const QgsExpression* dataDefinedProperty( const QString& property ) const;
+    QString dataDefinedPropertyString( const QString& property ) const;
+    void setDataDefinedProperty( const QString& property, const QString& expressionString );
+    void removeDataDefinedProperty( const QString& property );
+    void removeDataDefinedProperties();
+
+    QSet<QString> usedAttributes() const;
+
   protected:
 
     void drawMarker( QPainter* p, QgsSymbolV2RenderContext& context );
 
-    bool prepareShape();
-    bool preparePath();
+    bool prepareShape( QString name = QString() );
+    bool preparePath( QString name = QString() );
 
     void prepareCache( QgsSymbolV2RenderContext& context );
 
     QColor mBorderColor;
+    double mOutlineWidth;
+    QgsSymbolV2::OutputUnit mOutlineWidthUnit;
     QPen mPen;
     QBrush mBrush;
     QPolygonF mPolygon;
@@ -88,6 +107,20 @@ class CORE_EXPORT QgsSimpleMarkerSymbolLayerV2 : public QgsMarkerSymbolLayerV2
     QBrush mSelBrush;
     QImage mSelCache;
     bool mUsingCache;
+
+    //data defined properties
+    QgsExpression* mNameExpression;
+    QgsExpression* mColorExpression;
+    QgsExpression* mColorBorderExpression;
+    QgsExpression* mOutlineWidthExpression;
+    QgsExpression* mSizeExpression;
+    QgsExpression* mAngleExpression;
+    QgsExpression* mOffsetExpression;
+
+  private:
+    //helper functions for data defined symbology
+    void prepareExpressions( const QgsVectorLayer* vl );
+    void markerOffset( QgsSymbolV2RenderContext& context, double& offsetX, double& offsetY );
 };
 
 //////////
@@ -107,18 +140,6 @@ class CORE_EXPORT QgsSvgMarkerSymbolLayerV2 : public QgsMarkerSymbolLayerV2
 
     static QgsSymbolLayerV2* create( const QgsStringMap& properties = QgsStringMap() );
     static QgsSymbolLayerV2* createFromSld( QDomElement &element );
-
-    //! Return a list of all available svg files
-    static QStringList listSvgFiles();
-
-    //! Return a list of svg files at the specified directory
-    static QStringList listSvgFilesAt( QString directory );
-
-    //! Get symbol's path from its name
-    static QString symbolNameToPath( QString name );
-
-    //! Get symbols's name from its path
-    static QString symbolPathToName( QString path );
 
     // implemented from base classes
 
@@ -148,10 +169,21 @@ class CORE_EXPORT QgsSvgMarkerSymbolLayerV2 : public QgsMarkerSymbolLayerV2
     double outlineWidth() const { return mOutlineWidth; }
     void setOutlineWidth( double w ) { mOutlineWidth = w; }
 
+    void setOutlineWidthUnit( QgsSymbolV2::OutputUnit unit ) { mOutlineWidthUnit = unit; }
+    QgsSymbolV2::OutputUnit outlineWidthUnit() const { return mOutlineWidthUnit; }
+
+    void setOutputUnit( QgsSymbolV2::OutputUnit unit );
+    QgsSymbolV2::OutputUnit outputUnit() const;
+
+    const QgsExpression* dataDefinedProperty( const QString& property ) const;
+    QString dataDefinedPropertyString( const QString& property ) const;
+    void setDataDefinedProperty( const QString& property, const QString& expressionString );
+    void removeDataDefinedProperty( const QString& property );
+    void removeDataDefinedProperties();
+
+    QSet<QString> usedAttributes() const;
+
   protected:
-
-    void loadSvg();
-
     QString mPath;
 
     //param(fill), param(outline), param(outline-width) are going
@@ -159,7 +191,19 @@ class CORE_EXPORT QgsSvgMarkerSymbolLayerV2 : public QgsMarkerSymbolLayerV2
     QColor mFillColor;
     QColor mOutlineColor;
     double mOutlineWidth;
+    QgsSymbolV2::OutputUnit mOutlineWidthUnit;
     double mOrigSize;
+
+    QgsExpression* mSizeExpression;
+    QgsExpression* mOutlineWidthExpression;
+    QgsExpression* mAngleExpression;
+    QgsExpression* mOffsetExpression;
+    QgsExpression* mNameExpression;
+    QgsExpression* mFillExpression;
+    QgsExpression* mOutlineExpression;
+
+  private:
+    void prepareExpressions( const QgsVectorLayer* vl );
 };
 
 

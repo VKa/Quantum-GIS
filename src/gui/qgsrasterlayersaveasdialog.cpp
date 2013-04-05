@@ -1,3 +1,17 @@
+/***************************************************************************
+    qgsrasterlayersaveasdialog.cpp
+    ---------------------
+    begin                : May 2012
+    copyright            : (C) 2012 by Marco Hugentobler
+    email                : marco dot hugentobler at sourcepole dot ch
+ ***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
 #include "qgsapplication.h"
 #include "qgslogger.h"
 #include "qgscoordinatetransform.h"
@@ -8,8 +22,8 @@
 #include "qgsgenericprojectionselector.h"
 
 #include <QFileDialog>
+#include <QMessageBox>
 #include <QSettings>
-
 
 QgsRasterLayerSaveAsDialog::QgsRasterLayerSaveAsDialog( QgsRasterLayer* rasterLayer,
     QgsRasterDataProvider* sourceProvider, const QgsRectangle& currentExtent,
@@ -71,18 +85,22 @@ QgsRasterLayerSaveAsDialog::QgsRasterLayerSaveAsDialog( QgsRasterLayer* rasterLa
       mMaximumSizeYLineEdit->setText( QString::number( 2000 ) );
     }
 
+    // setup creation option widget
     mCreateOptionsWidget->setProvider( mDataProvider->name() );
     if ( mDataProvider->name() == "gdal" )
     {
       mCreateOptionsWidget->setFormat( myFormats[0] );
     }
+    mCreateOptionsWidget->setRasterLayer( mRasterLayer );
     mCreateOptionsWidget->update();
   }
 
   // Only do pyramids if dealing directly with GDAL.
   if ( mDataProvider->capabilities() & QgsRasterDataProvider::BuildPyramids )
   {
-    mPyramidsOptionsWidget->createOptionsWidget()->setType( QgsRasterFormatSaveOptionsWidget::ProfileLineEdit );
+    // setup pyramids option widget
+    // mPyramidsOptionsWidget->createOptionsWidget()->setType( QgsRasterFormatSaveOptionsWidget::ProfileLineEdit );
+    mPyramidsOptionsWidget->createOptionsWidget()->setRasterLayer( mRasterLayer );
 
     // TODO enable "use existing", has no effect for now, because using Create() in gdal provider
     // if ( ! mDataProvider->hasPyramids() )
@@ -98,6 +116,15 @@ QgsRasterLayerSaveAsDialog::QgsRasterLayerSaveAsDialog( QgsRasterLayer* rasterLa
   {
     mPyramidsGroupBox->setEnabled( false );
   }
+
+  // restore checked state for most groupboxes (default is to restore collapsed state)
+  // create options and pyramids will be preset, if user has selected defaults in the gdal options dlg
+  mCreateOptionsGroupBox->setSaveCheckedState( true );
+  //mTilesGroupBox->setSaveCheckedState( true );
+  // don't restore nodata, it needs user input
+  // pyramids are not necessarily built every time
+
+  mTilesGroupBox->hide();
 
   updateCrsGroup();
 
@@ -131,11 +158,44 @@ void QgsRasterLayerSaveAsDialog::on_mBrowseButton_clicked()
   QString fileName;
   if ( mTileModeCheckBox->isChecked() )
   {
-    fileName = QFileDialog::getExistingDirectory( this, tr( "Select output directory" ) );
+    while ( true )
+    {
+      // TODO: would not it be better to select .vrt file instead of directory?
+      fileName = QFileDialog::getExistingDirectory( this, tr( "Select output directory" ) );
+      //fileName = QFileDialog::getSaveFileName( this, tr( "Select output file" ), QString(), tr( "VRT" ) + " (*.vrt *.VRT)" );
+
+      if ( fileName.isEmpty() ) break; // canceled
+
+      // Check if directory is empty
+      QDir dir( fileName );
+      QString baseName = QFileInfo( fileName ).baseName();
+      QStringList filters;
+      filters << QString( "%1.*" ).arg( baseName );
+      QStringList files = dir.entryList( filters );
+      if ( !files.isEmpty() )
+      {
+        QMessageBox::StandardButton button = QMessageBox::warning( this, tr( "Warning" ),
+                                             tr( "The directory %1 contains files which will be overwritten: %2" ).arg( dir.absolutePath() ).arg( files.join( ", " ) ),
+                                             QMessageBox::Ok | QMessageBox::Cancel );
+
+        if ( button == QMessageBox::Ok )
+        {
+          break;
+        }
+        else
+        {
+          fileName = "";
+        }
+      }
+      else
+      {
+        break;
+      }
+    }
   }
   else
   {
-    fileName = QFileDialog::getSaveFileName( this, tr( "Select output file" ) );
+    fileName = QFileDialog::getSaveFileName( this, tr( "Select output file" ), QString(), tr( "GeoTIFF" ) + " (*.tif *.tiff *.TIF *.TIFF)" );
   }
 
   if ( !fileName.isEmpty() )
@@ -246,10 +306,10 @@ void QgsRasterLayerSaveAsDialog::setOutputExtent( const QgsRectangle& r, const Q
     extent = ct.transformBoundingBox( r );
   }
 
-  mXMinLineEdit->setText( QgsRasterInterface::printValue( extent.xMinimum() ) );
-  mXMaxLineEdit->setText( QgsRasterInterface::printValue( extent.xMaximum() ) );
-  mYMinLineEdit->setText( QgsRasterInterface::printValue( extent.yMinimum() ) );
-  mYMaxLineEdit->setText( QgsRasterInterface::printValue( extent.yMaximum() ) );
+  mXMinLineEdit->setText( QgsRasterBlock::printValue( extent.xMinimum() ) );
+  mXMaxLineEdit->setText( QgsRasterBlock::printValue( extent.xMaximum() ) );
+  mYMinLineEdit->setText( QgsRasterBlock::printValue( extent.yMinimum() ) );
+  mYMaxLineEdit->setText( QgsRasterBlock::printValue( extent.yMaximum() ) );
 
   mExtentState = state;
   extentChanged();
@@ -573,12 +633,12 @@ void QgsRasterLayerSaveAsDialog::addNoDataRow( double min, double max )
     QString valueString;
     switch ( mRasterLayer->dataProvider()->srcDataType( 1 ) )
     {
-      case QgsRasterInterface::Float32:
-      case QgsRasterInterface::Float64:
+      case QGis::Float32:
+      case QGis::Float64:
         lineEdit->setValidator( new QDoubleValidator( 0 ) );
         if ( !qIsNaN( value ) )
         {
-          valueString = QgsRasterInterface::printValue( value );
+          valueString = QgsRasterBlock::printValue( value );
         }
         break;
       default:
@@ -645,11 +705,25 @@ void QgsRasterLayerSaveAsDialog::on_mTileModeCheckBox_toggled( bool toggled )
   if ( toggled )
   {
     // enable pyramids
-    if ( ! mPyramidsGroupBox->isChecked() )
-      mPyramidsGroupBox->setChecked( true );
-    if ( mPyramidsGroupBox->isCollapsed() )
-      mPyramidsGroupBox->setCollapsed( false );
-    mPyramidsOptionsWidget->checkAllLevels( true );
+
+    // Disabled (Radim), auto enabling of pyramids was making impression that
+    // we (programmers) know better what you (user) want to do,
+    // certainly auto expaning was bad experience
+
+    //if ( ! mPyramidsGroupBox->isChecked() )
+    //  mPyramidsGroupBox->setChecked( true );
+
+    // Auto expanding mPyramidsGroupBox is bad - it auto crolls content of dialog
+    //if ( mPyramidsGroupBox->isCollapsed() )
+    //  mPyramidsGroupBox->setCollapsed( false );
+    //mPyramidsOptionsWidget->checkAllLevels( true );
+
+    // Show / hide tile options
+    mTilesGroupBox->show();
+  }
+  else
+  {
+    mTilesGroupBox->hide();
   }
 }
 
@@ -661,12 +735,13 @@ void QgsRasterLayerSaveAsDialog::on_mPyramidsGroupBox_toggled( bool toggled )
 
 void QgsRasterLayerSaveAsDialog::populatePyramidsLevels()
 {
-  // if selection != "Build pyramids", get pyramids from actual layer
   QString text;
 
   if ( mPyramidsGroupBox->isChecked() )
   {
     QList<QgsRasterPyramid> myPyramidList;
+    // if use existing, get pyramids from actual layer
+    // but that's not available yet
     if ( mPyramidsUseExistingCheckBox->isChecked() )
     {
       myPyramidList = mDataProvider->buildPyramidList();
@@ -681,7 +756,7 @@ void QgsRasterLayerSaveAsDialog::populatePyramidsLevels()
           myRasterPyramidIterator != myPyramidList.end();
           ++myRasterPyramidIterator )
     {
-      if ( myRasterPyramidIterator->exists )
+      if ( ! mPyramidsUseExistingCheckBox->isChecked() ||  myRasterPyramidIterator->exists )
       {
         text += QString::number( myRasterPyramidIterator->xDim ) + QString( "x" ) +
                 QString::number( myRasterPyramidIterator->yDim ) + " ";
@@ -738,7 +813,7 @@ QList<QgsRasterNuller::NoData> QgsRasterLayerSaveAsDialog::noData() const
   return noDataList;
 }
 
-QList<int> QgsRasterLayerSaveAsDialog::overviewList() const
+QList<int> QgsRasterLayerSaveAsDialog::pyramidsList() const
 {
   return mPyramidsGroupBox->isChecked() ? mPyramidsOptionsWidget->overviewList() : QList<int>();
 }
@@ -751,5 +826,22 @@ QgsRasterDataProvider::RasterBuildPyramids QgsRasterLayerSaveAsDialog::buildPyra
     return QgsRasterDataProvider::CopyExisting;
   else
     return QgsRasterDataProvider::PyramidsFlagYes;
+}
+
+bool QgsRasterLayerSaveAsDialog::validate() const
+{
+  if ( mCreateOptionsGroupBox->isChecked() )
+  {
+    QString message = mCreateOptionsWidget->validateOptions( true, false );
+    if ( !message.isNull() )
+      return false;
+  }
+  if ( mPyramidsGroupBox->isChecked() )
+  {
+    QString message = mPyramidsOptionsWidget->createOptionsWidget()->validateOptions( true, false );
+    if ( !message.isNull() )
+      return false;
+  }
+  return true;
 }
 

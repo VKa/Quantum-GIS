@@ -33,6 +33,10 @@ QgsSimplifyDialog::QgsSimplifyDialog( QWidget* parent )
   setupUi( this );
   connect( horizontalSlider, SIGNAL( valueChanged( int ) ),
            this, SLOT( valueChanged( int ) ) );
+  connect( horizontalSlider, SIGNAL( valueChanged( int ) ),
+           spinBox, SLOT( setValue( int ) ) );
+  connect( spinBox, SIGNAL( valueChanged( int ) ),
+           horizontalSlider, SLOT( setValue( int ) ) );
   connect( okButton, SIGNAL( clicked() ),
            this, SLOT( simplify() ) );
 
@@ -55,7 +59,8 @@ void QgsSimplifyDialog::setRange( int minValue, int maxValue )
 
   horizontalSlider->setMinimum(( minValue - 1 < 0 ? 0 : minValue - 1 ) );// -1 for count with minimum tolerance end caused by double imprecision
   horizontalSlider->setMaximum( maxValue );
-
+  qDebug()
+  spinBox->setRange( horizontalSlider->minimum(), horizontalSlider->maximum() );
 }
 
 
@@ -251,21 +256,28 @@ bool QgsMapToolSimplify::calculateSliderBoudaries()
 void QgsMapToolSimplify::canvasPressEvent( QMouseEvent * e )
 {
   QgsVectorLayer * vlayer = currentVectorLayer();
+
+  if ( !vlayer )
+  {
+    notifyNotVectorLayer();
+    return;
+  }
+
   QgsPoint layerCoords = mCanvas->getCoordinateTransform()->toMapPoint( e->pos().x(), e->pos().y() );
 
   double r = QgsTolerance::vertexSearchRadius( vlayer, mCanvas->mapRenderer() );
   QgsRectangle selectRect = QgsRectangle( layerCoords.x() - r, layerCoords.y() - r,
                                           layerCoords.x() + r, layerCoords.y() + r );
-  vlayer->select( QgsAttributeList(), selectRect, true );
+  QgsFeatureIterator fit = vlayer->getFeatures( QgsFeatureRequest().setFilterRect( selectRect ).setSubsetOfAttributes( QgsAttributeList() ) );
 
   QgsGeometry* geometry = QgsGeometry::fromPoint( layerCoords );
   double minDistance = DBL_MAX;
   double currentDistance;
-  QgsFeature f;
 
   mSelectedFeature.setValid( false );
 
-  while ( vlayer->nextFeature( f ) )
+  QgsFeature f;
+  while ( fit.nextFeature( f ) )
   {
     currentDistance = geometry->distance( *( f.geometry() ) );
     if ( currentDistance < minDistance )

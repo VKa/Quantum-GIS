@@ -1,3 +1,28 @@
+# -*- coding: utf-8 -*-
+
+"""
+***************************************************************************
+    OTBAlgorithm.py
+    ---------------------
+    Date                 : August 2012
+    Copyright            : (C) 2012 by Victor Olaya
+    Email                : volayaf at gmail dot com
+***************************************************************************
+*                                                                         *
+*   This program is free software; you can redistribute it and/or modify  *
+*   it under the terms of the GNU General Public License as published by  *
+*   the Free Software Foundation; either version 2 of the License, or     *
+*   (at your option) any later version.                                   *
+*                                                                         *
+***************************************************************************
+"""
+
+__author__ = 'Victor Olaya'
+__date__ = 'August 2012'
+__copyright__ = '(C) 2012, Victor Olaya'
+# This will get replaced with a git SHA1 when you do a git archive
+__revision__ = '$Format:%H$'
+
 import os
 from qgis.core import *
 from PyQt4.QtCore import *
@@ -13,6 +38,7 @@ from sextante.parameters.ParameterSelection import ParameterSelection
 from sextante.core.GeoAlgorithmExecutionException import GeoAlgorithmExecutionException
 from sextante.core.SextanteLog import SextanteLog
 from sextante.core.SextanteUtils import SextanteUtils
+from sextante.core.WrongHelpFileException import WrongHelpFileException
 from sextante.parameters.ParameterFactory import ParameterFactory
 from sextante.outputs.OutputFactory import OutputFactory
 from sextante.otb.OTBUtils import OTBUtils
@@ -40,10 +66,11 @@ class OTBAlgorithm(GeoAlgorithm):
 
     def helpFile(self):
         folder = os.path.join( OTBUtils.otbDescriptionPath(), 'doc' )
-        if str(folder).strip() != "":
-            helpfile = os.path.join( str(folder), self.appkey + ".html")
+        helpfile = os.path.join( str(folder), self.appkey + ".html")
+        if os.path.exists(helpfile):
             return helpfile
-        return None
+        else:
+            raise WrongHelpFileException("Could not find help file for this algorithm. \nIf you have it put it in: \n"+str(folder))
 
     def defineCharacteristicsFromFile(self):
         lines = open(self.descriptionFile)
@@ -66,6 +93,10 @@ class OTBAlgorithm(GeoAlgorithm):
                         param.default = OTBUtils.otbSRTMPath()
                     if param.name == "-elev.dem.geoid":
                         param.default = OTBUtils.otbGeoidPath()
+                    self.addParameter(param)
+                elif line.startswith("*Parameter"):
+                    param = ParameterFactory.getFromString(line[1:])
+                    param.isAdvanced = True
                     self.addParameter(param)
                 elif line.startswith("Extent"):
                     self.addParameter(ParameterExtent(self.REGION_OF_INTEREST, "Region of interest", "0,1,0,1"))
@@ -101,7 +132,7 @@ class OTBAlgorithm(GeoAlgorithm):
                     self.roiVectors[param.value] = roiFile
                 else:
                     commands.append(param.value)
-            if isinstance(param, ParameterRaster):
+            elif isinstance(param, ParameterRaster):
                 commands.append(param.name)
                 if self.hasROI:
                     roiFile = SextanteUtils.getTempFilename('tif')
@@ -162,7 +193,8 @@ class OTBAlgorithm(GeoAlgorithm):
         loglines.append("OTB execution command")
         for line in commands:
             loglines.append(line)
+            progress.setCommand(line)
 
         SextanteLog.addToLog(SextanteLog.LOG_INFO, loglines)
-        progress.setCommand(loglines)
+
         OTBUtils.executeOtb(commands, progress)

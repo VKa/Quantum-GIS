@@ -37,6 +37,7 @@
 #include "qgscoordinatereferencesystem.h"
 #include "qgsapplication.h"
 #include "qgsproject.h"
+#include "qgsprojectfiletransform.h"
 #include "qgsdatasourceuri.h"
 #include "qgsvectorlayer.h"
 
@@ -46,17 +47,17 @@ QgsMapLayer::QgsMapLayer( QgsMapLayer::LayerType type,
     mTransparencyLevel( 255 ), // 0 is completely transparent
     mValid( false ), // assume the layer is invalid
     mDataSource( source ),
+    mLayerOrigName( lyrname ), // store the original name
     mID( "" ),
-    mLayerType( type )
-
+    mLayerType( type ),
+    mBlendMode( QgsMapRenderer::BlendNormal ) // Default to normal blending
 {
-  QgsDebugMsg( "lyrname is '" + lyrname + "'" );
-
   mCRS = new QgsCoordinateReferenceSystem();
 
   // Set the display name = internal name
-  mLayerName = capitaliseLayerName( lyrname );
-  QgsDebugMsg( "layerName is '" + mLayerName + "'" );
+  QgsDebugMsg( "original name: '" + mLayerOrigName + "'" );
+  mLayerName = capitaliseLayerName( mLayerOrigName );
+  QgsDebugMsg( "display name: '" + mLayerName + "'" );
 
   // Generate the unique ID of this layer
   QDateTime dt = QDateTime::currentDateTime();
@@ -75,8 +76,6 @@ QgsMapLayer::QgsMapLayer( QgsMapLayer::LayerType type,
   mScaleBasedVisibility = false;
   mpCacheImage = 0;
 }
-
-
 
 QgsMapLayer::~QgsMapLayer()
 {
@@ -101,8 +100,12 @@ QString QgsMapLayer::id() const
 /** Write property of QString layerName. */
 void QgsMapLayer::setLayerName( const QString & name )
 {
-  QgsDebugMsg( "new name is '" + name + "'" );
-  mLayerName = capitaliseLayerName( name );
+  QgsDebugMsg( "new original name: '" + name + "'" );
+  QString newName = capitaliseLayerName( name );
+  QgsDebugMsg( "new display name: '" + name + "'" );
+  if ( name == mLayerOrigName && newName == mLayerName ) return;
+  mLayerOrigName = name; // store the new original name
+  mLayerName = newName;
   emit layerNameChanged();
 }
 
@@ -129,6 +132,18 @@ QString const & QgsMapLayer::source() const
 QgsRectangle QgsMapLayer::extent()
 {
   return mExtent;
+}
+
+/** Write blend mode for layer */
+void QgsMapLayer::setBlendMode( const QgsMapRenderer::BlendMode blendMode )
+{
+  mBlendMode = blendMode;
+}
+
+/** Read blend mode for layer */
+QgsMapRenderer::BlendMode QgsMapLayer::blendMode() const
+{
+  return mBlendMode;
 }
 
 bool QgsMapLayer::draw( QgsRenderContext& rendererContext )
@@ -429,7 +444,7 @@ bool QgsMapLayer::writeXML( QDomNode & layer_node, QDomDocument & document )
 
   // layer name
   QDomElement layerName = document.createElement( "layername" );
-  QDomText layerNameText = document.createTextNode( name() );
+  QDomText layerNameText = document.createTextNode( originalName() );
   layerName.appendChild( layerNameText );
 
   // layer title
@@ -471,6 +486,7 @@ bool QgsMapLayer::writeXML( QDomNode & layer_node, QDomDocument & document )
   QDomText    transparencyLevelIntText    = document.createTextNode( QString::number( getTransparency() ) );
   transparencyLevelIntElement.appendChild( transparencyLevelIntText );
   maplayer.appendChild( transparencyLevelIntElement );
+
   // now append layer node to map layer node
 
   layer_node.appendChild( maplayer );
@@ -581,13 +597,6 @@ const QgsCoordinateReferenceSystem& QgsMapLayer::crs() const
   return *mCRS;
 }
 
-const QgsCoordinateReferenceSystem& QgsMapLayer::srs()
-{
-  // This will be dropped in QGIS 2.0 due to conflicting name
-  // Please use crs() in the future
-  return *mCRS;
-}
-
 void QgsMapLayer::setCrs( const QgsCoordinateReferenceSystem& srs, bool emitSignal )
 {
   *mCRS = srs;
@@ -612,12 +621,12 @@ void QgsMapLayer::setTransparency( unsigned int theInt )
   mTransparencyLevel = theInt;
 }
 
-QString QgsMapLayer::capitaliseLayerName( const QString name )
+QString QgsMapLayer::capitaliseLayerName( const QString& name )
 {
   // Capitalise the first letter of the layer name if requested
   QSettings settings;
   bool capitaliseLayerName =
-    settings.value( "qgis/capitaliseLayerName", QVariant( false ) ).toBool();
+    settings.value( "/qgis/capitaliseLayerName", QVariant( false ) ).toBool();
 
   QString layerName( name );
 
@@ -776,6 +785,23 @@ QString QgsMapLayer::loadNamedStyle( const QString theURI, bool &theResultFlag )
   if ( !theResultFlag )
   {
     return myErrorMessage;
+  }
+
+  // get style file version string, if any
+  QgsProjectVersion fileVersion( myDocument.firstChildElement( "qgis" ).attribute( "version" ) );
+  QgsProjectVersion thisVersion( QGis::QGIS_VERSION );
+
+  if ( thisVersion > fileVersion )
+  {
+    QgsLogger::warning( "Loading a style file that was saved with an older "
+                        "version of qgis (saved in " + fileVersion.text() +
+                        ", loaded in " + QGis::QGIS_VERSION +
+                        "). Problems may occur." );
+
+    QgsProjectFileTransform styleFile( myDocument, fileVersion );
+    // styleFile.dump();
+    styleFile.updateRevision( thisVersion );
+    // styleFile.dump();
   }
 
   // now get the layer node out and pass it over to the layer
@@ -1223,6 +1249,7 @@ void QgsMapLayer::setCacheImage( QImage * thepImage )
 
   if ( mpCacheImage )
   {
+    onCacheImageDelete();
     delete mpCacheImage;
   }
   mpCacheImage = thepImage;
