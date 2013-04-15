@@ -45,6 +45,7 @@ attributetable/qgsattributetabledelegate.cpp
 attributetable/qgsfeaturelistview.cpp
 attributetable/qgsfeaturelistmodel.cpp
 attributetable/qgsfeaturelistviewdelegate.cpp
+attributetable/qgsfeatureselectionmodel.cpp
 attributetable/qgsdualview.cpp
 
 qgisgui.cpp
@@ -96,7 +97,6 @@ qgscredentialdialog.cpp
 qgsowssourceselect.cpp
 qgsprojectbadlayerguihandler.cpp
 qgsprojectionselector.cpp
-qgsquickprint.cpp
 qgsrasterlayersaveasdialog.cpp
 qgsrasterformatsaveoptionswidget.cpp
 qgsrasterpyramidsoptionswidget.cpp
@@ -169,6 +169,7 @@ attributetable/qgsattributetablefiltermodel.h
 attributetable/qgsattributetabledelegate.h
 attributetable/qgsfeaturelistview.h
 attributetable/qgsfeaturelistmodel.h
+attributetable/qgsfeatureselectionmodel.h
 attributetable/qgsfeaturelistviewdelegate.h
 attributetable/qgsdualview.h
 
@@ -204,7 +205,6 @@ qgsoptionsdialogbase.h
 qgscredentialdialog.h
 qgsowssourceselect.h
 qgsprojectionselector.h
-qgsquickprint.h
 qgsrasterlayersaveasdialog.h
 qgsrasterformatsaveoptionswidget.h
 qgsrasterpyramidsoptionswidget.h
@@ -273,8 +273,10 @@ attributetable/qgsattributetableview.h
 attributetable/qgsattributetablefiltermodel.h
 attributetable/qgsattributetabledelegate.h
 attributetable/qgsfeaturelistview.h
+attributetable/qgsfeaturemodel.h
 attributetable/qgsfeaturelistmodel.h
 attributetable/qgsfeaturelistviewdelegate.h
+attributetable/qgsfeatureselectionmodel.h
 attributetable/qgsdualview.h
 )
 
@@ -320,8 +322,6 @@ INCLUDE_DIRECTORIES(
   ../core
   ../core/composer
   ../core/raster
-  ../core/renderer
-  ../core/symbology
   ../core/symbology-ng
   ${CMAKE_CURRENT_BINARY_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}/../ui

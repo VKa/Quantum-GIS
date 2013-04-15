@@ -282,7 +282,7 @@ void QgsSimpleLineSymbolLayerV2::startRender( QgsSymbolV2RenderContext& context 
   mPen.setCapStyle( mPenCapStyle );
 
   mSelPen = mPen;
-  QColor selColor = context.selectionColor();
+  QColor selColor = context.renderContext().selectionColor();
   if ( ! selectionIsOpaque )
     selColor.setAlphaF( context.alpha() );
   mSelPen.setColor( selColor );
@@ -1228,7 +1228,7 @@ void QgsMarkerLineSymbolLayerV2::toSld( QDomDocument &doc, QDomElement &element,
       graphicStrokeElem.appendChild( gapElem );
     }
 
-    if ( !doubleNear( mOffset, 0.0 ) )
+    if ( !qgsDoubleNear( mOffset, 0.0 ) )
     {
       QDomElement perpOffsetElem = doc.createElement( "se:PerpendicularOffset" );
       perpOffsetElem.appendChild( doc.createTextNode( QString::number( mOffset ) ) );
@@ -1396,7 +1396,7 @@ void QgsLineDecorationSymbolLayerV2::startRender( QgsSymbolV2RenderContext& cont
   double width = mWidth * QgsSymbolLayerV2Utils::lineWidthScaleFactor( context.renderContext(), mWidthUnit );
   mPen.setWidth( context.outputLineWidth( width ) );
   mPen.setColor( penColor );
-  QColor selColor = context.selectionColor();
+  QColor selColor = context.renderContext().selectionColor();
   if ( ! selectionIsOpaque )
     selColor.setAlphaF( context.alpha() );
   mSelPen.setWidth( context.outputLineWidth( width ) );

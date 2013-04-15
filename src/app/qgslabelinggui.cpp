@@ -254,7 +254,7 @@ QgsLabelingGui::QgsLabelingGui( QgsPalLabeling* lbl, QgsVectorLayer* layer, QgsM
     mBufferTranspSpinBox->setValue( lyr.bufferTransp );
     mBufferJoinStyleComboBox->setPenJoinStyle( lyr.bufferJoinStyle );
     mBufferTranspFillChbx->setChecked( !lyr.bufferNoFill );
-    comboBufferBlendMode->setBlendMode( QgsMapRenderer::getBlendModeEnum( lyr.bufferBlendMode ) );
+    comboBufferBlendMode->setBlendMode( lyr.bufferBlendMode );
   }
   else
   {
@@ -295,7 +295,7 @@ QgsLabelingGui::QgsLabelingGui( QgsPalLabeling* lbl, QgsVectorLayer* layer, QgsM
   mFontSizeSpinBox->setValue( lyr.textFont.pointSizeF() );
   btnTextColor->setColor( lyr.textColor );
   mFontTranspSpinBox->setValue( lyr.textTransp );
-  comboBlendMode->setBlendMode( QgsMapRenderer::getBlendModeEnum( lyr.blendMode ) );
+  comboBlendMode->setBlendMode( lyr.blendMode );
 
   mFontWordSpacingSpinBox->setValue( lyr.textFont.wordSpacing() );
   mFontLetterSpacingSpinBox->setValue( lyr.textFont.letterSpacing() );
@@ -336,7 +336,7 @@ QgsLabelingGui::QgsLabelingGui( QgsPalLabeling* lbl, QgsVectorLayer* layer, QgsM
   connect( mShapeTranspSlider, SIGNAL( valueChanged( int ) ), mShapeTranspSpinBox, SLOT( setValue( int ) ) );
   connect( mShapeTranspSpinBox, SIGNAL( valueChanged( int ) ), mShapeTranspSlider, SLOT( setValue( int ) ) );
   mShapeTranspSpinBox->setValue( lyr.shapeTransparency );
-  mShapeBlendCmbBx->setBlendMode( QgsMapRenderer::getBlendModeEnum( lyr.shapeBlendMode ) );
+  mShapeBlendCmbBx->setBlendMode( lyr.shapeBlendMode );
 
   mLoadSvgParams = false;
   on_mShapeTypeCmbBx_currentIndexChanged( lyr.shapeType ); // force update of shape background gui
@@ -346,8 +346,27 @@ QgsLabelingGui::QgsLabelingGui( QgsPalLabeling* lbl, QgsVectorLayer* layer, QgsM
   mShapeCollisionsChkBx->setVisible( false ); // until implemented
 
   // drop shadow
-  mShadowGrpBx->setVisible( false ); // until implemented
+  mShadowGrpBx->setChecked( lyr.shadowDraw );
+  mShadowUnderCmbBx->setCurrentIndex( lyr.shadowUnder );
 
+  connect( mShadowOffsetAngleDial, SIGNAL( valueChanged( int ) ), mShadowOffsetAngleSpnBx, SLOT( setValue( int ) ) );
+  connect( mShadowOffsetAngleSpnBx, SIGNAL( valueChanged( int ) ), mShadowOffsetAngleDial, SLOT( setValue( int ) ) );
+  mShadowOffsetAngleSpnBx->setValue( lyr.shadowOffsetAngle );
+  mShadowOffsetSpnBx->setValue( lyr.shadowOffsetDist );
+  mShadowOffsetUnitsCmbBx->setCurrentIndex( lyr.shadowOffsetUnits - 1 );
+  mShadowOffsetGlobalChkBx->setChecked( lyr.shadowOffsetGlobal );
+
+  mShadowRadiusDblSpnBx->setValue( lyr.shadowRadius );
+  mShadowRadiusUnitsCmbBx->setCurrentIndex( lyr.shadowRadiusUnits - 1 );
+  mShadowRadiusAlphaChkBx->setChecked( lyr.shadowRadiusAlphaOnly );
+
+  connect( mShadowTranspSlider, SIGNAL( valueChanged( int ) ), mShadowTranspSpnBx, SLOT( setValue( int ) ) );
+  connect( mShadowTranspSpnBx, SIGNAL( valueChanged( int ) ), mShadowTranspSlider, SLOT( setValue( int ) ) );
+  mShadowTranspSpnBx->setValue( lyr.shadowTransparency );
+  mShadowScaleSpnBx->setValue( lyr.shadowScale );
+
+  mShadowColorBtn->setColor( lyr.shadowColor );
+  mShadowBlendCmbBx->setBlendMode( lyr.shadowBlendMode );
 
   updateUi();
 
@@ -498,7 +517,7 @@ QgsPalLayerSettings QgsLabelingGui::layerSettings()
   lyr.textFont = mRefFont;
   lyr.textNamedStyle = mFontStyleComboBox->currentText();
   lyr.textTransp = mFontTranspSpinBox->value();
-  lyr.blendMode = QgsMapRenderer::getCompositionMode(( QgsMapRenderer::BlendMode )comboBlendMode->blendMode() );
+  lyr.blendMode = comboBlendMode->blendMode();
   lyr.previewBkgrdColor = mPreviewBackgroundBtn->color();
   lyr.enabled = chkEnableLabeling->isChecked();
   lyr.priority = sliderPriority->value();
@@ -523,7 +542,7 @@ QgsPalLayerSettings QgsLabelingGui::layerSettings()
     lyr.bufferSizeInMapUnits = ( mBufferUnitComboBox->currentIndex() == 1 );
     lyr.bufferJoinStyle = mBufferJoinStyleComboBox->penJoinStyle();
     lyr.bufferNoFill = !mBufferTranspFillChbx->isChecked();
-    lyr.bufferBlendMode = QgsMapRenderer::getCompositionMode(( QgsMapRenderer::BlendMode )comboBufferBlendMode->blendMode() );
+    lyr.bufferBlendMode = comboBufferBlendMode->blendMode();
   }
   else
   {
@@ -551,8 +570,22 @@ QgsPalLayerSettings QgsLabelingGui::layerSettings()
   lyr.shapeBorderWidthUnits = ( QgsPalLayerSettings::SizeUnit )( mShapeBorderWidthUnitsCmbBx->currentIndex() + 1 );
   lyr.shapeJoinStyle = mShapePenStyleCmbBx->penJoinStyle();
   lyr.shapeTransparency = mShapeTranspSpinBox->value();
-  lyr.shapeBlendMode = QgsMapRenderer::getCompositionMode(( QgsMapRenderer::BlendMode )mShapeBlendCmbBx->blendMode() );
+  lyr.shapeBlendMode = mShapeBlendCmbBx->blendMode();
 
+  // drop shadow
+  lyr.shadowDraw = mShadowGrpBx->isChecked();
+  lyr.shadowUnder = ( QgsPalLayerSettings::ShadowType )mShadowUnderCmbBx->currentIndex();
+  lyr.shadowOffsetAngle = mShadowOffsetAngleSpnBx->value();
+  lyr.shadowOffsetDist = mShadowOffsetSpnBx->value();
+  lyr.shadowOffsetUnits = ( QgsPalLayerSettings::SizeUnit )( mShadowOffsetUnitsCmbBx->currentIndex() + 1 );
+  lyr.shadowOffsetGlobal = mShadowOffsetGlobalChkBx->isChecked();
+  lyr.shadowRadius = mShadowRadiusDblSpnBx->value();
+  lyr.shadowRadiusUnits = ( QgsPalLayerSettings::SizeUnit )( mShadowRadiusUnitsCmbBx->currentIndex() + 1 );
+  lyr.shadowRadiusAlphaOnly = mShadowRadiusAlphaChkBx->isChecked();
+  lyr.shadowTransparency = mShadowTranspSpnBx->value();
+  lyr.shadowScale = mShadowScaleSpnBx->value();
+  lyr.shadowColor = mShadowColorBtn->color();
+  lyr.shadowBlendMode = mShadowBlendCmbBx->blendMode();
 
   if ( chkFormattedNumbers->isChecked() )
   {

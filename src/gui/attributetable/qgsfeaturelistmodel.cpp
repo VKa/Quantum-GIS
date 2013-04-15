@@ -89,7 +89,7 @@ QVariant QgsFeatureListModel::data( const QModelIndex &index, int role ) const
     return QVariant::fromValue( featInfo );
   }
 
-  return QVariant();
+  return sourceModel()->data( mapToSource( index ), role );
 }
 
 Qt::ItemFlags QgsFeatureListModel::flags( const QModelIndex &index ) const
@@ -100,11 +100,6 @@ Qt::ItemFlags QgsFeatureListModel::flags( const QModelIndex &index ) const
 QgsAttributeTableModel* QgsFeatureListModel::masterModel()
 {
   return mFilterModel->masterModel();
-}
-
-QItemSelectionModel* QgsFeatureListModel::masterSelection()
-{
-  return mFilterModel->masterSelection();
 }
 
 bool QgsFeatureListModel::setDisplayExpression( const QString expression )
@@ -237,4 +232,14 @@ int QgsFeatureListModel::rowCount( const QModelIndex& parent ) const
 {
   Q_UNUSED( parent )
   return sourceModel()->rowCount();
+}
+
+QModelIndex QgsFeatureListModel::fidToIndex( QgsFeatureId fid )
+{
+  return mapFromMaster( masterModel()->idToIndex( fid ) );
+}
+
+QModelIndexList QgsFeatureListModel::fidToIndexList( QgsFeatureId fid )
+{
+  return QModelIndexList() << fidToIndex( fid );
 }

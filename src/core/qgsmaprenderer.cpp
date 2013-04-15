@@ -29,6 +29,7 @@
 #include "qgscentralpointpositionmanager.h"
 #include "qgsoverlayobjectpositionmanager.h"
 #include "qgspalobjectpositionmanager.h"
+#include "qgsproject.h"
 #include "qgsvectorlayer.h"
 #include "qgsvectoroverlay.h"
 
@@ -281,6 +282,14 @@ void QgsMapRenderer::render( QPainter* painter, double* forceWidthScale )
   //so must be false at every new render operation
   mRenderContext.setRenderingStopped( false );
 
+  // set selection color
+  QgsProject* prj = QgsProject::instance();
+  int myRed = prj->readNumEntry( "Gui", "/SelectionColorRedPart", 255 );
+  int myGreen = prj->readNumEntry( "Gui", "/SelectionColorGreenPart", 255 );
+  int myBlue = prj->readNumEntry( "Gui", "/SelectionColorBluePart", 0 );
+  int myAlpha = prj->readNumEntry( "Gui", "/SelectionColorAlphaPart", 255 );
+  mRenderContext.setSelectionColor( QColor( myRed, myGreen, myBlue, myAlpha ) );
+
   //calculate scale factor
   //use the specified dpi and not those from the paint device
   //because sometimes QPainter units are in a local coord sys (e.g. in case of QGraphicsScene)
@@ -388,7 +397,7 @@ void QgsMapRenderer::render( QPainter* painter, double* forceWidthScale )
 
     // Set the QPainter composition mode so that this layer is rendered using
     // the desired blending mode
-    mypContextPainter->setCompositionMode( getCompositionMode( ml->blendMode() ) );
+    mypContextPainter->setCompositionMode( ml->blendMode() );
 
     if ( !ml->hasScaleBasedVisibility() || ( ml->minimumScale() <= mScale && mScale < ml->maximumScale() ) || mOverview )
     {

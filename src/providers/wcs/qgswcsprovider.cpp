@@ -28,6 +28,7 @@
 #include "qgswcsprovider.h"
 #include "qgscoordinatetransform.h"
 #include "qgsdatasourceuri.h"
+#include "qgsrasteridentifyresult.h"
 #include "qgsrasterlayer.h"
 #include "qgsrectangle.h"
 #include "qgscoordinatereferencesystem.h"
@@ -71,6 +72,7 @@
 
 #define ERR(message) QGS_ERROR_MESSAGE(message,"WCS provider")
 #define SRVERR(message) QGS_ERROR_MESSAGE(message,"WCS server")
+#define ERROR(message) QgsError(message,"WCS provider")
 
 static QString WCS_KEY = "wcs";
 static QString WCS_DESCRIPTION = "OGC Web Coverage Service version 1.0/1.1 data provider";
@@ -316,6 +318,8 @@ QgsWcsProvider::QgsWcsProvider( QString const &uri )
     // disabled by user, in that case we need another value to be used for nodata
     // (for reprojection for example) -> always internaly represent as wider type
     // with mInternalNoDataValue in reserve.
+    // No retyping, no internal values for now
+#if 0
     int myInternalGdalDataType = myGdalDataType;
     double myInternalNoDataValue;
     switch ( srcDataType( i ) )
@@ -348,12 +352,14 @@ QgsWcsProvider::QgsWcsProvider( QString const &uri )
     mGdalDataType.append( myInternalGdalDataType );
     mInternalNoDataValue.append( myInternalNoDataValue );
     QgsDebugMsg( QString( "mInternalNoDataValue[%1] = %2" ).arg( i - 1 ).arg( mInternalNoDataValue[i-1] ) );
+#endif
+    mGdalDataType.append( myGdalDataType );
 
     // TODO: what to do if null values from DescribeCoverage differ?
-    if ( !mCoverageSummary.nullValues.contains( myNoDataValue ) )
-    {
-      QgsDebugMsg( QString( "noDataValue %1 is missing in nullValues from CoverageDescription" ).arg( myNoDataValue ) );
-    }
+    //if ( !mCoverageSummary.nullValues.contains( myNoDataValue ) )
+    //{
+    //  QgsDebugMsg( QString( "noDataValue %1 is missing in nullValues from CoverageDescription" ).arg( myNoDataValue ) );
+    //}
 
     QgsDebugMsg( QString( "mSrcGdalDataType[%1] = %2" ).arg( i - 1 ).arg( mSrcGdalDataType[i-1] ) );
     QgsDebugMsg( QString( "mGdalDataType[%1] = %2" ).arg( i - 1 ).arg( mGdalDataType[i-1] ) );
@@ -564,12 +570,12 @@ void QgsWcsProvider::readBlock( int bandNo, QgsRectangle  const & viewExtent, in
     // TODO: check also rotated
     if ( cacheCrs.isValid() && !mFixRotate )
     {
-      // using doubleNear is too precise, example accetable difference:
+      // using qgsDoubleNear is too precise, example accetable difference:
       // 179.9999999306699863 x 179.9999999306700431
-      if ( !doubleNearSig( cacheExtent.xMinimum(), viewExtent.xMinimum(), 10 ) ||
-           !doubleNearSig( cacheExtent.yMinimum(), viewExtent.yMinimum(), 10 ) ||
-           !doubleNearSig( cacheExtent.xMaximum(), viewExtent.xMaximum(), 10 ) ||
-           !doubleNearSig( cacheExtent.yMaximum(), viewExtent.yMaximum(), 10 ) )
+      if ( !qgsDoubleNearSig( cacheExtent.xMinimum(), viewExtent.xMinimum(), 10 ) ||
+           !qgsDoubleNearSig( cacheExtent.yMinimum(), viewExtent.yMinimum(), 10 ) ||
+           !qgsDoubleNearSig( cacheExtent.xMaximum(), viewExtent.xMaximum(), 10 ) ||
+           !qgsDoubleNearSig( cacheExtent.yMaximum(), viewExtent.yMaximum(), 10 ) )
       {
         QgsDebugMsg( "cacheExtent and viewExtent differ" );
         QgsMessageLog::logMessage( tr( "Received coverage has wrong extent %1 (expected %2)" ).arg( cacheExtent.toString() ).arg( viewExtent.toString() ), tr( "WCS" ) );
@@ -1392,10 +1398,10 @@ bool QgsWcsProvider::calculateExtent()
     // extent check for rotated, TODO: verify
     if ( cacheCrs.isValid() && !mFixRotate )
     {
-      if ( !doubleNearSig( cacheExtent.xMinimum(), mCoverageExtent.xMinimum(), 10 ) ||
-           !doubleNearSig( cacheExtent.yMinimum(), mCoverageExtent.yMinimum(), 10 ) ||
-           !doubleNearSig( cacheExtent.xMaximum(), mCoverageExtent.xMaximum(), 10 ) ||
-           !doubleNearSig( cacheExtent.yMaximum(), mCoverageExtent.yMaximum(), 10 ) )
+      if ( !qgsDoubleNearSig( cacheExtent.xMinimum(), mCoverageExtent.xMinimum(), 10 ) ||
+           !qgsDoubleNearSig( cacheExtent.yMinimum(), mCoverageExtent.yMinimum(), 10 ) ||
+           !qgsDoubleNearSig( cacheExtent.xMaximum(), mCoverageExtent.xMaximum(), 10 ) ||
+           !qgsDoubleNearSig( cacheExtent.yMaximum(), mCoverageExtent.yMaximum(), 10 ) )
       {
         QgsDebugMsg( "cacheExtent and mCoverageExtent differ, mCoverageExtent cut to cacheExtent" );
         mCoverageExtent = cacheExtent;
@@ -1593,23 +1599,26 @@ QString QgsWcsProvider:: htmlRow( const QString &text1, const QString &text2 )
   return "<tr>" + htmlCell( text1 ) +  htmlCell( text2 ) + "</tr>";
 }
 
-QMap<int, QVariant> QgsWcsProvider::identify( const QgsPoint & thePoint, IdentifyFormat theFormat, const QgsRectangle &theExtent, int theWidth, int theHeight )
+QgsRasterIdentifyResult QgsWcsProvider::identify( const QgsPoint & thePoint, IdentifyFormat theFormat, const QgsRectangle &theExtent, int theWidth, int theHeight )
 {
   QgsDebugMsg( QString( "thePoint =  %1 %2" ).arg( thePoint.x(), 0, 'g', 10 ).arg( thePoint.y(), 0, 'g', 10 ) );
   QgsDebugMsg( QString( "theWidth = %1 theHeight = %2" ).arg( theWidth ).arg( theHeight ) );
   QgsDebugMsg( "theExtent = " + theExtent.toString() );
   QMap<int, QVariant> results;
 
-  if ( theFormat != IdentifyFormatValue ) return results;
+  if ( theFormat != IdentifyFormatValue )
+  {
+    return QgsRasterIdentifyResult( ERROR( tr( "Format not supported" ) ) );
+  }
 
   if ( !extent().contains( thePoint ) )
   {
     // Outside the raster
     for ( int i = 1; i <= bandCount(); i++ )
     {
-      results.insert( i, noDataValue( i ) );
+      results.insert( i, QVariant() );
     }
-    return results;
+    return QgsRasterIdentifyResult( IdentifyFormatValue, results );
   }
 
   QgsRectangle myExtent = theExtent;
@@ -1659,7 +1668,7 @@ QMap<int, QVariant> QgsWcsProvider::identify( const QgsPoint & thePoint, Identif
   if ( !mCachedGdalDataset ||
        !mCachedViewExtent.contains( thePoint ) )
   {
-    return results; // should not happen
+    return QgsRasterIdentifyResult( ERROR( tr( "Read data error" ) ) );
   }
 
   double x = thePoint.x();
@@ -1686,21 +1695,23 @@ QMap<int, QVariant> QgsWcsProvider::identify( const QgsPoint & thePoint, Identif
     if ( err != CPLE_None )
     {
       QgsLogger::warning( "RasterIO error: " + QString::fromUtf8( CPLGetLastErrorMsg() ) );
-      results.clear();
-      return results;
+      return QgsRasterIdentifyResult( ERROR( tr( "RasterIO error: " ) + QString::fromUtf8( CPLGetLastErrorMsg() ) ) );
     }
 
-    // Apply user no data
-    QList<QgsRasterBlock::Range> myNoDataRangeList = userNoDataValue( i );
-    if ( QgsRasterBlock::valueInRange( value, myNoDataRangeList ) )
+    // Apply no data and user no data
+    if (( srcHasNoDataValue( i ) && useSrcNoDataValue( i ) &&
+          ( qIsNaN( value ) || qgsDoubleNear( value, srcNoDataValue( i ) ) ) ) ||
+        ( QgsRasterRange::contains( value, userNoDataValue( i ) ) ) )
     {
-      value = noDataValue( i );
+      results.insert( i, QVariant() );
     }
-
-    results.insert( i, value );
+    else
+    {
+      results.insert( i, value );
+    }
   }
 
-  return results;
+  return QgsRasterIdentifyResult( IdentifyFormatValue, results );
 }
 
 QgsCoordinateReferenceSystem QgsWcsProvider::crs()

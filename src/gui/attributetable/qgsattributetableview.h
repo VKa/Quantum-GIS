@@ -24,7 +24,8 @@
 class QgsAttributeTableModel;
 class QgsAttributeTableFilterModel;
 class QgsVectorLayerCache;
-
+class QgsFeatureSelectionModel;
+class QgsAttributeTableDelegate;
 class QgsMapCanvas;
 class QgsVectorLayer;
 class QMenu;
@@ -49,12 +50,6 @@ class GUI_EXPORT QgsAttributeTableView : public QTableView
     virtual void setModel( QgsAttributeTableFilterModel* filterModel );
 
     /**
-     * The selection used for synchronisation with other views.
-     *
-     */
-    QItemSelectionModel* masterSelection();
-
-    /**
      * Autocreates the models
      * @param layerCache The @link QgsVectorLayerCache @endlink to use ( as backend )
      * @param canvas     The @link QgsMapCanvas @endlink to use ( for the currently visible features filter )
@@ -62,6 +57,18 @@ class GUI_EXPORT QgsAttributeTableView : public QTableView
      * @deprecated
      */
     void setCanvasAndLayerCache( QgsMapCanvas *canvas, QgsVectorLayerCache *layerCache );
+
+    /**
+     * This event filter is installed on the verticalHeader to intercept mouse press and release
+     * events. These are used to disable / enable live synchronisation with the map canvas selection
+     * which can be slow due to recurring canvas repaints. Updating the
+     *
+     * @param object The object which is the target of the event.
+     * @param event  The intercepted event
+     *
+     * @return Returns always false, so the event gets processed
+     */
+    virtual bool eventFilter( QObject* object, QEvent* event );
 
   protected:
     /**
@@ -124,36 +131,24 @@ class GUI_EXPORT QgsAttributeTableView : public QTableView
 
     void finished();
 
-    /**
-     * @brief
-     * Is emitted, after the selection has been changed.
-     *
-     * @param selectedFeatures  A list of currently selected features.
-     */
-    void selectionChangeFinished( const QgsFeatureIds &selectedFeatures );
-
   public slots:
-    /**
-     * Is triggered after a mouse release event on the vertical header.
-     * Emits a selectionChangeFinished() signal, so the underlying sort filter
-     * can adapt to the current selection without disturbing the users current interaction.
-     *
-     * @param logicalIndex The section's logical index
-     */
-    void onVerticalHeaderSectionClicked( int logicalIndex );
-    void onFilterAboutToBeInvalidated();
-    void onFilterInvalidated();
-    void onSelectionChanged( const QItemSelection& selected, const QItemSelection& deselected );
-    void onMasterSelectionChanged( const QItemSelection& selected, const QItemSelection& deselected );
+    void repaintRequested( QModelIndexList indexes );
+    void repaintRequested();
     virtual void selectAll();
+    virtual void selectRow( int row );
+    virtual void _q_selectRow( int row );
 
   private:
+    void selectRow( int row, bool anchor );
     QgsAttributeTableModel* mMasterModel;
     QgsAttributeTableFilterModel* mFilterModel;
+    QgsFeatureSelectionModel* mFeatureSelectionModel;
+    QgsAttributeTableDelegate* mTableDelegate;
     QAbstractItemModel* mModel; // Most likely the filter model
     QMenu *mActionPopup;
     QgsVectorLayerCache* mLayerCache;
-    QItemSelectionModel* mMasterSelection;
+    int mRowSectionAnchor;
+    QItemSelectionModel::SelectionFlag mCtrlDragSelectionFlag;
 };
 
 #endif

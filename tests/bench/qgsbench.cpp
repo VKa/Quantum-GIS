@@ -34,6 +34,9 @@
 #include <QTextStream>
 #include <QTime>
 
+#ifndef QGSVERSION
+#include "qgsversion.h"
+#endif
 #include "qgsbench.h"
 #include "qgslogger.h"
 #include "qgsmaplayerregistry.h"
@@ -208,6 +211,7 @@ void QgsBench::render()
   }
 
   mLogMap.insert( "iterations", mTimes.size() );
+  mLogMap.insert( "revision", QGSVERSION );
 
   // Calc stats: user, sys, total
   double min[4], max[4];
@@ -295,7 +299,7 @@ QString QgsBench::serialize( QMap<QString, QVariant> theMap, int level )
         list.append( space2 + "\"" + i.key() + "\": " + QString( "%1" ).arg( i.value().toDouble(), 0, 'f', 3 ) );
         break;
       case QMetaType::QString:
-        list.append( space2 + "\"" + i.key() + "\": \"" + i.value().toString() + "\"" );
+        list.append( space2 + "\"" + i.key() + "\": \"" + i.value().toString().replace( "\\", "\\\\" ).replace( "\"", "\\\"" ) + "\"" );
         break;
         //case QMetaType::QMap: QMap is not in QMetaType
       default:

@@ -104,7 +104,6 @@ set GRASS_PREFIX=%O4W_ROOT%/apps/grass/grass-%GRASS_VERSION%
 
 cmake -G "Visual Studio 9 2008" ^
 	-D PEDANTIC=TRUE ^
-	-D WITH_SPATIALITE=TRUE ^
 	-D WITH_QSPATIALITE=TRUE ^
 	-D WITH_MAPSERVER=TRUE ^
 	-D WITH_GLOBE=TRUE ^
@@ -205,7 +204,7 @@ tar -C %OSGEO4W_ROOT% -cjf %PACKAGENAME%-common-%VERSION%-%PACKAGE%.tar.bz2 ^
 	"apps/%PACKAGENAME%/resources/qgis.db" ^
 	"apps/%PACKAGENAME%/resources/spatialite.db" ^
 	"apps/%PACKAGENAME%/resources/srs.db" ^
-	"apps/%PACKAGENAME%/resources/symbology-ng-style.xml" ^
+	"apps/%PACKAGENAME%/resources/symbology-ng-style.db" ^
 	"apps/%PACKAGENAME%/svg/" ^
 	"apps/%PACKAGENAME%/cpt-city-qgis-min/" ^
 	"apps/%PACKAGENAME%/crssync.exe" ^

@@ -8,6 +8,7 @@
 
 class QgsVectorLayer;
 class QgsFeatureListModel;
+class QgsFeatureSelectionModel;
 class QPosition;
 
 class QgsFeatureListViewDelegate : public QItemDelegate
@@ -19,14 +20,17 @@ class QgsFeatureListViewDelegate : public QItemDelegate
 
     enum Element
     {
-      EditButtonElement,
-      TextElement
+      EditElement,
+      SelectionElement
     };
 
     explicit QgsFeatureListViewDelegate( QgsFeatureListModel* listModel, QObject *parent = 0 );
 
     void setEditSelectionModel( QItemSelectionModel* editSelectionModel );
+
     Element positionToElement( const QPoint& pos );
+
+    void setFeatureSelectionModel( QgsFeatureSelectionModel* featureSelectionModel );
 
   signals:
     void editButtonClicked( QModelIndex& index );
@@ -38,6 +42,7 @@ class QgsFeatureListViewDelegate : public QItemDelegate
     virtual void paint( QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index ) const;
 
   private:
+    QgsFeatureSelectionModel* mFeatureSelectionModel;
     QItemSelectionModel* mEditSelectionModel;
     QgsFeatureListModel* mListModel;
 };

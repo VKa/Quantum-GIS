@@ -16,8 +16,6 @@
 *                                                                         *
 ***************************************************************************
 """
-from sextante.tests.TestData import points
-import traceback
 
 __author__ = 'Victor Olaya'
 __date__ = 'August 2012'
@@ -26,9 +24,13 @@ __copyright__ = '(C) 2012, Victor Olaya'
 __revision__ = '$Format:%H$'
 
 import os
-from sextante.core.SextanteUtils import SextanteUtils, mkdir
+from qgis.core import QgsApplication
+from PyQt4.QtCore import *
+import traceback
 import subprocess
+from sextante.tests.TestData import points
 from sextante.core.SextanteConfig import SextanteConfig
+from sextante.core.SextanteUtils import SextanteUtils, mkdir
 from sextante.core.SextanteLog import SextanteLog
 import stat
 import shutil
@@ -42,7 +44,6 @@ class GrassUtils:
     GRASS_REGION_YMAX = "GRASS_REGION_YMAX"
     GRASS_REGION_CELLSIZE = "GRASS_REGION_CELLSIZE"
     GRASS_FOLDER = "GRASS_FOLDER"
-    GRASS_HELP_FOLDER = "GRASS_HELP_FOLDER"
     GRASS_WIN_SHELL = "GRASS_WIN_SHELL"
     GRASS_LOG_COMMANDS = "GRASS_LOG_COMMANDS"
     GRASS_LOG_CONSOLE = "GRASS_LOG_CONSOLE"
@@ -86,22 +87,9 @@ class GrassUtils:
                         folder = folder + os.sep + subfolder
                         break
             else:
-                return "/Applications/GRASS-6.4.app/Contents/MacOS"
-
-        return folder
-
-    @staticmethod
-    def grassHelpPath():
-        folder = SextanteConfig.getSetting(GrassUtils.GRASS_HELP_FOLDER)
-        if folder == None or folder == "":
-            if SextanteUtils.isWindows():
-                testfolders = [os.path.join(GrassUtils.grassPath(), "docs", "html")]
-            else:
-                testfolders = ['/usr/share/doc/grass-doc/html']
-            for f in testfolders:
-                if os.path.exists(f):
-                    folder = f
-                    break
+                folder = os.path.join(str(QgsApplication.prefixPath()), "grass")
+                if not os.path.isdir(folder):
+                    folder = "/Applications/GRASS-6.4.app/Contents/MacOS"
 
         return folder
 
@@ -331,20 +319,20 @@ class GrassUtils:
             path = GrassUtils.grassPath()
             if path == "":
                 return "GRASS folder is not configured.\nPlease configure it before running SAGA algorithms."
-            cmdpath = os.path.join(path, "bin\r.out.exe")
+            cmdpath = os.path.join(path, "bin","r.out.gdal.exe")
             if not os.path.exists(cmdpath):
                 return ("The specified GRASS folder does not contain a valid set of GRASS modules.\n"
                         + "Please, go to the SEXTANTE settings dialog, and check that the GRASS\n"
                         + "folder is correctly configured")
 
+        settings = QSettings()
+        GRASS_INSTALLED = "/SextanteQGIS/GrassInstalled"
         if not ignoreRegistrySettings:
-            GRASS_INSTALLED = "/SextanteQGIS/GrassInstalled"
-            settings = QSettings()
             if settings.contains(GRASS_INSTALLED):
                 return
 
         try:
-            from sextante.core.Sextante import runalg
+            from sextante import runalg
             result = runalg("grass:v.voronoi", points(),False,False,"270778.60198,270855.745301,4458921.97814,4458983.8488",-1,0.0001,None)
             if not os.path.exists(result['output']):
                 return "It seems that GRASS is not correctly installed and configured in your system.\nPlease install it before running GRASS algorithms."

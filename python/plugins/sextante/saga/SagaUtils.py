@@ -33,9 +33,6 @@ from sextante.core.SextanteConfig import SextanteConfig
 from sextante.core.SextanteLog import SextanteLog
 from qgis.core import *
 from PyQt4.QtCore import *
-from sextante.core.SextanteVectorWriter import SextanteVectorWriter
-from sextante.core.QGisLayers import QGisLayers
-
 
 class SagaUtils:
 
@@ -67,6 +64,14 @@ class SagaUtils:
         if folder == None:
             folder =""
 
+        if SextanteUtils.isMac():
+            testfolder = os.path.join(str(QgsApplication.prefixPath()), "bin")
+            if os.path.exists(os.path.join(testfolder, "saga_cmd")):
+                folder = testfolder
+            else:
+                testfolder = "/usr/local/bin"
+                if os.path.exists(os.path.join(testfolder, "saga_cmd")):
+                    folder = testfolder
         return folder
 
     @staticmethod
@@ -79,8 +84,11 @@ class SagaUtils:
         fout = open(SagaUtils.sagaBatchJobFilename(), "w")
         if SextanteUtils.isWindows():
             fout.write("set SAGA=" + SagaUtils.sagaPath() + "\n");
-            fout.write("set SAGA_MLB=" + SagaUtils.sagaPath()+ os.sep + "modules" + "\n");
+            fout.write("set SAGA_MLB=" + SagaUtils.sagaPath() + os.sep + "modules" + "\n");
             fout.write("PATH=PATH;%SAGA%;%SAGA_MLB%\n");
+        elif SextanteUtils.isMac():
+            fout.write("export SAGA_MLB=" + SagaUtils.sagaPath() + "/../lib/saga\n");
+            fout.write("export PATH=" + SagaUtils.sagaPath() + ":$PATH\n");
         else:
             pass
         for command in commands:
@@ -127,14 +135,14 @@ class SagaUtils:
                         + "Please, go to the SEXTANTE settings dialog, and check that the SAGA\n"
                         + "folder is correctly configured")
 
+        settings = QSettings()
+        SAGA_INSTALLED = "/SextanteQGIS/SagaInstalled"
         if not ignoreRegistrySettings:
-            SAGA_INSTALLED = "/SextanteQGIS/SagaInstalled"
-            settings = QSettings()
             if settings.contains(SAGA_INSTALLED):
                 return
 
         try:
-            from sextante.core.Sextante import runalg
+            from sextante import runalg
             result = runalg("saga:thiessenpolygons", points(), None)
             if not os.path.exists(result['POLYGONS']):
                 return "It seems that SAGA is not correctly installed in your system.\nPlease install it before running SAGA algorithms."

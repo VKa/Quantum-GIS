@@ -59,7 +59,6 @@ void QgsSimplifyDialog::setRange( int minValue, int maxValue )
 
   horizontalSlider->setMinimum(( minValue - 1 < 0 ? 0 : minValue - 1 ) );// -1 for count with minimum tolerance end caused by double imprecision
   horizontalSlider->setMaximum( maxValue );
-  qDebug()
   spinBox->setRange( horizontalSlider->minimum(), horizontalSlider->maximum() );
 }
 
@@ -217,7 +216,7 @@ bool QgsMapToolSimplify::calculateSliderBoudaries()
         bottomFound = true;
         highTol = tol;
         tol = ( highTol + lowTol ) / 2;
-        if ( doubleNear( highTol, lowTol, 0.0001 ) ) // without 0.0001 tolerance sometimes an endless loop in epsg:4326
+        if ( qgsDoubleNear( highTol, lowTol, 0.0001 ) ) // without 0.0001 tolerance sometimes an endless loop in epsg:4326
         { //solving problem that two points are in same distance from  line, so they will be both excluded at same time
           //so some time more than required count of vertices can stay
           found = true;
@@ -231,7 +230,7 @@ bool QgsMapToolSimplify::calculateSliderBoudaries()
       {
         lowTol = tol;
         tol = ( highTol + lowTol ) / 2;
-        if ( doubleNear( highTol, lowTol, 0.0001 ) ) // without 0.0001 tolerance sometimes an endless loop in epsg:4326
+        if ( qgsDoubleNear( highTol, lowTol, 0.0001 ) ) // without 0.0001 tolerance sometimes an endless loop in epsg:4326
         { //solving problem that two points are in same distance from  line, so they will be both excluded at same time
           //so some time more than required count of vertices can stay
           found = true;

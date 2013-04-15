@@ -96,6 +96,7 @@ class SagaAlgorithm(GeoAlgorithm):
             self.cmdname = tokens[1]
         else:
             self.cmdname = self.name
+            self.name = self.name[0].upper() + self.name[1:].lower()
         line = lines.readline().strip("\n").strip()
         self.undecoratedGroup = line
         self.group = SagaGroupNameDecorator.getDecoratedName(self.undecoratedGroup)
@@ -233,7 +234,7 @@ class SagaAlgorithm(GeoAlgorithm):
                             raise GeoAlgorithmExecutionException("Unsupported file format")
 
         #2: set parameters and outputs
-        if SextanteUtils.isWindows():
+        if SextanteUtils.isWindows() or SextanteUtils.isMac():
             command = self.undecoratedGroup  + " \"" + self.cmdname + "\""
         else:
             command = "lib" + self.undecoratedGroup  + " \"" + self.cmdname + "\""
@@ -300,7 +301,7 @@ class SagaAlgorithm(GeoAlgorithm):
             if isinstance(out, OutputRaster):
                 filename = out.getCompatibleFileName(self)
                 filename2 = SextanteUtils.tempFolder() + os.sep + os.path.basename(filename) + ".sgrd"
-                if SextanteUtils.isWindows():
+                if SextanteUtils.isWindows() or SextanteUtils.isMac():
                     commands.append("io_gdal 1 -GRIDS \"" + filename2 + "\" -FORMAT 1 -TYPE 0 -FILE \"" + filename + "\"");
                 else:
                     commands.append("libio_gdal 1 -GRIDS \"" + filename2 + "\" -FORMAT 1 -TYPE 0 -FILE \"" + filename + "\"");
@@ -335,7 +336,7 @@ class SagaAlgorithm(GeoAlgorithm):
             inputFilename = layer
         destFilename = SextanteUtils.getTempFilename("sgrd")
         self.exportedLayers[layer]= destFilename
-        if SextanteUtils.isWindows():
+        if SextanteUtils.isWindows() or SextanteUtils.isMac():
             s = "grid_tools \"Resampling\" -INPUT \"" + inputFilename + "\" -TARGET 0 -SCALE_UP_METHOD 4 -SCALE_DOWN_METHOD 4 -USER_XMIN " +\
                 str(self.xmin) + " -USER_XMAX " + str(self.xmax) + " -USER_YMIN " + str(self.ymin) + " -USER_YMAX "  + str(self.ymax) +\
                 " -USER_SIZE " + str(self.cellsize) + " -USER_GRID \"" + destFilename + "\""
@@ -349,14 +350,19 @@ class SagaAlgorithm(GeoAlgorithm):
     def exportRasterLayer(self, layer):
         destFilename = SextanteUtils.getTempFilenameInTempFolder(os.path.basename(layer)[0:5] + ".sgrd")
         self.exportedLayers[layer]= destFilename
-        if SextanteUtils.isWindows():
+        if SextanteUtils.isWindows() or SextanteUtils.isMac():
             return "io_gdal 0 -GRIDS \"" + destFilename + "\" -FILES \"" + layer+"\""
         else:
             return "libio_gdal 0 -GRIDS \"" + destFilename + "\" -FILES \"" + layer + "\""
 
 
     def checkBeforeOpeningParametersDialog(self):
-        return SagaUtils.checkSagaIsInstalled()
+        msg = SagaUtils.checkSagaIsInstalled()
+        if msg is not None:
+            html = ("<p>This algorithm requires SAGA to be run."
+            "Unfortunately, it seems that SAGA is not installed in your system, or it is not correctly configured to be used from QGIS</p>")
+            html += '<p><a href= "http://docs.qgis.org/html/en/docs/user_manual/sextante/3rdParty.html">Click here</a> to know more about how to install and configure SAGA to be used with SEXTANTE</p>'
+            return html
 
 
     def checkParameterValuesBeforeExecuting(self):

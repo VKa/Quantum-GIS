@@ -59,15 +59,13 @@ checkDock::checkDock( QgisInterface* qIface, QWidget* parent )
   mErrorTableView->verticalHeader()->setDefaultSectionSize( 20 );
 
   mLayerRegistry = QgsMapLayerRegistry::instance();
-  mConfigureDialog = new rulesDialog( mLayerRegistry->mapLayers().keys(), mTest->testMap(), qIface, parent );
-  mTestTable = mConfigureDialog->testTable();
+  mConfigureDialog = new rulesDialog( mTest->testMap(), qIface, parent );
+  mTestTable = mConfigureDialog->rulesTable();
 
   mValidateExtentButton->setIcon( QIcon( ":/topology/validateExtent.png" ) );
   mValidateAllButton->setIcon( QIcon( ":/topology/validateAll.png" ) );
   mConfigureButton->setIcon( QIcon( ":/topology/configureRules.png" ) );
 
-
-// mQgisApp = QgisApp::instance();
   QgsMapCanvas* canvas = qIface->mapCanvas();// mQgisApp->mapCanvas();
   mRBFeature1 = new QgsRubberBand( canvas );
   mRBFeature2 = new QgsRubberBand( canvas );
@@ -94,30 +92,22 @@ checkDock::checkDock( QgisInterface* qIface, QWidget* parent )
   connect( mFixButton, SIGNAL( clicked() ), this, SLOT( fix() ) );
   connect( mErrorTableView, SIGNAL( clicked( const QModelIndex & ) ), this, SLOT( errorListClicked( const QModelIndex & ) ) );
 
-  connect( mLayerRegistry, SIGNAL( layerWasAdded( QgsMapLayer* ) ), mConfigureDialog, SLOT( addLayer( QgsMapLayer* ) ) );
-  connect( mLayerRegistry, SIGNAL( layerWillBeRemoved( QString ) ), mConfigureDialog, SLOT( removeLayer( QString ) ) );
   connect( mLayerRegistry, SIGNAL( layerWillBeRemoved( QString ) ), this, SLOT( parseErrorListByLayer( QString ) ) );
 
   connect( this, SIGNAL( visibilityChanged( bool ) ), this, SLOT( updateRubberBands( bool ) ) );
+  connect( qgsInterface, SIGNAL( newProjectCreated() ), mConfigureDialog, SLOT( clearRules() ) );
+  connect( qgsInterface, SIGNAL( newProjectCreated() ), this, SLOT( deleteErrors() ) );
+
 }
 
 checkDock::~checkDock()
 {
   delete mConfigureDialog;
-  delete mErrorListModel;
-
-  QList<QgsRubberBand*>::const_iterator it;
-  for ( it = mRbErrorMarkers.begin(); it != mRbErrorMarkers.end(); ++it )
-  {
-    QgsRubberBand* rb = *it;
-    rb->reset();
-    delete rb;
-  }
-
+  mRbErrorMarkers.clear();
   clearVertexMarkers();
-
   // delete errors in list
   deleteErrors();
+  delete mErrorListModel;
 }
 
 void checkDock::clearVertexMarkers()
@@ -204,6 +194,7 @@ void checkDock::parseErrorListByFeature( int featureId )
 
 void checkDock::configure()
 {
+  mConfigureDialog->initGui();
   mConfigureDialog->show();
 }
 

@@ -702,17 +702,11 @@ QPair< bool, QList<QDomNode> > QgsProject::_getMapLayers( QDomDocument const &do
 
   //Update field map of layers with joins and create join caches if necessary
   //Needs to be done here once all dependent layers are loaded
-  QString errorMessage;
   QList< QPair< QgsVectorLayer*, QDomElement > >::iterator vIt = vLayerList.begin();
   for ( ; vIt != vLayerList.end(); ++vIt )
   {
     vIt->first->createJoinCaches();
     vIt->first->updateFields();
-    //for old symbology, it is necessary to read the symbology again after having the complete field map
-    if ( !vIt->first->isUsingRendererV2() )
-    {
-      vIt->first->readSymbology( vIt->second, errorMessage );
-    }
   }
 
   return qMakePair( returnStatus, brokenNodes );
@@ -959,6 +953,7 @@ bool QgsProject::write()
   }
 
   QDomImplementation DomImplementation;
+  DomImplementation.setInvalidDataPolicy( QDomImplementation::DropInvalidChars );
 
   QDomDocumentType documentType =
     DomImplementation.createDocumentType( "qgis", "http://mrcc.com/qgis.dtd",
@@ -1136,6 +1131,7 @@ QgsProject::writeEntry( QString const &scope, const QString & key,
 QStringList
 QgsProject::readListEntry( QString const & scope,
                            const QString & key,
+                           QStringList def,
                            bool * ok ) const
 {
   QgsProperty * property = findKey_( scope, key, imp_->properties_ );
@@ -1159,7 +1155,7 @@ QgsProject::readListEntry( QString const & scope,
     return value.toStringList();
   }
 
-  return QStringList();
+  return def;
 } // QgsProject::readListEntry
 
 
