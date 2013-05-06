@@ -24,8 +24,7 @@ email                : sherman at mrcc.com
 #include <gdal.h>         // to collect version information
 #include <ogr_api.h>
 #include <ogr_srs_api.h>
-#include <cpl_error.h>
-#include <cpl_conv.h>
+#include <cpl_string.h>
 
 #include <limits>
 
@@ -914,7 +913,7 @@ bool QgsOgrProvider::addAttributes( const QList<QgsField> &attributes )
         continue;
     }
 
-    OGRFieldDefnH fielddefn = OGR_Fld_Create( TO8( iter->name() ), type );
+    OGRFieldDefnH fielddefn = OGR_Fld_Create( mEncoding->fromUnicode( iter->name() ).constData(), type );
     OGR_Fld_SetWidth( fielddefn, iter->length() );
     OGR_Fld_SetPrecision( fielddefn, iter->precision() );
 
@@ -1198,7 +1197,7 @@ bool QgsOgrProvider::deleteFeature( QgsFeatureId id )
 
 int QgsOgrProvider::capabilities() const
 {
-  int ability = SetEncoding;
+  int ability = 0;
 
   // collect abilities reported by OGR
   if ( ogrLayer )
@@ -1288,6 +1287,15 @@ int QgsOgrProvider::capabilities() const
     {
       ability |= DeleteAttributes;
     }
+
+#if defined(OLCStringsAsUTF8)
+    if ( !OGR_L_TestCapability( ogrLayer, OLCStringsAsUTF8 ) )
+    {
+      ability |= SelectEncoding;
+    }
+#else
+    ability |= SelectEncoding;
+#endif
 
     // OGR doesn't handle shapefiles without attributes, ie. missing DBFs well, fixes #803
     if ( ogrDriverName == "ESRI Shapefile" )
@@ -1839,8 +1847,18 @@ QGISEXTERN bool createEmptyDataSource( const QString &uri,
     }
   }
 
+  char **papszOptions = NULL;
+  if ( driverName == "ESRI Shapefile" )
+  {
+    papszOptions = CSLSetNameValue( papszOptions, "ENCODING", QgsVectorFileWriter::convertCodecNameForEncodingOption( encoding ).toLocal8Bit().data() );
+    // OGR Shapefile fails to create fields if given encoding is not supported by its side
+    // so disable encoding conversion of OGR Shapefile layer
+    CPLSetConfigOption( "SHAPE_ENCODING", "" );
+  }
+
   OGRLayerH layer;
-  layer = OGR_DS_CreateLayer( dataSource, TO8F( QFileInfo( uri ).completeBaseName() ), reference, OGRvectortype, NULL );
+  layer = OGR_DS_CreateLayer( dataSource, TO8F( QFileInfo( uri ).completeBaseName() ), reference, OGRvectortype, papszOptions );
+  CSLDestroy( papszOptions );
   if ( !layer )
   {
     QgsMessageLog::logMessage( QObject::tr( "Creation of OGR data source %1 failed: %2" ).arg( uri ).arg( QString::fromUtf8( CPLGetLastErrorMsg() ) ), QObject::tr( "OGR" ) );
@@ -1875,7 +1893,7 @@ QGISEXTERN bool createEmptyDataSource( const QString &uri,
       if ( precision < 0 )
         precision = 3;
 
-      field = OGR_Fld_Create( TO8( it->first ), OFTReal );
+      field = OGR_Fld_Create( codec->fromUnicode( it->first ).constData(), OFTReal );
       OGR_Fld_SetWidth( field, width );
       OGR_Fld_SetPrecision( field, precision );
     }
@@ -1884,7 +1902,7 @@ QGISEXTERN bool createEmptyDataSource( const QString &uri,
       if ( width < 0 || width > 10 )
         width = 10;
 
-      field = OGR_Fld_Create( TO8( it->first ), OFTInteger );
+      field = OGR_Fld_Create( codec->fromUnicode( it->first ).constData(), OFTInteger );
       // limit to 10.  otherwise OGR sets it to 11 and recognizes as OFTDouble later
       OGR_Fld_SetWidth( field, width );
     }
@@ -1893,16 +1911,16 @@ QGISEXTERN bool createEmptyDataSource( const QString &uri,
       if ( width < 0 || width > 255 )
         width = 255;
 
-      field = OGR_Fld_Create( TO8( it->first ), OFTString );
+      field = OGR_Fld_Create( codec->fromUnicode( it->first ).constData(), OFTString );
       OGR_Fld_SetWidth( field, width );
     }
     else if ( fields[0] == "Date" )
     {
-      field = OGR_Fld_Create( TO8( it->first ), OFTDate );
+      field = OGR_Fld_Create( codec->fromUnicode( it->first ).constData(), OFTDate );
     }
     else if ( fields[0] == "DateTime" )
     {
-      field = OGR_Fld_Create( TO8( it->first ), OFTDateTime );
+      field = OGR_Fld_Create( codec->fromUnicode( it->first ).constData(), OFTDateTime );
     }
     else
     {

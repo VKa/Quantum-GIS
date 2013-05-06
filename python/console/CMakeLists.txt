@@ -1,4 +1,4 @@
-ADD_SUBDIRECTORY(console_help)
+ADD_SUBDIRECTORY(help)
 
 SET (QGIS_CONSOLE_DIR ${QGIS_DATA_DIR}/python/console)
 SET (PYTHON_OUTPUT_DIRECTORY ${QGIS_OUTPUT_DIRECTORY}/python)
@@ -9,6 +9,7 @@ SET(PY_CONSOLE_FILES
   console_help.py
   console_settings.py
   console_output.py
+  console_editor.py
   __init__.py
 )
 

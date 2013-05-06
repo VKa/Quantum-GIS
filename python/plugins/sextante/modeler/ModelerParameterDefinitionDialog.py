@@ -187,7 +187,7 @@ class ModelerParameterDefinitionDialog(QtGui.QDialog):
             self.defaultTextBox = QtGui.QLineEdit()
             self.defaultTextBox.setText("0")
             if self.param is not None:
-                self.defaultTextBox.setText(self.param.default)
+                self.defaultTextBox.setText(str(self.param.default))
             self.horizontalLayout3.addWidget(self.defaultTextBox)
             self.verticalLayout.addLayout(self.horizontalLayout3)
         elif self.paramType == ModelerParameterDefinitionDialog.PARAMETER_STRING \
@@ -214,6 +214,7 @@ class ModelerParameterDefinitionDialog(QtGui.QDialog):
         self.buttonBox.setObjectName("buttonBox")
         QObject.connect(self.buttonBox, QtCore.SIGNAL("accepted()"), self.okPressed)
         QObject.connect(self.buttonBox, QtCore.SIGNAL("rejected()"), self.cancelPressed)
+
         self.verticalLayout.addWidget(self.buttonBox)
 
         self.setLayout(self.verticalLayout)

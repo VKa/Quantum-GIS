@@ -42,6 +42,8 @@ SET(QGIS_APP_SRCS
   qgslabelengineconfigdialog.cpp
   qgslabelinggui.cpp
   qgslabelpreview.cpp
+  qgsloadstylefromdbdialog.cpp
+  qgssavestyletodbdialog.cpp
 
   qgsmaptooladdfeature.cpp
   qgsmaptooladdvertex.cpp
@@ -195,6 +197,8 @@ SET (QGIS_APP_MOC_HDRS
   qgslabelengineconfigdialog.h
   qgslabelinggui.h
   qgslabelpropertydialog.h
+  qgsloadstylefromdbdialog.h
+  qgssavestyletodbdialog.h
   qgsshortcutsmanager.h
 
   qgsmaptooladdfeature.h
@@ -462,11 +466,12 @@ TARGET_LINK_LIBRARIES(${QGIS_APP_NAME}
 )
 
 IF (ANDROID)
-    TARGET_LINK_LIBRARIES(${QGIS_APP_NAME} log)
+  TARGET_LINK_LIBRARIES(${QGIS_APP_NAME} log)
 ENDIF (ANDROID)
 
 IF(WIN32)
   ADD_DEFINITIONS(-DQWT_DLL)
+  TARGET_LINK_LIBRARIES(${QGIS_APP_NAME} DbgHelp)
 ENDIF(WIN32)
 
 IF (APPLE)

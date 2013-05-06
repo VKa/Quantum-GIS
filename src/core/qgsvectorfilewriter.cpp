@@ -73,7 +73,7 @@ QgsVectorFileWriter::QgsVectorFileWriter(
 {
   QString vectorFileName = theVectorFileName;
   QString fileEncoding = theFileEncoding;
-
+  QStringList layOptions = layerOptions;
   QStringList dsOptions = datasourceOptions;
 
   QString ogrDriverName;
@@ -98,9 +98,6 @@ QgsVectorFileWriter::QgsVectorFileWriter(
   OGRSFDriverH poDriver;
   QgsApplication::registerOgrDrivers();
 
-  QSettings settings;
-  CPLSetConfigOption( "SHAPE_ENCODING", settings.value( "/qgis/ignoreShapeEncoding", true ).toBool() ? "" : 0 );
-
   poDriver = OGRGetDriverByName( ogrDriverName.toLocal8Bit().data() );
 
   if ( poDriver == NULL )
@@ -114,6 +111,13 @@ QgsVectorFileWriter::QgsVectorFileWriter(
 
   if ( driverName == "ESRI Shapefile" )
   {
+    if ( layOptions.join( "" ).toUpper().indexOf( "ENCODING=" ) == -1 )
+    {
+      layOptions.append( "ENCODING=" + convertCodecNameForEncodingOption( fileEncoding ) );
+    }
+
+    CPLSetConfigOption( "SHAPE_ENCODING", "" );
+
     if ( !vectorFileName.endsWith( ".shp", Qt::CaseInsensitive ) &&
          !vectorFileName.endsWith( ".dbf", Qt::CaseInsensitive ) )
     {
@@ -220,6 +224,7 @@ QgsVectorFileWriter::QgsVectorFileWriter(
   {
     QgsDebugMsg( "error finding QTextCodec for " + fileEncoding );
 
+    QSettings settings;
     QString enc = settings.value( "/UI/encoding", "System" ).toString();
     mCodec = QTextCodec::codecForName( enc.toLocal8Bit().constData() );
     if ( !mCodec )
@@ -243,21 +248,21 @@ QgsVectorFileWriter::QgsVectorFileWriter(
   QString layerName = QFileInfo( vectorFileName ).baseName();
   OGRwkbGeometryType wkbType = static_cast<OGRwkbGeometryType>( geometryType );
 
-  if ( !layerOptions.isEmpty() )
+  if ( !layOptions.isEmpty() )
   {
-    options = new char *[ layerOptions.size()+1 ];
-    for ( int i = 0; i < layerOptions.size(); i++ )
+    options = new char *[ layOptions.size()+1 ];
+    for ( int i = 0; i < layOptions.size(); i++ )
     {
-      options[i] = CPLStrdup( layerOptions[i].toLocal8Bit().data() );
+      options[i] = CPLStrdup( layOptions[i].toLocal8Bit().data() );
     }
-    options[ layerOptions.size()] = NULL;
+    options[ layOptions.size()] = NULL;
   }
 
   mLayer = OGR_DS_CreateLayer( mDS, TO8F( layerName ), ogrRef, wkbType, options );
 
   if ( options )
   {
-    for ( int i = 0; i < layerOptions.size(); i++ )
+    for ( int i = 0; i < layOptions.size(); i++ )
       CPLFree( options[i] );
     delete [] options;
     options = NULL;
@@ -1016,6 +1021,23 @@ QString QgsVectorFileWriter::filterForDriver( const QString& driverName )
     return "";
 
   return trLongName + " [OGR] (" + glob.toLower() + " " + glob.toUpper() + ")";
+}
+
+QString QgsVectorFileWriter::convertCodecNameForEncodingOption( const QString &codecName )
+{
+  if ( codecName == "System" )
+    return QString( "LDID/0" );
+
+  QRegExp re = QRegExp( QString( "(CP|windows-|ISO[ -])(.+)" ), Qt::CaseInsensitive );
+  if ( re.exactMatch( codecName ) )
+  {
+    QString c = re.cap( 2 ).replace( "-" , "" );
+    bool isNumber;
+    c.toInt( &isNumber );
+    if ( isNumber )
+      return c;
+  }
+  return codecName;
 }
 
 bool QgsVectorFileWriter::driverMetadata( QString driverName, QString &longName, QString &trLongName, QString &glob, QString &ext )

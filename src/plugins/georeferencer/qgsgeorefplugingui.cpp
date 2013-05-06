@@ -632,16 +632,16 @@ void QgsGeorefPluginGui::showGeorefConfigDialog()
 // Histogram stretch slots
 void QgsGeorefPluginGui::fullHistogramStretch()
 {
-  mLayer->setContrastEnhancementAlgorithm( "StretchToMinimumMaximum" );
-  mLayer->setMinimumMaximumUsingDataset();
+  mLayer->setContrastEnhancement( QgsContrastEnhancement::StretchToMinimumMaximum );
   mLayer->setCacheImage( NULL );
   mCanvas->refresh();
 }
 
 void QgsGeorefPluginGui::localHistogramStretch()
 {
-  mLayer->setContrastEnhancementAlgorithm( "StretchToMinimumMaximum" );
-  mLayer->setMinimumMaximumUsingLastExtent();
+  QgsRectangle rectangle = mIface->mapCanvas()->mapRenderer()->outputExtentToLayerExtent( mLayer, mIface->mapCanvas()->extent() );
+
+  mLayer->setContrastEnhancement( QgsContrastEnhancement::StretchToMinimumMaximum, QgsRaster::ContrastEnhancementMinMax, rectangle );
   mLayer->setCacheImage( NULL );
   mCanvas->refresh();
 }
@@ -1066,7 +1066,7 @@ void QgsGeorefPluginGui::removeOldLayer()
   if ( mLayer )
   {
     QgsMapLayerRegistry::instance()->removeMapLayers(
-      ( QStringList() << mLayer->id() ), false );
+      ( QStringList() << mLayer->id() ) );
     mLayer = NULL;
   }
   mCanvas->refresh();
@@ -1184,7 +1184,7 @@ void QgsGeorefPluginGui::loadGCPs( /*bool verbose*/ )
     {
       line = points.readLine();
       QStringList ls;
-      if ( line.contains( QRegExp( "," ) ) ) // in previous format "\t" is delimeter of points in new - ","
+      if ( line.contains( QRegExp( "," ) ) ) // in previous format "\t" is delimiter of points in new - ","
       {
         // points from new georeferencer
         ls = line.split( "," );

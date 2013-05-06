@@ -1,7 +1,7 @@
 # -*- coding:utf-8 -*-
 """
 /***************************************************************************
-Python Conosle for QGIS
+Python Console for QGIS
                              -------------------
 begin                : 2012-09-10
 copyright            : (C) 2012 by Salvatore Larosa
@@ -36,13 +36,14 @@ _init_commands = ["from qgis.core import *", "import qgis.utils",
                   "from qgis.utils import iface"]
 _historyFile = unicode( QgsApplication.qgisSettingsDirPath() + "console_history.txt" )
 
-class PythonEdit(QsciScintilla, code.InteractiveInterpreter):
+class ShellScintilla(QsciScintilla, code.InteractiveInterpreter):
     def __init__(self, parent=None):
-        #QsciScintilla.__init__(self, parent)
-        super(PythonEdit,self).__init__(parent)
+        super(ShellScintilla,self).__init__(parent)
         code.InteractiveInterpreter.__init__(self, locals=None)
 
         self.parent = parent
+
+        self.settings = QSettings()
 
         # Enable non-ascii chars for editor
         self.setUtf8(True)
@@ -68,27 +69,11 @@ class PythonEdit(QsciScintilla, code.InteractiveInterpreter):
         # Brace matching: enable for a brace immediately before or after
         # the current position
         self.setBraceMatching(QsciScintilla.SloppyBraceMatch)
-        #self.moveToMatchingBrace()
-        #self.selectToMatchingBrace()
 
         # Current line visible with special background color
-        #self.setCaretLineVisible(True)
-        #self.setCaretLineBackgroundColor(QColor("#ffe4e4"))
         self.setCaretWidth(2)
 
-        # Set Python lexer
-        self.setLexers()
-
-        # Indentation
-        #self.setAutoIndent(True)
-        #self.setIndentationsUseTabs(False)
-        #self.setIndentationWidth(4)
-        #self.setTabIndents(True)
-        #self.setBackspaceUnindents(True)
-        #self.setTabWidth(4)
-
-        self.setAutoCompletionThreshold(2)
-        self.setAutoCompletionSource(self.AcsAPIs)
+        self.settingsShell()
 
         # Don't want to see the horizontal scrollbar at all
         # Use raw message to Scintilla here (all messages are documented
@@ -112,18 +97,46 @@ class PythonEdit(QsciScintilla, code.InteractiveInterpreter):
         self.SendScintilla(QsciScintilla.SCI_CLEARCMDKEY, ord('L')+ ctrl+shift)
 
         ## New QShortcut = ctrl+space/ctrl+alt+space for Autocomplete
-        self.newShortcutCS = QShortcut(QKeySequence(Qt.CTRL + Qt.Key_Space), self)
+        self.newShortcutCSS = QShortcut(QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_Space), self)
         self.newShortcutCAS = QShortcut(QKeySequence(Qt.CTRL + Qt.ALT + Qt.Key_Space), self)
-        self.newShortcutCS.activated.connect(self.autoComplete)
-        self.newShortcutCAS.activated.connect(self.showHistory)
+        self.newShortcutCSS.setContext(Qt.WidgetShortcut)
+        self.newShortcutCAS.setContext(Qt.WidgetShortcut)
+        self.newShortcutCAS.activated.connect(self.autoCompleteKeyBinding)
+        self.newShortcutCSS.activated.connect(self.showHistory)
         self.connect(self, SIGNAL('userListActivated(int, const QString)'),
                      self.completion_list_selected)
+
+    def settingsShell(self):
+        # Set Python lexer
+        self.setLexers()
+        threshold = self.settings.value("pythonConsole/autoCompThreshold", 2).toInt()[0]
+        self.setAutoCompletionThreshold(threshold)
+        radioButtonSource = self.settings.value("pythonConsole/autoCompleteSource", 'fromAPI').toString()
+        autoCompEnabled = self.settings.value("pythonConsole/autoCompleteEnabled", True).toBool()
+        self.setAutoCompletionThreshold(threshold)
+        if autoCompEnabled:
+            if radioButtonSource == 'fromDoc':
+                self.setAutoCompletionSource(self.AcsDocument)
+            elif radioButtonSource == 'fromAPI':
+                self.setAutoCompletionSource(self.AcsAPIs)
+            elif radioButtonSource == 'fromDocAPI':
+                self.setAutoCompletionSource(self.AcsAll)
+        else:
+            self.setAutoCompletionSource(self.AcsNone)
 
     def showHistory(self):
         self.showUserList(1, QStringList(self.history))
 
-    def autoComplete(self):
-        self.autoCompleteFromAll()
+    def autoCompleteKeyBinding(self):
+        radioButtonSource = self.settings.value("pythonConsole/autoCompleteSource").toString()
+        autoCompEnabled = self.settings.value("pythonConsole/autoCompleteEnabled").toBool()
+        if autoCompEnabled:
+            if radioButtonSource == 'fromDoc':
+                self.autoCompleteFromDocument()
+            elif radioButtonSource == 'fromAPI':
+                self.autoCompleteFromAPIs()
+            elif radioButtonSource == 'fromDocAPI':
+                self.autoCompleteFromAll()
 
     def commandConsole(self, command):
         if not self.is_cursor_on_last_line():
@@ -147,9 +160,9 @@ class PythonEdit(QsciScintilla, code.InteractiveInterpreter):
 
     def setLexers(self):
         self.lexer = QsciLexerPython()
-        settings = QSettings()
-        loadFont = settings.value("pythonConsole/fontfamilytext", "Monospace").toString()
-        fontSize = settings.value("pythonConsole/fontsize", 10).toInt()[0]
+
+        loadFont = self.settings.value("pythonConsole/fontfamilytext", "Monospace").toString()
+        fontSize = self.settings.value("pythonConsole/fontsize", 10).toInt()[0]
 
         font = QFont(loadFont)
         font.setFixedPitch(True)
@@ -168,11 +181,11 @@ class PythonEdit(QsciScintilla, code.InteractiveInterpreter):
         self.lexer.setFont(font, 4)
 
         self.api = QsciAPIs(self.lexer)
-        chekBoxAPI = settings.value("pythonConsole/preloadAPI", True).toBool()
+        chekBoxAPI = self.settings.value("pythonConsole/preloadAPI", True).toBool()
         if chekBoxAPI:
             self.api.loadPrepared( QgsApplication.pkgDataPath() + "/python/qsci_apis/pyqgis_master.pap" )
         else:
-            apiPath = settings.value("pythonConsole/userAPI").toStringList()
+            apiPath = self.settings.value("pythonConsole/userAPI").toStringList()
             for i in range(0, len(apiPath)):
                 self.api.load(QString(unicode(apiPath[i])))
             self.api.prepare()
@@ -228,10 +241,10 @@ class PythonEdit(QsciScintilla, code.InteractiveInterpreter):
         self.ensureCursorVisible()
         self.ensureLineVisible(line)
 
-#    def on_new_line(self):
-#        """On new input line"""
-#        self.move_cursor_to_end()
-#        self.new_input_line = False
+    #def on_new_line(self):
+        #"""On new input line"""
+        #self.move_cursor_to_end()
+        #self.new_input_line = False
 
     def is_cursor_on_last_line(self):
         """Return True if cursor is on the last line"""
@@ -252,23 +265,6 @@ class PythonEdit(QsciScintilla, code.InteractiveInterpreter):
         line, index = self.getCursorPosition()
         self.ensureCursorVisible()
         self.ensureLineVisible(line)
-
-    def refreshLexerProperties(self):
-        self.setLexers()
-
-#    def check_selection(self):
-#        """
-#        Check if selected text is r/w,
-#        otherwise remove read-only parts of selection
-#        """
-#        #if self.current_prompt_pos is None:
-#            #self.move_cursor_to_end()
-#            #return
-#        line_from, index_from, line_to, index_to = self.getSelection()
-#        pline, pindex = self.getCursorPosition()
-#        if line_from < pline or \
-#           (line_from == pline and index_from < pindex):
-#            self.setSelection(pline, pindex, line_to, index_to)
 
     def displayPrompt(self, more=False):
         self.append("... ") if more else self.append(">>> ")
@@ -349,7 +345,6 @@ class PythonEdit(QsciScintilla, code.InteractiveInterpreter):
                 if e.key() in (Qt.Key_Left, Qt.Key_Right, Qt.Key_Home, Qt.Key_End):
                     QsciScintilla.keyPressEvent(self, e)
                 return
-
             # all other keystrokes get sent to the input line
             self.move_cursor_to_end()
 
@@ -442,16 +437,16 @@ class PythonEdit(QsciScintilla, code.InteractiveInterpreter):
             stringDrag = e.mimeData().text()
             self.insertFromDropPaste(stringDrag)
             self.setFocus()
-            e.setDropAction(Qt.MoveAction)
+            e.setDropAction(Qt.CopyAction)
             e.accept()
         else:
             QsciScintillaCompat.dropEvent(self, e)
 
     def insertFromDropPaste(self, textDP):
-        pasteList = textDP.split("\n")
+        pasteList = str(textDP).splitlines()
         for line in pasteList[:-1]:
             line.replace(">>> ", "").replace("... ", "")
-            self.insert(line)
+            self.insert(unicode(line))
             self.move_cursor_to_end()
             self.runCommand(unicode(self.currentCommand()))
         if pasteList[-1] != "":
@@ -459,11 +454,6 @@ class PythonEdit(QsciScintilla, code.InteractiveInterpreter):
             line.replace(">>> ", "").replace("... ", "")
             self.insert(unicode(line))
             self.move_cursor_to_end()
-
-#    def getTextFromEditor(self):
-#        text = self.text()
-#        textList = text.split("\n")
-#        return textList
 
     def insertTextFromFile(self, listOpenFile):
         for line in listOpenFile[:-1]:
@@ -492,7 +482,7 @@ class PythonEdit(QsciScintilla, code.InteractiveInterpreter):
         return cmd
 
     def runCommand(self, cmd):
-        self.write_stdout(cmd)
+        self.writeCMD(cmd)
         import webbrowser
         self.updateHistory(cmd)
         line, pos = self.getCursorPosition()
@@ -524,13 +514,16 @@ class PythonEdit(QsciScintilla, code.InteractiveInterpreter):
             more = self.runsource(src, "<input>")
             if not more:
                 self.buffer = []
+            ## prevents to commands with more lines to break the console
+            ## in the case they have a eol different from '\n'
+            self.setText('')
             self.move_cursor_to_end()
             self.displayPrompt(more)
 
     def write(self, txt):
         sys.stderr.write(txt)
 
-    def write_stdout(self, txt):
+    def writeCMD(self, txt):
         if len(txt) > 0:
             getCmdString = self.text()
             prompt = getCmdString[0:4]

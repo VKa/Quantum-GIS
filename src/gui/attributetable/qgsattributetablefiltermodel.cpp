@@ -57,7 +57,39 @@ bool QgsAttributeTableFilterModel::lessThan( const QModelIndex &left, const QMod
     }
   }
 
-  return QSortFilterProxyModel::lessThan( left, right );
+
+  QVariant leftData = left.data( QgsAttributeTableModel::SortRole );
+  QVariant rightData = right.data( QgsAttributeTableModel::SortRole );
+
+  if ( leftData.isNull() )
+    return true;
+
+  if ( rightData.isNull() )
+    return false;
+
+  switch ( leftData.type() )
+  {
+    case QVariant::Int:
+    case QVariant::UInt:
+    case QVariant::LongLong:
+    case QVariant::ULongLong:
+      return leftData.toLongLong() < rightData.toLongLong();
+
+    case QVariant::Double:
+      return leftData.toDouble() < rightData.toDouble();
+
+    default:
+      return leftData.toString().localeAwareCompare( rightData.toString() ) < 0;
+  }
+
+  // Avoid warning. Will never reach this
+  return false;
+}
+
+void QgsAttributeTableFilterModel::sort( int column, Qt::SortOrder order )
+{
+  masterModel()->prefetchColumnData( column );
+  QSortFilterProxyModel::sort( column, order );
 }
 
 void QgsAttributeTableFilterModel::setSelectedOnTop( bool selectedOnTop )
@@ -91,7 +123,7 @@ bool QgsAttributeTableFilterModel::selectedOnTop()
 void QgsAttributeTableFilterModel::setFilteredFeatures( QgsFeatureIds ids )
 {
   mFilteredFeatures = ids;
-  mFilterMode = ShowFilteredList;
+  setFilterMode( ShowFilteredList );
   invalidateFilter();
 }
 
@@ -101,12 +133,12 @@ void QgsAttributeTableFilterModel::setFilterMode( FilterMode filterMode )
   {
     if ( filterMode == ShowVisible )
     {
-      connect( mCanvas, SIGNAL( extentsChanged() ), SLOT( extentsChanged() ) );
+      connect( mCanvas, SIGNAL( extentsChanged() ), this, SLOT( extentsChanged() ) );
       generateListOfVisibleFeatures();
     }
     else
     {
-      disconnect( SLOT( extentsChanged() ) );
+      disconnect( mCanvas, SIGNAL( extentsChanged() ), this, SLOT( extentsChanged() ) );
     }
 
     if ( filterMode == ShowSelected )
@@ -197,6 +229,7 @@ void QgsAttributeTableFilterModel::generateListOfVisibleFeatures()
   if ( !renderer )
   {
     QgsDebugMsg( "Cannot get renderer" );
+    return;
   }
 
   if ( layer()->hasScaleBasedVisibility() &&

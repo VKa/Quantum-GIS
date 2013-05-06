@@ -81,7 +81,7 @@ class GUI_EXPORT QgsDualView : public QStackedWidget, private Ui::QgsDualViewBas
     /**
      * Change the current view mode.
      *
-     * @param The view mode to set
+     * @param view The view mode to set
      */
     void setView( ViewMode view );
 
@@ -136,8 +136,8 @@ class GUI_EXPORT QgsDualView : public QStackedWidget, private Ui::QgsDualViewBas
      */
     void columnBoxInit();
 
-    virtual void hideEvent(QHideEvent *);
-    virtual void focusOutEvent(QFocusEvent *);
+    virtual void hideEvent( QHideEvent * );
+    virtual void focusOutEvent( QFocusEvent * );
 
   public slots:
     /**

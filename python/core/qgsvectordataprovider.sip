@@ -27,7 +27,7 @@ class QgsVectorDataProvider : QgsDataProvider
       RandomSelectGeometryAtId =     1024,
       SequentialSelectGeometryAtId = 2048,
       CreateAttributeIndex =         4096,
-      SetEncoding =                  8192,
+      SelectEncoding =               8192,
     };
 
     /** bitmask of all provider's editing capabilities */
@@ -268,6 +268,12 @@ class QgsVectorDataProvider : QgsDataProvider
      */
     QStringList errors();
 
+
+    /**
+     * It returns false by default.
+     * Must be implemented by providers that support saving and loading styles to db returning true
+     */
+    virtual bool isSaveAndLoadStyleToDBSupported();
 
   protected:
     QVariant convertValue( QVariant::Type type, QString value );

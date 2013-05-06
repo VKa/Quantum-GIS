@@ -104,10 +104,10 @@ QgsLegend::QgsLegend( QgsMapCanvas *canvas, QWidget * parent, const char *name )
   connect( QgsMapLayerRegistry::instance(),
            SIGNAL( layersWillBeRemoved( QStringList ) ),
            this, SLOT( removeLayers( QStringList ) ) );
-  connect( QgsMapLayerRegistry::instance(), SIGNAL( removedAll() ),
+  connect( QgsMapLayerRegistry::instance(), SIGNAL( removeAll() ),
            this, SLOT( removeAll() ) );
   connect( QgsMapLayerRegistry::instance(),
-           SIGNAL( layersAdded( QList<QgsMapLayer*> ) ),
+           SIGNAL( legendLayersAdded( QList<QgsMapLayer*> ) ),
            this, SLOT( addLayers( QList<QgsMapLayer *> ) ) );
 
   connect( mMapCanvas, SIGNAL( layersChanged() ),
@@ -2716,7 +2716,7 @@ void QgsLegend::legendLayerZoomNative()
   QgsRasterLayer *layer =  qobject_cast<QgsRasterLayer *>( currentLayer->layer() );
   if ( layer )
   {
-    QgsDebugMsg( "Raster units per pixel  : " + QString::number( layer->rasterUnitsPerPixel() ) );
+    QgsDebugMsg( "Raster units per pixel  : " + QString::number( layer->rasterUnitsPerPixelX() ) );
     QgsDebugMsg( "MapUnitsPerPixel before : " + QString::number( mMapCanvas->mapUnitsPerPixel() ) );
 
     layer->setCacheImage( NULL );
@@ -2732,11 +2732,11 @@ void QgsLegend::legendLayerZoomNative()
       p2 = ct.transform( p2 );
       double width = sqrt( p1.sqrDist( p2 ) ); // width of reprojected pixel
       // This is not perfect of course, we use the resolution in just one direction
-      mMapCanvas->zoomByFactor( qAbs( layer->rasterUnitsPerPixel() / width ) );
+      mMapCanvas->zoomByFactor( qAbs( layer->rasterUnitsPerPixelX() / width ) );
     }
     else
     {
-      mMapCanvas->zoomByFactor( qAbs( layer->rasterUnitsPerPixel() / mMapCanvas->mapUnitsPerPixel() ) );
+      mMapCanvas->zoomByFactor( qAbs( layer->rasterUnitsPerPixelX() / mMapCanvas->mapUnitsPerPixel() ) );
     }
     mMapCanvas->refresh();
     QgsDebugMsg( "MapUnitsPerPixel after  : " + QString::number( mMapCanvas->mapUnitsPerPixel() ) );
@@ -2753,25 +2753,11 @@ void QgsLegend::legendLayerStretchUsingCurrentExtent()
   QgsRasterLayer *layer =  qobject_cast<QgsRasterLayer *>( currentLayer->layer() );
   if ( layer )
   {
-    // Note: Do we really want to do these next clauses? The user will get a surprise when the
-    // drawing style they are using suddenly changes....! TS
-    if ( layer->drawingStyle() == QgsRasterLayer::SingleBandPseudoColor )
-    {
-      layer->setDrawingStyle( QgsRasterLayer::SingleBandGray );
-    }
-    else if ( layer->drawingStyle() == QgsRasterLayer::MultiBandSingleBandPseudoColor )
-    {
-      layer->setDrawingStyle( QgsRasterLayer::MultiBandSingleBandGray );
-    }
-
-    if ( layer->contrastEnhancementAlgorithmAsString() == "NoEnhancement" )
-    {
-      layer->setContrastEnhancementAlgorithm( "StretchToMinimumMaximum" );
-    }
+    QgsContrastEnhancement::ContrastEnhancementAlgorithm contrastEnhancementAlgorithm = QgsContrastEnhancement::StretchToMinimumMaximum;
 
     QgsRectangle myRectangle;
     myRectangle = mMapCanvas->mapRenderer()->outputExtentToLayerExtent( layer, mMapCanvas->extent() );
-    layer->setContrastEnhancementAlgorithm( layer->contrastEnhancementAlgorithm(), QgsRasterLayer::ContrastEnhancementMinMax, myRectangle );
+    layer->setContrastEnhancement( contrastEnhancementAlgorithm, QgsRaster::ContrastEnhancementMinMax, myRectangle );
 
     layer->setCacheImage( NULL );
     refreshLayerSymbology( layer->id() );

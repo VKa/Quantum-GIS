@@ -160,7 +160,7 @@ struct CORE_EXPORT QgsVectorJoinInfo
  *     QgsVectorLayer *scratchLayer = new QgsVectorLayer(uri, "Scratch point layer",  "memory");
  * \endcode
  *
- * The main data providers supported by QGis are listed below.
+ * The main data providers supported by QGIS are listed below.
  *
  * \section providers Vector data providers
  *
@@ -310,15 +310,6 @@ struct CORE_EXPORT QgsVectorJoinInfo
  *
  *   Defines the characters used to escape delimiter, quote, and newline characters.
  *
- * - skipEmptyFields=(yes|no)
- *
- *   If yes then empty fields will be discarded (eqivalent to concatenating consecutive
- *   delimiters)
- *
- * - trimFields=(yes|no)
- *
- *   If yes then leading and trailing whitespace will be removed from fields
- *
  * - skipLines=n
  *
  *   Defines the number of lines to ignore at the beginning of the file (default 0)
@@ -328,16 +319,30 @@ struct CORE_EXPORT QgsVectorJoinInfo
  *   Defines whether the first record in the file (after skipped lines) contains
  *   column names (default yes)
  *
+ * - trimFields=(yes|no)
+ *
+ *   If yes then leading and trailing whitespace will be removed from fields
+ *
+ * - skipEmptyFields=(yes|no)
+ *
+ *   If yes then empty fields will be discarded (eqivalent to concatenating consecutive
+ *   delimiters)
+ *
+ * - maxFields=#
+ *
+ *   Specifies the maximum number of fields to load for each record.  Additional
+ *   fields will be discarded.  Default is 0 - load all fields.
+ *
+ * - decimalPoint=c
+ *
+ *   Defines a character that is used as a decimal point in the numeric columns
+ *   The default is '.'.
+ *
  * - xField=column yField=column
  *
  *   Defines the name of the columns holding the x and y coordinates for XY point geometries.
  *   If the useHeader is no (ie there are no column names), then this is the column
  *   number (with the first column as 1).
- *
- * - decimalPoint=c
- *
- *   Defines a character that is used as a decimal point in the X and Y columns.
- *   The default is '.'.
  *
  * - xyDms=(yes|no)
  *
@@ -353,13 +358,17 @@ struct CORE_EXPORT QgsVectorJoinInfo
  *
  * - geomType=(point|line|polygon|none)
  *
- *   Defines the geometry type for WKT type geometries.  QGis will only display one
+ *   Defines the geometry type for WKT type geometries.  QGIS will only display one
  *   type of geometry for the layer - any others will be ignored when the file is
  *   loaded.  By default the provider uses the type of the first geometry in the file.
  *   Use geomType to override this type.
  *
  *   geomType can also be set to none, in which case the layer is loaded without
  *   geometries.
+ *
+ * - subset=expression
+ *
+ *   Defines an expression that will identify a subset of records to display
  *
  * - crs=crsstring
  *
@@ -382,8 +391,6 @@ struct CORE_EXPORT QgsVectorJoinInfo
  * \subsection grass Grass data provider (grass)
  *
  * Provider to display vector data in a GRASS GIS layer.
- *
- *
  *
  */
 
@@ -489,6 +496,7 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer
      *               parameters used by the data provider as url query items.
      * @param  baseName The name used to represent the layer in the legend
      * @param  providerLib  The name of the data provider, eg "memory", "postgres"
+     * @param  loadDefaultStyleFlag whether to load the default style
      *
      */
     QgsVectorLayer( QString path = QString::null, QString baseName = QString::null,
@@ -683,6 +691,37 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer
      *  @note Called by QgsMapLayer::writeXML().
      */
     virtual bool writeXml( QDomNode & layer_node, QDomDocument & doc );
+
+    /**
+     * Save named and sld style of the layer to the style table in the db.
+     * @param name
+     * @param description
+     * @param useAsDefault
+     * @param uiFileContent
+     * @param msgError
+     */
+    virtual void saveStyleToDatabase( QString name, QString description,
+                                      bool useAsDefault, QString uiFileContent,
+                                      QString &msgError );
+
+    /**
+     * Lists all the style in db split into related to the layer and not related to
+     * @param ids the QVector in which will be stored the style db ids
+     * @param names the QVector in which will be stored the style names
+     * @param descriptions the QVector in which will be stored the style descriptions
+     * @param msgError
+     * @return the number of styles related to current layer
+     */
+    virtual int listStylesInDatabase( QStringList &ids, QStringList &names,
+                                      QStringList &descriptions, QString &msgError );
+
+    /**
+     * Will return the named style corresponding to style id provided
+     */
+    virtual QString getStyleFromDatabase( QString styleId, QString &msgError );
+
+    virtual QString loadNamedStyle( const QString theURI, bool &theResultFlag, bool loadFromLocalDb = false );
+    virtual bool applyNamedStyle( QString namedStyle , QString errorMsg );
 
     /** convert a saved attribute editor element into a AttributeEditor structure as it's used internally.
      * @param elem the DOM element
@@ -1228,7 +1267,7 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer
   signals:
 
     /**
-     * This signal is emited when selection was changed
+     * This signal is emitted when selection was changed
      *
      * @param selected        Newly selected feature ids
      * @param deselected      Ids of all features which have previously been selected but are not any more
@@ -1236,7 +1275,7 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer
      */
     void selectionChanged( const QgsFeatureIds selected, const QgsFeatureIds deselected, const bool clearAndSelect );
 
-    /** This signal is emited when selection was changed */
+    /** This signal is emitted when selection was changed */
     void selectionChanged();
 
     /** This signal is emitted when modifications has been done on layer */
@@ -1245,7 +1284,7 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer
     /** Is emitted, when editing on this layer has started*/
     void editingStarted();
 
-    /** Is emitted, when edited changes succesfully have been written to the data provider */
+    /** Is emitted, when edited changes successfully have been written to the data provider */
     void editingStopped();
 
     /** Is emitted, before changes are commited to the data provider */

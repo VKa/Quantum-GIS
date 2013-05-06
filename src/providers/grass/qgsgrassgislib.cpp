@@ -221,6 +221,17 @@ int GRASS_LIB_EXPORT QgsGrassGisLib::G__gisinit( const char * version, const cha
     {
       fatal( "Cannot create CRS from QGIS_GRASS_CRS: " + crsStr );
     }
+    //TODO: createFromProj4 used to save to the user database any new CRS
+    // this behavior was changed in order to separate creation and saving.
+    // Not sure if it necessary to save it here, should be checked by someone
+    // familiar with the code (should also give a more descriptive name to the generated CRS)
+    if ( mCrs.srsid() == 0 )
+    {
+      QString myName = QString( " * %1 (%2)" )
+                       .arg( QObject::tr( "Generated CRS", "A CRS automatically generated from layer info get this prefix for description" ) )
+                       .arg( mCrs.toProj4() );
+      mCrs.saveAsUserCRS( myName );
+    }
   }
   mDistanceArea.setSourceCrs( mCrs.srsid() );
 
@@ -299,10 +310,10 @@ int GRASS_LIB_EXPORT G_parser( int argc, char **argv )
 
   if ( ret == 0 ) // parsed OK
   {
-    // It would be useful to determin region from input raster layers if no one
-    // is given by environment variable but there seems to be no way to get
-    // access to module options. Everything is in static variables in parser.c
-    // and there are no access functions to them.
+    // It would be useful to determine the region from input raster layers if
+    // no one is given by environment variable but there seems to be no way to
+    // get access to module options. Everything is in static variables in
+    // parser.c and there are no access functions to them.
   }
   return ret;
 }

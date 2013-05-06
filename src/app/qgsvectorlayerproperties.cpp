@@ -40,6 +40,8 @@
 #include "qgspluginmetadata.h"
 #include "qgspluginregistry.h"
 #include "qgsproject.h"
+#include "qgssavestyletodbdialog.h"
+#include "qgsloadstylefromdbdialog.h"
 #include "qgsvectorlayer.h"
 #include "qgsvectorlayerproperties.h"
 #include "qgsconfig.h"
@@ -69,23 +71,34 @@ QgsVectorLayerProperties::QgsVectorLayerProperties(
   QWidget * parent,
   Qt::WFlags fl
 )
-    : QDialog( parent, fl )
+    : QgsOptionsDialogBase( "VectorLayerProperties", parent, fl )
     , layer( lyr )
     , mMetadataFilled( false )
     , mRendererDialog( 0 )
 {
   setupUi( this );
+  // QgsOptionsDialogBase handles saving/restoring of geometry, splitter and current tab states,
+  // switching vertical tabs between icon/text to icon-only modes (splitter collapsed to left),
+  // and connecting QDialogButtonBox's accepted/rejected signals to dialog's accept/reject slots
+  initOptionsBase( false );
 
   mMaximumScaleIconLabel->setPixmap( QgsApplication::getThemePixmap( "/mActionZoomIn.png" ) );
   mMinimumScaleIconLabel->setPixmap( QgsApplication::getThemePixmap( "/mActionZoomOut.png" ) );
 
-  connect( buttonBox, SIGNAL( accepted() ), this, SLOT( accept() ) );
-  connect( buttonBox, SIGNAL( rejected() ), this, SLOT( reject() ) );
   connect( buttonBox->button( QDialogButtonBox::Apply ), SIGNAL( clicked() ), this, SLOT( apply() ) );
   connect( this, SIGNAL( accepted() ), this, SLOT( apply() ) );
 
+  connect( mOptionsStackedWidget, SIGNAL( currentChanged( int ) ), this, SLOT( mOptionsStackedWidget_CurrentChanged( int ) ) );
+
   connect( insertFieldButton, SIGNAL( clicked() ), this, SLOT( insertField() ) );
   connect( insertExpressionButton, SIGNAL( clicked() ), this, SLOT( insertExpression() ) );
+
+  // connections for Map Tip display
+  connect( htmlRadio, SIGNAL( toggled( bool ) ), htmlMapTip, SLOT( setEnabled( bool ) ) );
+  connect( htmlRadio, SIGNAL( toggled( bool ) ), insertFieldButton, SLOT( setEnabled( bool ) ) );
+  connect( htmlRadio, SIGNAL( toggled( bool ) ), fieldComboBox, SLOT( setEnabled( bool ) ) );
+  connect( htmlRadio, SIGNAL( toggled( bool ) ), insertExpressionButton, SLOT( setEnabled( bool ) ) );
+  connect( fieldComboRadio, SIGNAL( toggled( bool ) ), displayFieldComboBox, SLOT( setEnabled( bool ) ) );
 
   QVBoxLayout *layout;
 
@@ -95,6 +108,7 @@ QgsVectorLayerProperties::QgsVectorLayerProperties(
     layout = new QVBoxLayout( labelingFrame );
     layout->setMargin( 0 );
     labelingDialog = new QgsLabelingGui( QgisApp::instance()->palLabeling(), layer, QgisApp::instance()->mapCanvas(), labelingFrame );
+    labelingDialog->layout()->setMargin( 0 );
     layout->addWidget( labelingDialog );
     labelingFrame->setLayout( layout );
 
@@ -102,6 +116,7 @@ QgsVectorLayerProperties::QgsVectorLayerProperties(
     layout = new QVBoxLayout( labelOptionsFrame );
     layout->setMargin( 0 );
     labelDialog = new QgsLabelDialog( layer->label(), labelOptionsFrame );
+    labelDialog->layout()->setMargin( 0 );
     layout->addWidget( labelDialog );
     labelOptionsFrame->setLayout( layout );
     connect( labelDialog, SIGNAL( labelSourceSet() ), this, SLOT( setLabelCheckBox() ) );
@@ -110,8 +125,8 @@ QgsVectorLayerProperties::QgsVectorLayerProperties(
   {
     labelingDialog = 0;
     labelDialog = 0;
-    tabWidget->setTabEnabled( 1, false ); // hide labeling item
-    tabWidget->setTabEnabled( 2, false ); // hide labeling (deprecated) item
+    mOptsPage_Labels->setEnabled( false ); // disable labeling item
+    mOptsPage_LabelsOld->setEnabled( false ); // disable labeling (deprecated) item
   }
 
   // Create the Actions dialog tab
@@ -119,16 +134,38 @@ QgsVectorLayerProperties::QgsVectorLayerProperties(
   actionLayout->setMargin( 0 );
   const QgsFields &fields = layer->pendingFields();
   actionDialog = new QgsAttributeActionDialog( layer->actions(), fields, actionOptionsFrame );
+  actionDialog->layout()->setMargin( 0 );
   actionLayout->addWidget( actionDialog );
 
   // Create the menu for the save style button to choose the output format
   mSaveAsMenu = new QMenu( pbnSaveStyleAs );
   mSaveAsMenu->addAction( tr( "QGIS Layer Style File" ) );
   mSaveAsMenu->addAction( tr( "SLD File" ) );
-  QObject::connect( mSaveAsMenu, SIGNAL( triggered( QAction * ) ), this, SLOT( saveStyleAsMenuTriggered( QAction * ) ) );
+
+  //Only if the provider support loading & saving styles to db add new choices
+  if ( layer->dataProvider()->isSaveAndLoadStyleToDBSupported() )
+  {
+    //for loading
+    mLoadStyleMenu = new QMenu();
+    mLoadStyleMenu->addAction( tr( "Load from file" ) );
+    mLoadStyleMenu->addAction( tr( "Load from database" ) );
+    pbnLoadStyle->setContextMenuPolicy( Qt::PreventContextMenu );
+    pbnLoadStyle->setMenu( mLoadStyleMenu );
+
+    QObject::connect( mLoadStyleMenu, SIGNAL( triggered( QAction * ) ),
+                      this, SLOT( loadStyleMenuTriggered( QAction * ) ) ) ;
+
+    //for saving
+    mSaveAsMenu->addAction( tr( "Save on database (%1)" ).arg( layer->providerType() ) );
+  }
+
+  QObject::connect( mSaveAsMenu, SIGNAL( triggered( QAction * ) ),
+                    this, SLOT( saveStyleAsMenuTriggered( QAction * ) ) );
 
   mFieldsPropertiesDialog = new QgsFieldsProperties( layer, mFieldsFrame );
+  mFieldsPropertiesDialog->layout()->setMargin( 0 );
   mFieldsFrame->setLayout( new QVBoxLayout( mFieldsFrame ) );
+  mFieldsFrame->layout()->setMargin( 0 );
   mFieldsFrame->layout()->addWidget( mFieldsPropertiesDialog );
 
   connect( mFieldsPropertiesDialog, SIGNAL( toggleEditing() ), this, SLOT( toggleEditing() ) );
@@ -144,7 +181,7 @@ QgsVectorLayerProperties::QgsVectorLayerProperties(
       pbnIndex->setEnabled( false );
     }
 
-    if ( capabilities & QgsVectorDataProvider::SetEncoding )
+    if ( capabilities & QgsVectorDataProvider::SelectEncoding )
     {
       cboProviderEncoding->addItems( QgsVectorDataProvider::availableEncodings() );
       QString enc = layer->dataProvider()->encoding();
@@ -156,10 +193,17 @@ QgsVectorLayerProperties::QgsVectorLayerProperties(
       }
       cboProviderEncoding->setCurrentIndex( encindex );
     }
+    else if ( layer->dataProvider()->name() == "ogr" )
+    {
+      // if OGR_L_TestCapability(OLCStringsAsUTF8) returns true, OGR provider encoding can be set to only UTF-8
+      // so make encoding box grayed out
+      cboProviderEncoding->addItem( layer->dataProvider()->encoding() );
+      cboProviderEncoding->setEnabled( false );
+    }
     else
     {
-      // currently only encoding can be set in this group, so hide it completely
-      grpProviderOptions->hide();
+      // other providers do not use mEncoding, so hide the group completely
+      mDataSourceEncodingFrame->hide();
     }
   }
 
@@ -174,7 +218,9 @@ QgsVectorLayerProperties::QgsVectorLayerProperties(
   }
 
   diagramPropertiesDialog = new QgsDiagramProperties( layer, mDiagramFrame );
+  diagramPropertiesDialog->layout()->setMargin( 0 );
   mDiagramFrame->setLayout( new QVBoxLayout( mDiagramFrame ) );
+  mDiagramFrame->layout()->setMargin( 0 );
   mDiagramFrame->layout()->addWidget( diagramPropertiesDialog );
 
   //layer title and abstract
@@ -184,26 +230,18 @@ QgsVectorLayerProperties::QgsVectorLayerProperties(
     mLayerAbstractTextEdit->setPlainText( layer->abstract() );
   }
 
-  QSettings settings;
-  restoreGeometry( settings.value( "/Windows/VectorLayerProperties/geometry" ).toByteArray() );
-  int tabIndex = settings.value( "/Windows/VectorLayerProperties/row", 0 ).toInt();
-
-  // if the last used tab is not enabled display the first enabled one
-  if ( !tabWidget->isTabEnabled( tabIndex ) )
-  {
-    tabIndex = 0;
-    for ( int i = 0; i < tabWidget->count(); i++ )
-    {
-      if ( tabWidget->isTabEnabled( i ) )
-      {
-        tabIndex = i;
-        break;
-      }
-    }
-  }
-  tabWidget->setCurrentIndex( tabIndex );
-
   setWindowTitle( tr( "Layer Properties - %1" ).arg( layer->name() ) );
+
+  QSettings settings;
+  // if dialog hasn't been opened/closed yet, default to Styles tab, which is used most often
+  // this will be read by restoreOptionsBaseUi()
+  if ( !settings.contains( QString( "/Windows/VectorLayerProperties/tab" ) ) )
+  {
+    settings.setValue( QString( "/Windows/VectorLayerProperties/tab" ),
+                       mOptStackedWidget->indexOf( mOptsPage_Style ) );
+  }
+
+  restoreOptionsBaseUi();
 } // QgsVectorLayerProperties ctor
 
 
@@ -213,10 +251,6 @@ QgsVectorLayerProperties::~QgsVectorLayerProperties()
   {
     disconnect( labelDialog, SIGNAL( labelSourceSet() ), this, SLOT( setLabelCheckBox() ) );
   }
-
-  QSettings settings;
-  settings.setValue( "/Windows/VectorLayerProperties/geometry", saveGeometry() );
-  settings.setValue( "/Windows/VectorLayerProperties/row", tabWidget->currentIndex() );
 }
 
 void QgsVectorLayerProperties::toggleEditing()
@@ -263,7 +297,7 @@ void QgsVectorLayerProperties::insertExpression()
   dlg.setWindowTitle( tr( "Insert expression" ) );
   if ( dlg.exec() == QDialog::Accepted )
   {
-    QString expression =  dlg.expressionBuilder()->expressionText();
+    QString expression = dlg.expressionBuilder()->expressionText();
     //Only add the expression if the user has entered some text.
     if ( !expression.isEmpty() )
     {
@@ -386,7 +420,7 @@ void QgsVectorLayerProperties::apply()
   // provider-specific options
   if ( layer->dataProvider() )
   {
-    if ( layer->dataProvider()->capabilities() & QgsVectorDataProvider::SetEncoding )
+    if ( layer->dataProvider()->capabilities() & QgsVectorDataProvider::SelectEncoding )
     {
       layer->setProviderEncoding( cboProviderEncoding->currentText() );
     }
@@ -518,8 +552,49 @@ void QgsVectorLayerProperties::on_pbnChangeSpatialRefSys_clicked()
 
 void QgsVectorLayerProperties::on_pbnLoadDefaultStyle_clicked()
 {
+  QString msg;
   bool defaultLoadedFlag = false;
-  QString myMessage = layer->loadDefaultStyle( defaultLoadedFlag );
+
+  if ( layer->dataProvider()->isSaveAndLoadStyleToDBSupported() )
+  {
+    QMessageBox askToUser;
+    askToUser.setText( tr( "Load default style from: " ) );
+    askToUser.setIcon( QMessageBox::Question );
+    askToUser.addButton( tr( "Cancel" ), QMessageBox::RejectRole );
+    askToUser.addButton( tr( "Local database" ), QMessageBox::NoRole );
+    askToUser.addButton( tr( "Datasource database" ), QMessageBox::YesRole );
+
+    switch ( askToUser.exec() )
+    {
+      case( 0 ):
+        return;
+        break;
+      case( 2 ):
+        msg = layer->loadNamedStyle( layer->styleURI(), defaultLoadedFlag );
+        if ( !defaultLoadedFlag )
+        {
+          //something went wrong - let them know why
+          QMessageBox::information( this, tr( "Default Style" ), msg );
+        }
+        if ( msg.compare( tr( "Loaded from Provider" ) ) )
+        {
+          QMessageBox::information( this, tr( "Default Style" ),
+                                    tr( "No default style was found for this layer" ) );
+        }
+        else
+        {
+          reset();
+        }
+
+        return;
+        break;
+      default:
+        break;
+    }
+  }
+
+  QString myMessage = layer->loadNamedStyle( layer->styleURI(), defaultLoadedFlag, true );
+//  QString myMessage = layer->loadDefaultStyle( defaultLoadedFlag );
   //reset if the default style was loaded ok only
   if ( defaultLoadedFlag )
   {
@@ -535,17 +610,39 @@ void QgsVectorLayerProperties::on_pbnLoadDefaultStyle_clicked()
 
 void QgsVectorLayerProperties::on_pbnSaveDefaultStyle_clicked()
 {
-  apply(); // make sure the qml to save is uptodate
+  apply();
+  QString errorMsg;
+  if ( layer->dataProvider()->isSaveAndLoadStyleToDBSupported() )
+  {
+    QMessageBox askToUser;
+    askToUser.setText( tr( "Save default style to: " ) );
+    askToUser.setIcon( QMessageBox::Question );
+    askToUser.addButton( tr( "Cancel" ), QMessageBox::RejectRole );
+    askToUser.addButton( tr( "Local database" ), QMessageBox::NoRole );
+    askToUser.addButton( tr( "Datasource database" ), QMessageBox::YesRole );
 
-  // a flag passed by reference
+    switch ( askToUser.exec() )
+    {
+      case( 0 ):
+        return;
+        break;
+      case( 2 ):
+        layer->saveStyleToDatabase( "", "", true, "", errorMsg );
+        if ( errorMsg.isNull() )
+        {
+          return;
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
   bool defaultSavedFlag = false;
-  // after calling this the above flag will be set true for success
-  // or false if the save operation failed
-  QString myMessage = layer->saveDefaultStyle( defaultSavedFlag );
+  errorMsg = layer->saveDefaultStyle( defaultSavedFlag );
   if ( !defaultSavedFlag )
   {
-    //only raise the message if something went wrong
-    QMessageBox::information( this, tr( "Default Style" ), myMessage );
+    QMessageBox::warning( this, tr( "Default Style" ), errorMsg );
   }
 }
 
@@ -615,60 +712,156 @@ void QgsVectorLayerProperties::saveStyleAs( StyleType styleType )
   QString myLastUsedDir = myQSettings.value( "style/lastStyleDir", "." ).toString();
 
   QString format, extension;
-  if ( styleType == SLD )
+  if ( styleType == DB )
   {
-    format = tr( "SLD File" ) + " (*.sld)";
-    extension = ".sld";
+    QString infoWindowTitle = QObject::tr( "Save style to DB (%1)" ).arg( layer->providerType() );
+    QString msgError;
+
+    QgsSaveStyleToDbDialog askToUser;
+    //Ask the user for a name and a description about the style
+    if ( askToUser.exec() == QDialog::Accepted )
+    {
+      QString styleName = askToUser.getName();
+      QString styleDesc = askToUser.getDescription();
+      QString uiFileContent = askToUser.getUIFileContent();
+      bool isDefault = askToUser.isDefault();
+
+      apply();
+
+      layer->saveStyleToDatabase( styleName, styleDesc, isDefault, uiFileContent, msgError );
+      if ( !msgError.isNull() )
+      {
+        QMessageBox::warning( this, infoWindowTitle, msgError );
+      }
+      else
+      {
+        QMessageBox::information( this, infoWindowTitle, tr( "Style saved" ) );
+      }
+    }
+    else
+    {
+      return;
+    }
   }
   else
   {
-    format =  tr( "QGIS Layer Style File" ) + " (*.qml)";
-    extension = ".qml";
+
+    QString format, extension;
+    if ( styleType == SLD )
+    {
+      format = tr( "SLD File" ) + " (*.sld)";
+      extension = ".sld";
+    }
+    else
+    {
+      format = tr( "QGIS Layer Style File" ) + " (*.qml)";
+      extension = ".qml";
+    }
+
+    QString myOutputFileName = QFileDialog::getSaveFileName( this, tr( "Save layer properties as style file" ),
+                               myLastUsedDir, format );
+    if ( myOutputFileName.isNull() ) //dialog canceled
+    {
+      return;
+    }
+
+    apply(); // make sure the style to save is uptodate
+
+    QString myMessage;
+    bool defaultLoadedFlag = false;
+
+    //ensure the user never omitted the extension from the file name
+    if ( !myOutputFileName.endsWith( extension, Qt::CaseInsensitive ) )
+    {
+      myOutputFileName += extension;
+    }
+
+    if ( styleType == SLD )
+    {
+      // convert to SLD
+      myMessage = layer->saveSldStyle( myOutputFileName, defaultLoadedFlag );
+    }
+    else
+    {
+      myMessage = layer->saveNamedStyle( myOutputFileName, defaultLoadedFlag );
+    }
+
+    //reset if the default style was loaded ok only
+    if ( defaultLoadedFlag )
+    {
+      reset();
+    }
+    else
+    {
+      //let the user know what went wrong
+      QMessageBox::information( this, tr( "Saved Style" ), myMessage );
+    }
+
+    QFileInfo myFI( myOutputFileName );
+    QString myPath = myFI.path();
+    // Persist last used dir
+    myQSettings.setValue( "style/lastStyleDir", myPath );
+  }
+}
+
+void QgsVectorLayerProperties::loadStyleMenuTriggered( QAction *action )
+{
+  QMenu *menu = qobject_cast<QMenu *>( sender() );
+  if ( !menu )
+    return;
+
+  int index = mLoadStyleMenu->actions().indexOf( action );
+
+  if ( index == 0 ) //Load from filesystem
+  {
+    this->on_pbnLoadStyle_clicked();
+  }
+  else if ( index == 1 ) //Load from database
+  {
+    this->showListOfStylesFromDatabase();
   }
 
-  QString myOutputFileName = QFileDialog::getSaveFileName( this, tr( "Save layer properties as style file" ),
-                             myLastUsedDir, format );
-  if ( myOutputFileName.isNull() ) //dialog canceled
+}
+
+void QgsVectorLayerProperties::showListOfStylesFromDatabase()
+{
+  QString errorMsg;
+  QStringList ids, names, descriptions;
+
+  //get the list of styles in the db
+  int sectionLimit = layer->listStylesInDatabase( ids, names, descriptions, errorMsg );
+  if ( !errorMsg.isNull() )
   {
+    QMessageBox::warning( this, tr( "Error occured retrieving styles from database" ), errorMsg );
     return;
   }
 
-  apply(); // make sure the style to save is uptodate
+  QgsLoadStyleFromDBDialog dialog;
+  dialog.initializeLists( ids, names, descriptions, sectionLimit );
 
-  QString myMessage;
-  bool defaultLoadedFlag = false;
-
-  //ensure the user never omitted the extension from the file name
-  if ( !myOutputFileName.endsWith( extension, Qt::CaseInsensitive ) )
+  if ( dialog.exec() == QDialog::Accepted )
   {
-    myOutputFileName += extension;
+    QString selectedStyleId = dialog.getSelectedStyleId();
+
+    QString qmlStyle = layer->getStyleFromDatabase( selectedStyleId, errorMsg );
+    if ( !errorMsg.isNull() )
+    {
+      QMessageBox::warning( this, tr( "Error occured retrieving styles from database" ), errorMsg );
+      return;
+    }
+    if ( layer->applyNamedStyle( qmlStyle, errorMsg ) )
+    {
+      reset();
+    }
+    else
+    {
+      QMessageBox::warning( this, tr( "Error occured retrieving styles from database" ),
+                            tr( "The style retrieved is not a valid named style. Error message: %1" )
+                            .arg( errorMsg ) );
+    }
+
   }
 
-  if ( styleType == SLD )
-  {
-    // convert to SLD
-    myMessage = layer->saveSldStyle( myOutputFileName, defaultLoadedFlag );
-  }
-  else
-  {
-    myMessage = layer->saveNamedStyle( myOutputFileName, defaultLoadedFlag );
-  }
-
-  //reset if the default style was loaded ok only
-  if ( defaultLoadedFlag )
-  {
-    reset();
-  }
-  else
-  {
-    //let the user know what went wrong
-    QMessageBox::information( this, tr( "Saved Style" ), myMessage );
-  }
-
-  QFileInfo myFI( myOutputFileName );
-  QString myPath = myFI.path();
-  // Persist last used dir
-  myQSettings.setValue( "style/lastStyleDir", myPath );
 }
 
 QList<QgsVectorOverlayPlugin*> QgsVectorLayerProperties::overlayPlugins() const
@@ -788,13 +981,15 @@ void QgsVectorLayerProperties::updateSymbologyPage()
   }
   else
   {
-    tabWidget->setTabEnabled( 0, false ); // hide symbology item
+    mOptsPage_Style->setEnabled( false ); // hide symbology item
   }
 
   if ( mRendererDialog )
   {
+    mRendererDialog->layout()->setMargin( 0 );
     widgetStackRenderers->addWidget( mRendererDialog );
     widgetStackRenderers->setCurrentWidget( mRendererDialog );
+    widgetStackRenderers->currentWidget()->layout()->setMargin( 0 );
   }
 }
 
@@ -804,9 +999,9 @@ void QgsVectorLayerProperties::on_pbnUpdateExtents_clicked()
   mMetadataFilled = false;
 }
 
-void QgsVectorLayerProperties::on_tabWidget_currentChanged( int index )
+void QgsVectorLayerProperties::mOptionsStackedWidget_CurrentChanged( int indx )
 {
-  if ( index != 6 || mMetadataFilled )
+  if ( indx != mOptStackedWidget->indexOf( mOptsPage_Metadata ) || mMetadataFilled )
     return;
 
   //set the metadata contents (which can be expensive)

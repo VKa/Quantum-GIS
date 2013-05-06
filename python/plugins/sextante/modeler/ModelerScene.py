@@ -37,6 +37,7 @@ class ModelerScene(QtGui.QGraphicsScene):
         super(ModelerScene, self).__init__(parent)
         self.paramItems = []
         self.algItems = []
+        self.outputItems = []
         self.setItemIndexMethod(QtGui.QGraphicsScene.NoIndex);
 
     def getParameterPositions(self):
@@ -49,6 +50,18 @@ class ModelerScene(QtGui.QGraphicsScene):
         pos = []
         for item in self.algItems:
             pos.append(item.pos())
+        return pos
+    
+    def getOutputPositions(self):
+        pos = []
+        for alg in self.outputItems:
+            outputPos = {}
+            for key,value in alg.iteritems():                
+                if value is not None:
+                    outputPos[key] = value.pos()
+                else:
+                    outputPos[key] = None
+            pos.append(outputPos)
         return pos
 
     def getLastParameterItem(self):
@@ -77,17 +90,23 @@ class ModelerScene(QtGui.QGraphicsScene):
                 iModelParam=0
                 for modelparam in self.model.parameters:
                     if modelparam.name == aap.param:
-                        items.append(self.paramItems[iModelParam])
+                        items.append((self.paramItems[iModelParam], -1))
                         break
                     iModelParam+=1
         else:
-            items.append(self.algItems[start])
+            idx = 0
+            for output in self.model.algs[start].outputs:
+                if output.name == aap.param:
+                    items.append((self.algItems[start], idx))
+                    break
+                idx += 1
 
         return items
 
     def paintModel(self, model):
         self.model = model
         i=0
+        #inputs
         for param in model.parameters:
             item = ModelerGraphicItem(param, i, model)
             item.setFlag(QtGui.QGraphicsItem.ItemIsMovable, True)
@@ -96,7 +115,7 @@ class ModelerScene(QtGui.QGraphicsScene):
             item.setPos(model.paramPos[i])
             self.paramItems.append(item)
             i+=1
-        #first we add the algs
+        #we add the algs
         iAlg=0
         for alg in model.algs:
             item = ModelerGraphicItem(alg, iAlg, model)
@@ -106,21 +125,47 @@ class ModelerScene(QtGui.QGraphicsScene):
             item.setPos(model.algPos[iAlg])
             self.algItems.append(item)
             iAlg+=1
+                   
         #and then the arrows
         iAlg=0
         for alg in model.algs:
             params = model.algParameters[iAlg]
-            for key in params.keys():
-                param = params[key]
+            idx = 0
+            for parameter in alg.parameters:
+                param = params[parameter.name]
                 if param:
-                    sourceItems = self.getItemsFromAAP(param, isinstance(alg.getParameterFromName(key), ParameterMultipleInput))
+                    sourceItems = self.getItemsFromAAP(param, isinstance(alg.getParameterFromName(parameter.name), ParameterMultipleInput))
                     for sourceItem in sourceItems:
-                        arrow = ModelerArrowItem(sourceItem, self.algItems[iAlg])
+                        arrow = ModelerArrowItem(sourceItem[0], sourceItem[1], self.algItems[iAlg], idx)
                         self.addItem(arrow)
+                idx += 1
             for depend in model.dependencies[iAlg]:
-                arrow = ModelerArrowItem(self.algItems[depend], self.algItems[iAlg])
+                arrow = ModelerArrowItem(self.algItems[depend], -1, self.algItems[iAlg], -1)
                 self.addItem(arrow)
             iAlg+=1
+            
+        #and finally the outputs                        
+        for iAlg, alg in enumerate(model.algs):
+            outputs = model.algOutputs[iAlg]  
+            outputItems = {}                      
+            for idx, key in enumerate(outputs.keys()):
+                out = outputs[key]                
+                if out is not None:   
+                    item = ModelerGraphicItem(out, idx, model)
+                    item.setFlag(QtGui.QGraphicsItem.ItemIsMovable, True)
+                    item.setFlag(QtGui.QGraphicsItem.ItemIsSelectable, True)
+                    self.addItem(item)
+                    pos = model.outputPos[iAlg][key]                     
+                    if pos is None:
+                        pos = self.algItems[iAlg].pos() + QtCore.QPointF(ModelerGraphicItem.BOX_WIDTH,0) + self.algItems[iAlg].getLinkPointForOutput(idx)                                            
+                    item.setPos(pos)
+                    outputItems[key] = item                                 
+                    arrow = ModelerArrowItem(self.algItems[iAlg], idx, item, -1)
+                    self.addItem(arrow)
+                else:
+                    outputItems[key] = None                
+            self.outputItems.append(outputItems)
+
 
     def mousePressEvent(self, mouseEvent):
         if (mouseEvent.button() != QtCore.Qt.LeftButton):

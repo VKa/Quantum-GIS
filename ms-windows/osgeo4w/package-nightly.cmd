@@ -13,7 +13,7 @@ REM *   (at your option) any later version.                                   *
 REM *                                                                         *
 REM ***************************************************************************
 @echo off
-set GRASS_VERSION=6.4.3RC2
+set GRASS_VERSION=6.4.3RC3
 
 set BUILDDIR=%CD%\build
 REM set BUILDDIR=%TEMP%\qgis_unstable
@@ -174,14 +174,14 @@ REM del %OSGEO4W_ROOT%\apps\%PACKAGENAME%\python\qgis\qgisconfig.py
 
 touch exclude
 
-move %OSGEO4W_ROOT%\apps\%PACKAGENAME%\bin\qgis.exe %OSGEO4W_ROOT%\bin\%PACKAGENAME%.exe
-move %OSGEO4W_ROOT%\apps\%PACKAGENAME%\bin\qbrowser.exe %OSGEO4W_ROOT%\bin\%PACKAGENAME%-browser.exe
+move %OSGEO4W_ROOT%\apps\%PACKAGENAME%\bin\qgis.exe %OSGEO4W_ROOT%\bin\%PACKAGENAME%-bin.exe
+move %OSGEO4W_ROOT%\apps\%PACKAGENAME%\bin\qbrowser.exe %OSGEO4W_ROOT%\bin\%PACKAGENAME%-browser-bin.exe
 
 tar -C %OSGEO4W_ROOT% -cjf %PACKAGENAME%-%VERSION%-%PACKAGE%.tar.bz2 ^
 	--exclude-from exclude ^
 	apps/%PACKAGENAME% ^
-	bin/%PACKAGENAME%.exe ^
-	bin/%PACKAGENAME%-browser.exe ^
+	bin/%PACKAGENAME%-bin.exe ^
+	bin/%PACKAGENAME%-browser-bin.exe ^
 	bin/%PACKAGENAME%.bat.tmpl ^
 	bin/%PACKAGENAME%-browser.bat.tmpl ^
 	apps/qt4/plugins/sqldrivers/qsqlocispatial.dll ^

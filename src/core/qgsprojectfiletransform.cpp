@@ -473,7 +473,7 @@ void QgsProjectFileTransform::transform1800to1900()
     QgsRasterLayer rasterLayer;
     // TODO: We have to use more data from project file to read the layer it correctly,
     // OTOH, we should not read it until it was converted
-    rasterLayer.readXML( layerNode );
+    rasterLayer.readLayerXML( layerNode.toElement() );
     convertRasterProperties( mDom, layerNode, rasterPropertiesElem, &rasterLayer );
   }
 
@@ -816,10 +816,13 @@ int QgsProjectFileTransform::rasterBandNumber( const QDomElement& rasterProperti
   QDomElement rasterBandElem = rasterPropertiesElem.firstChildElement( bandName );
   if ( !rasterBandElem.isNull() )
   {
-    band = rlayer->bandNumber( rasterBandElem.text() );
-    if ( band == 0 )
+    for ( int i = 1; i <= rlayer->bandCount(); i++ )
     {
-      band = -1;
+      if ( rlayer->bandName( i ) == rasterBandElem.text() )
+      {
+        band = i;
+        break;
+      }
     }
   }
   return band;

@@ -151,7 +151,7 @@ class QgsMapLayer : QObject
 
        @returns true if successful
      */
-    bool readXML( const QDomNode& layer_node );
+    bool readLayerXML( const QDomElement& layerElement );
 
 
     /** stores state in Dom node
@@ -169,7 +169,7 @@ class QgsMapLayer : QObject
 
        @returns true if successful
     */
-    bool writeXML( QDomNode & layer_node, QDomDocument & document );
+    bool writeLayerXML( QDomElement& layerElement, QDomDocument & document );
 
     /** Set a custom property for layer. Properties are stored in a map and saved in project file.
      *  @note Added in v1.4 */
@@ -306,6 +306,13 @@ class QgsMapLayer : QObject
      * @note This method was added in QGIS 1.4 **/
     void setCacheImage( QImage * thepImage /Transfer/ );
 
+    /* Returns the current blending mode for a layer 
+        @note added in version 1.9*/
+    const QPainter::CompositionMode blendMode() const;
+    /* Sets the blending mode for a layer 
+        @note added in version 1.9*/    
+    void setBlendMode( const QPainter::CompositionMode blendMode );
+
   public slots:
 
     /** Event handler for when a coordinate transform fails due to bad vertex error */
@@ -373,12 +380,12 @@ class QgsMapLayer : QObject
         \note added in v1.5 */
     void setValid( bool valid );
 
-    /** called by readXML(), used by children to read state specific to them from
+    /** called by readLayerXML(), used by children to read state specific to them from
         project files.
     */
     virtual bool readXml( const QDomNode& layer_node );
 
-    /** called by writeXML(), used by children to write state specific to them to
+    /** called by writeLayerXML(), used by children to write state specific to them to
         project files.
     */
     virtual bool writeXml( QDomNode & layer_node, QDomDocument & document );

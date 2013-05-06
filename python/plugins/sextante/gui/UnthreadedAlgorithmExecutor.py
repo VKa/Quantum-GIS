@@ -16,6 +16,7 @@
 *                                                                         *
 ***************************************************************************
 """
+from sextante.tools.vector import getfeatures
 
 __author__ = 'Victor Olaya'
 __date__ = 'August 2012'
@@ -56,16 +57,15 @@ class UnthreadedAlgorithmExecutor:
         systemEncoding = settings.value( "/UI/encoding", "System" ).toString()
         layerfile = alg.getParameterValue(paramToIter)
         layer = QGisLayers.getObjectFromUri(layerfile, False)
-        provider = layer.dataProvider()
-        allAttrs = provider.attributeIndexes()
-        provider.select( allAttrs )
         feat = QgsFeature()
         filelist = []
         outputs = {}
-        while provider.nextFeature(feat):
+        provider = layer.dataProvider()
+        features = getfeatures(layer)
+        for feat in features:
             output = SextanteUtils.getTempFilename("shp")
             filelist.append(output)
-            writer = QgsVectorFileWriter(output, systemEncoding,provider.fields(), provider.geometryType(), layer.crs() )
+            writer = QgsVectorFileWriter(output, systemEncoding, provider.fields(), provider.geometryType(), layer.crs() )
             writer.addFeature(feat)
             del writer
 

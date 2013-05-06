@@ -16,9 +16,7 @@
 *                                                                         *
 ***************************************************************************
 """
-from sextante.core.SextanteConfig import SextanteConfig
-from sextante.core.GeoAlgorithm import GeoAlgorithm
-from sextante.gui.AlgorithmClassification import AlgorithmDecorator
+import sys
 
 __author__ = 'Victor Olaya'
 __date__ = 'August 2012'
@@ -33,10 +31,12 @@ import codecs
 import pickle
 
 from sextante.core.SextanteUtils import SextanteUtils
-
 from sextante.gui.HelpEditionDialog import HelpEditionDialog
 from sextante.gui.ParametersDialog import ParametersDialog
-
+from sextante.core.SextanteConfig import SextanteConfig
+from sextante.core.GeoAlgorithm import GeoAlgorithm
+from sextante.gui.AlgorithmClassification import AlgorithmDecorator
+#from sextante.gui.SextanteToolbox import SextanteToolbox
 from sextante.modeler.ModelerParameterDefinitionDialog import ModelerParameterDefinitionDialog
 from sextante.modeler.ModelerAlgorithm import ModelerAlgorithm
 from sextante.modeler.ModelerParametersDialog import ModelerParametersDialog
@@ -44,10 +44,12 @@ from sextante.modeler.ModelerUtils import ModelerUtils
 from sextante.modeler.WrongModelException import WrongModelException
 from sextante.modeler.ModelerScene import ModelerScene
 from sextante.modeler.Providers import Providers
-
 from sextante.ui.ui_DlgModeler import Ui_DlgModeler
 
 class ModelerDialog(QDialog, Ui_DlgModeler):
+
+    USE_CATEGORIES = "/SextanteQGIS/UseCategories"
+
     def __init__(self, alg=None):
         QDialog.__init__(self)
 
@@ -165,7 +167,7 @@ class ModelerDialog(QDialog, Ui_DlgModeler):
                                 self.tr("Please enter group and model names before saving")
                                )
             return
-        self.alg.setPositions(self.scene.getParameterPositions(), self.scene.getAlgorithmPositions())
+        self.alg.setPositions(self.scene.getParameterPositions(), self.scene.getAlgorithmPositions(), self.scene.getOutputPositions())
         self.alg.name = unicode(self.textName.text())
         self.alg.group = unicode(self.textGroup.text())
         if self.alg.descriptionFile != None and not saveAs:
@@ -178,8 +180,20 @@ class ModelerDialog(QDialog, Ui_DlgModeler):
                 self.alg.descriptionFile = filename
         if filename:
             text = self.alg.serialize()
-            fout = codecs.open(filename, "w", encoding='utf-8')
-            #fout = open(filename, "w")
+            try:
+                fout = codecs.open(filename, "w", encoding='utf-8')
+            except:
+                if saveAs:
+                    QMessageBox.warning(self,
+                                    self.tr("I/O error"),
+                                    self.tr("Unable to save edits. Reason:\n %1").arg(unicode(sys.exc_info()[1]))
+                                   )
+                else:
+                    QMessageBox.warning(self,
+                                    self.tr("Can't save model"),
+                                    self.tr("This model can't be saved in its original location\n(probably you do not have permission to do it).\nPlease, use the 'Save as...' option.")
+                                   )
+                return
             fout.write(text)
             fout.close()
             self.update = True
@@ -226,7 +240,7 @@ class ModelerDialog(QDialog, Ui_DlgModeler):
             dlg = ModelerParameterDefinitionDialog(self.alg, paramType)
             dlg.exec_()
             if dlg.param != None:
-                self.alg.setPositions(self.scene.getParameterPositions(), self.scene.getAlgorithmPositions())
+                self.alg.setPositions(self.scene.getParameterPositions(), self.scene.getAlgorithmPositions(), self.scene.getOutputPositions())
                 self.alg.addParameter(dlg.param)
                 self.repaintModel()
                 self.view.ensureVisible(self.scene.getLastParameterItem())
@@ -251,13 +265,14 @@ class ModelerDialog(QDialog, Ui_DlgModeler):
                 dlg = ModelerParametersDialog(alg, self.alg)
             dlg.exec_()
             if dlg.params != None:
-                self.alg.setPositions(self.scene.getParameterPositions(), self.scene.getAlgorithmPositions())
+                self.alg.setPositions(self.scene.getParameterPositions(), self.scene.getAlgorithmPositions(), self.scene.getOutputPositions())
                 self.alg.addAlgorithm(alg, dlg.params, dlg.values, dlg.outputs, dlg.dependencies)
                 self.repaintModel()
                 self.view.ensureVisible(self.scene.getLastAlgorithmItem())
 
     def fillAlgorithmTree(self):
-        useCategories = SextanteConfig.getSetting(SextanteConfig.USE_CATEGORIES)
+        settings = QSettings()
+        useCategories = settings.value(self.USE_CATEGORIES).toBool()
         if useCategories:
             self.fillAlgorithmTreeUsingCategories()
         else:
@@ -400,7 +415,7 @@ class ModelerDialog(QDialog, Ui_DlgModeler):
 class TreeAlgorithmItem(QTreeWidgetItem):
 
     def __init__(self, alg):
-        useCategories = SextanteConfig.getSetting(SextanteConfig.USE_CATEGORIES)
+        useCategories = SextanteConfig.getSetting(ModelerDialog.USE_CATEGORIES)
         QTreeWidgetItem.__init__(self)
         self.alg = alg
         icon = alg.getIcon()

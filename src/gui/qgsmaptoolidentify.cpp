@@ -376,19 +376,19 @@ bool QgsMapToolIdentify::identifyRasterLayer( QList<IdentifyResult> *results, Qg
 
   QMap<int, QVariant> values;
 
-  QgsRasterDataProvider::IdentifyFormat format = QgsRasterDataProvider::identifyFormatFromName( layer->customProperty( "identify/format" ).toString() );
+  QgsRaster::IdentifyFormat format = QgsRasterDataProvider::identifyFormatFromName( layer->customProperty( "identify/format" ).toString() );
 
   // check if the format is really supported otherwise use first supported format
   if ( !( QgsRasterDataProvider::identifyFormatToCapability( format ) & capabilities ) )
   {
-    if ( capabilities & QgsRasterInterface::IdentifyFeature ) format = QgsRasterDataProvider::IdentifyFormatFeature;
-    else if ( capabilities & QgsRasterInterface::IdentifyValue ) format = QgsRasterDataProvider::IdentifyFormatValue;
-    else if ( capabilities & QgsRasterInterface::IdentifyHtml ) format = QgsRasterDataProvider::IdentifyFormatHtml;
-    else if ( capabilities & QgsRasterInterface::IdentifyText ) format = QgsRasterDataProvider::IdentifyFormatText;
+    if ( capabilities & QgsRasterInterface::IdentifyFeature ) format = QgsRaster::IdentifyFormatFeature;
+    else if ( capabilities & QgsRasterInterface::IdentifyValue ) format = QgsRaster::IdentifyFormatValue;
+    else if ( capabilities & QgsRasterInterface::IdentifyHtml ) format = QgsRaster::IdentifyFormatHtml;
+    else if ( capabilities & QgsRasterInterface::IdentifyText ) format = QgsRaster::IdentifyFormatText;
     else return false;
   }
 
-  // We can only use context (extent, width, heigh) if layer is not reprojected,
+  // We can only use context (extent, width, height) if layer is not reprojected,
   // otherwise we don't know source resolution (size).
   if ( mCanvas->hasCrsTransformEnabled() && dprovider->crs() != mCanvas->mapRenderer()->destinationCrs() )
   {
@@ -423,7 +423,7 @@ bool QgsMapToolIdentify::identifyRasterLayer( QList<IdentifyResult> *results, Qg
 
   //QString type = tr( "Raster" );
   QgsGeometry geometry;
-  if ( format == QgsRasterDataProvider::IdentifyFormatValue )
+  if ( format == QgsRaster::IdentifyFormatValue )
   {
     foreach ( int bandNo, values.keys() )
     {
@@ -442,7 +442,7 @@ bool QgsMapToolIdentify::identifyRasterLayer( QList<IdentifyResult> *results, Qg
     QString label = layer->name();
     results->append( IdentifyResult( qobject_cast<QgsMapLayer *>( layer ), label, attributes, derivedAttributes ) );
   }
-  else if ( format == QgsRasterDataProvider::IdentifyFormatFeature )
+  else if ( format == QgsRaster::IdentifyFormatFeature )
   {
     foreach ( int i, values.keys() )
     {
