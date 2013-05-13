@@ -160,14 +160,14 @@ class PythonConsoleWidget(QWidget):
         saveFileBt = QCoreApplication.translate("PythonConsole", "Save")
         self.saveFileButton = QAction(self)
         self.saveFileButton.setCheckable(False)
-        self.saveFileButton.setEnabled(True)
+        self.saveFileButton.setEnabled(False)
         self.saveFileButton.setIcon(QgsApplication.getThemeIcon("console/iconSaveConsole.png"))
         self.saveFileButton.setMenuRole(QAction.PreferencesRole)
         self.saveFileButton.setIconVisibleInMenu(True)
         self.saveFileButton.setToolTip(saveFileBt)
         self.saveFileButton.setText(saveFileBt)
         ## Action for Save File As
-        saveAsFileBt = QCoreApplication.translate("PythonConsole", "Save As..")
+        saveAsFileBt = QCoreApplication.translate("PythonConsole", "Save As...")
         self.saveAsFileButton = QAction(self)
         self.saveAsFileButton.setCheckable(False)
         self.saveAsFileButton.setEnabled(True)
@@ -537,6 +537,12 @@ class PythonConsoleWidget(QWidget):
             self.findPrevButton.setEnabled(False)
 
     def onClickGoToLine(self, item, column):
+        tabEditor = self.tabEditorWidget.currentWidget().newEditor
+        if item.text(1) == 'syntaxError':
+            check = self.tabEditorWidget.currentWidget().newEditor.syntaxCheck(fromContextMenu=False)
+            if check and not tabEditor.isReadOnly():
+                self.tabEditorWidget.currentWidget().save()
+            return
         linenr = int(item.text(1))
         itemName = str(item.text(0))
         charPos = itemName.find(' ')
@@ -544,7 +550,7 @@ class PythonConsoleWidget(QWidget):
             objName = itemName[0:charPos]
         else:
             objName = itemName
-        self.tabEditorWidget.currentWidget().newEditor.goToLine(objName, linenr)
+        tabEditor.goToLine(objName, linenr)
 
     def sextante(self):
        self.shell.commandConsole('sextante')
@@ -652,7 +658,7 @@ class PythonConsoleWidget(QWidget):
         except (IOError, OSError), e:
             errTr = QCoreApplication.translate("PythonConsole", "Save Error")
             msgErrTr = QCoreApplication.translate("PythonConsole",
-                                                  "Failed to save %1: %2").arg(tabWidget.path, e)
+                                                  "Failed to save %1: %2").arg(tabWidget.path).arg(e)
             QMessageBox.warning(self, errTr, msgErrTr)
 
     def saveAsScriptFile(self):

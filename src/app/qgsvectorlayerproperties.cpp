@@ -156,7 +156,7 @@ QgsVectorLayerProperties::QgsVectorLayerProperties(
                       this, SLOT( loadStyleMenuTriggered( QAction * ) ) ) ;
 
     //for saving
-    mSaveAsMenu->addAction( tr( "Save on database (%1)" ).arg( layer->providerType() ) );
+    mSaveAsMenu->addAction( tr( "Save in database (%1)" ).arg( layer->providerType() ) );
   }
 
   QObject::connect( mSaveAsMenu, SIGNAL( triggered( QAction * ) ),
@@ -729,6 +729,7 @@ void QgsVectorLayerProperties::saveStyleAs( StyleType styleType )
       apply();
 
       layer->saveStyleToDatabase( styleName, styleDesc, isDefault, uiFileContent, msgError );
+
       if ( !msgError.isNull() )
       {
         QMessageBox::warning( this, infoWindowTitle, msgError );
@@ -737,6 +738,7 @@ void QgsVectorLayerProperties::saveStyleAs( StyleType styleType )
       {
         QMessageBox::information( this, infoWindowTitle, tr( "Style saved" ) );
       }
+
     }
     else
     {
@@ -856,7 +858,7 @@ void QgsVectorLayerProperties::showListOfStylesFromDatabase()
     else
     {
       QMessageBox::warning( this, tr( "Error occured retrieving styles from database" ),
-                            tr( "The style retrieved is not a valid named style. Error message: %1" )
+                            tr( "The retrieved style is not a valid named style. Error message: %1" )
                             .arg( errorMsg ) );
     }
 
