@@ -29,8 +29,10 @@
 #include <QDialog>
 #include <QMouseEvent>
 
-QgsMapToolAnnotation::QgsMapToolAnnotation( QgsMapCanvas* canvas ): QgsMapTool( canvas ),
-    mActiveItem( 0 ), mCurrentMoveAction( QgsAnnotationItem::NoAction ), mLastMousePosition( 0, 0 )
+QgsMapToolAnnotation::QgsMapToolAnnotation( QgsMapCanvas* canvas )
+    : QgsMapTool( canvas )
+    , mCurrentMoveAction( QgsAnnotationItem::NoAction )
+    , mLastMousePosition( 0, 0 )
 {
   mCursor = QCursor( Qt::ArrowCursor );
 }
@@ -131,7 +133,7 @@ void QgsMapToolAnnotation::keyPressEvent( QKeyEvent* e )
   QgsAnnotationItem* sItem = selectedItem();
   if ( sItem )
   {
-    if ( e->key() == Qt::Key_Delete )
+    if ( e->key() == Qt::Key_Backspace || e->key() == Qt::Key_Delete )
     {
       if ( mCanvas && mCanvas->scene() )
       {
@@ -139,6 +141,9 @@ void QgsMapToolAnnotation::keyPressEvent( QKeyEvent* e )
         mCanvas->scene()->removeItem( sItem );
         delete sItem;
         mCanvas->setCursor( neutralCursor );
+
+        // Override default shortcut management in MapCanvas
+        e->ignore();
       }
     }
   }

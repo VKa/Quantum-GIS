@@ -25,11 +25,9 @@
 
 static const QString WFS_NAMESPACE = "http://www.opengis.net/wfs";
 
-QgsWFSCapabilities::QgsWFSCapabilities( QString theUri ) :
-    //QObject( parent ),
-    //mConnName( connName ),
-    mCapabilitiesReply( 0 ),
-    mErrorCode( QgsWFSCapabilities::NoError )
+QgsWFSCapabilities::QgsWFSCapabilities( QString theUri )
+    : mCapabilitiesReply( 0 )
+    , mErrorCode( QgsWFSCapabilities::NoError )
 {
   mUri.setEncodedUri( theUri );
   QgsDebugMsg( "theUri = " + theUri );
@@ -38,7 +36,7 @@ QgsWFSCapabilities::QgsWFSCapabilities( QString theUri ) :
   QgsDebugMsg( "mBaseUrl = " + mBaseUrl );
 
   //find out the server URL
-  /*
+#if 0
   QSettings settings;
   QString key = "/Qgis/connections-wfs/" + mConnName + "/url";
   mUri = settings.value( key ).toString();
@@ -54,7 +52,7 @@ QgsWFSCapabilities::QgsWFSCapabilities( QString theUri ) :
   {
     mUri.append( "&" );
   }
-  */
+#endif
 }
 
 QString QgsWFSCapabilities::prepareUri( QString uri )
@@ -120,10 +118,10 @@ QString QgsWFSCapabilities::uriGetFeature( QString typeName, QString crsString, 
   if ( !bBox.isEmpty() )
   {
     bBoxString = QString( "&BBOX=%1,%2,%3,%4" )
-                 .arg( bBox.xMinimum(), 0, 'f' )
-                 .arg( bBox.yMinimum(), 0, 'f' )
-                 .arg( bBox.xMaximum(), 0, 'f' )
-                 .arg( bBox.yMaximum(), 0, 'f' );
+                 .arg( qgsDoubleToString( bBox.xMinimum() ) )
+                 .arg( qgsDoubleToString( bBox.yMinimum() ) )
+                 .arg( qgsDoubleToString( bBox.xMaximum() ) )
+                 .arg( qgsDoubleToString( bBox.yMaximum() ) );
   }
 
   QString uri = mBaseUrl;
@@ -148,17 +146,21 @@ void QgsWFSCapabilities::requestCapabilities()
 
 void QgsWFSCapabilities::capabilitiesReplyFinished()
 {
+  QNetworkReply *reply = mCapabilitiesReply;
+  reply->deleteLater();
+  mCapabilitiesReply = 0;
+
   // handle network errors
-  if ( mCapabilitiesReply->error() != QNetworkReply::NoError )
+  if ( reply->error() != QNetworkReply::NoError )
   {
     mErrorCode = QgsWFSCapabilities::NetworkError;
-    mErrorMessage = mCapabilitiesReply->errorString();
+    mErrorMessage = reply->errorString();
     emit gotCapabilities();
     return;
   }
 
   // handle HTTP redirects
-  QVariant redirect = mCapabilitiesReply->attribute( QNetworkRequest::RedirectionTargetAttribute );
+  QVariant redirect = reply->attribute( QNetworkRequest::RedirectionTargetAttribute );
   if ( !redirect.isNull() )
   {
     QgsDebugMsg( "redirecting to " + redirect.toUrl().toString() );
@@ -166,14 +168,13 @@ void QgsWFSCapabilities::capabilitiesReplyFinished()
     request.setAttribute( QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::PreferNetwork );
     request.setAttribute( QNetworkRequest::CacheSaveControlAttribute, true );
 
-    mCapabilitiesReply->deleteLater();
     mCapabilitiesReply = QgsNetworkAccessManager::instance()->get( request );
 
     connect( mCapabilitiesReply, SIGNAL( finished() ), this, SLOT( capabilitiesReplyFinished() ) );
     return;
   }
 
-  QByteArray buffer = mCapabilitiesReply->readAll();
+  QByteArray buffer = reply->readAll();
 
   QgsDebugMsg( "parsing capabilities: " + buffer );
 
@@ -264,8 +265,6 @@ void QgsWFSCapabilities::capabilitiesReplyFinished()
     mCaps.featureTypes.append( featureType );
   }
 
-  mCapabilitiesReply->deleteLater();
-  mCapabilitiesReply = 0;
   emit gotCapabilities();
 }
 

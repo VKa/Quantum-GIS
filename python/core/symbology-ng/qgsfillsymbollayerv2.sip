@@ -32,6 +32,8 @@ class QgsSimpleFillSymbolLayerV2 : QgsFillSymbolLayerV2
 
     void toSld( QDomDocument &doc, QDomElement &element, QgsStringMap props ) const;
 
+    QString ogrFeatureStyle( double mmScaleFactor, double mapUnitScaleFactor ) const;
+
     Qt::BrushStyle brushStyle() const;
     void setBrushStyle( Qt::BrushStyle style );
 
@@ -55,6 +57,119 @@ class QgsSimpleFillSymbolLayerV2 : QgsFillSymbolLayerV2
 
     void setOutputUnit( QgsSymbolV2::OutputUnit unit );
     QgsSymbolV2::OutputUnit outputUnit() const;
+};
+
+class QgsGradientFillSymbolLayerV2 : QgsFillSymbolLayerV2
+{
+%TypeHeaderCode
+#include <qgsfillsymbollayerv2.h>
+%End
+
+  public:
+  
+    enum GradientColorType
+    {
+      SimpleTwoColor,
+      ColorRamp
+    };
+
+    enum GradientType
+    {
+      Linear,
+      Radial,
+      Conical
+    };
+
+    enum GradientCoordinateMode
+    {
+      Feature,
+      Viewport
+    };
+
+    enum GradientSpread
+    {
+      Pad,
+      Reflect,
+      Repeat
+    };
+
+    QgsGradientFillSymbolLayerV2( QColor color = DEFAULT_SIMPLEFILL_COLOR,
+                                  QColor color2 = Qt::white,
+                                  GradientColorType gradientColorType = SimpleTwoColor,
+                                  GradientType gradientType = Linear,
+                                  GradientCoordinateMode coordinateMode = Feature,
+                                  GradientSpread gradientSpread = Pad
+                                );
+    // static stuff
+
+    static QgsSymbolLayerV2* create( const QgsStringMap& properties = QgsStringMap() ) /Factory/;
+
+    // implemented from base classes
+
+    QString layerType() const;
+
+    void startRender( QgsSymbolV2RenderContext& context );
+
+    void stopRender( QgsSymbolV2RenderContext& context );
+
+    void renderPolygon( const QPolygonF& points, QList<QPolygonF>* rings, QgsSymbolV2RenderContext& context );
+
+    QgsStringMap properties() const;
+
+    QgsSymbolLayerV2* clone() const /Factory/;
+
+    /**Type of gradient, eg linear or radial*/
+    GradientType gradientType() const;
+    void setGradientType( GradientType gradientType );
+
+    /**Gradient color mode, controls how gradient color stops are created*/
+    GradientColorType gradientColorType() const;
+    void setGradientColorType( GradientColorType gradientColorType );
+
+    /**Color ramp used for the gradient fill, only used if the gradient color type is set to ColorRamp*/
+    QgsVectorColorRampV2* colorRamp();
+    void setColorRamp( QgsVectorColorRampV2* ramp );
+
+    /**Color for endpoint of gradient, only used if the gradient color type is set to SimpleTwoColor*/
+    QColor color2() const;
+    void setColor2( QColor color2 );
+
+    /**Coordinate mode for gradient. Controls how the gradient stops are positioned.*/
+    GradientCoordinateMode coordinateMode() const;
+    void setCoordinateMode( GradientCoordinateMode coordinateMode );
+
+    /**Gradient spread mode. Controls how the gradient behaves outside of the predefined stops*/
+    GradientSpread gradientSpread() const;
+    void setGradientSpread( GradientSpread gradientSpread );
+
+    /**Starting point of gradient fill, in the range [0,0] - [1,1]*/
+    void setReferencePoint1( QPointF referencePoint );
+    QPointF referencePoint1() const;
+
+    /**Sets the starting point of the gradient to be the feature centroid*/
+    void setReferencePoint1IsCentroid( bool isCentroid );
+    bool referencePoint1IsCentroid() const;
+
+    /**End point of gradient fill, in the range [0,0] - [1,1]*/
+    void setReferencePoint2( QPointF referencePoint );
+    QPointF referencePoint2() const;
+
+    /**Sets the end point of the gradient to be the feature centroid*/
+    void setReferencePoint2IsCentroid( bool isCentroid );
+    bool referencePoint2IsCentroid() const;
+
+    /**Rotation angle for gradient fill. Can be used to rotate a gradient around its centre point*/
+    void setAngle( double angle );
+    double angle() const;
+
+    /**Offset for gradient fill*/
+    void setOffset( QPointF offset );
+    QPointF offset() const;
+
+    /**Units for gradient fill offset*/
+    void setOffsetUnit( QgsSymbolV2::OutputUnit unit );
+    QgsSymbolV2::OutputUnit offsetUnit() const;
+
 };
 
 /**Base class for polygon renderers generating texture images*/
@@ -127,6 +242,8 @@ class QgsSVGFillSymbolLayer: QgsImageFillSymbolLayer
     void setOutputUnit( QgsSymbolV2::OutputUnit unit );
     QgsSymbolV2::OutputUnit outputUnit() const;
 
+  protected:
+    void applyDataDefinedSettings( const QgsSymbolV2RenderContext& context );
 };
 
 class QgsLinePatternFillSymbolLayer: QgsImageFillSymbolLayer
@@ -152,6 +269,8 @@ class QgsLinePatternFillSymbolLayer: QgsImageFillSymbolLayer
     QgsSymbolLayerV2* clone() const /Factory/;
 
     void toSld( QDomDocument &doc, QDomElement &element, QgsStringMap props ) const;
+
+    QString ogrFeatureStyleWidth( double widthScaleFactor ) const;
 
     //getters and setters
     void setLineAngle( double a );
@@ -232,6 +351,9 @@ class QgsPointPatternFillSymbolLayer : QgsImageFillSymbolLayer
 
     void setOutputUnit( QgsSymbolV2::OutputUnit unit );
     QgsSymbolV2::OutputUnit outputUnit() const;
+
+  protected:
+    void applyDataDefinedSettings( const QgsSymbolV2RenderContext& context );
 };
 
 class QgsCentroidFillSymbolLayerV2 : QgsFillSymbolLayerV2
@@ -269,4 +391,7 @@ class QgsCentroidFillSymbolLayerV2 : QgsFillSymbolLayerV2
 
     QgsSymbolV2* subSymbol();
     bool setSubSymbol( QgsSymbolV2* symbol /Transfer/ );
+
+    void setOutputUnit( QgsSymbolV2::OutputUnit unit );
+    QgsSymbolV2::OutputUnit outputUnit() const;
 };

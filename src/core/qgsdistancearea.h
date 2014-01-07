@@ -55,13 +55,16 @@ class CORE_EXPORT QgsDistanceArea
     //! sets source spatial reference system (by QGIS CRS)
     void setSourceCrs( long srsid );
 
+    //! sets source spatial reference system (by QGIS CRS)
+    void setSourceCrs( const QgsCoordinateReferenceSystem& srcCRS );
+
     //! sets source spatial reference system by authid
     void setSourceAuthId( QString authid );
 
     //! returns source spatial reference system
-    long sourceCrs() { return mSourceRefSys; }
+    long sourceCrs() const { return mSourceRefSys; }
     //! What sort of coordinate system is being used?
-    bool geographic() { return mCoordTransform->sourceCrs().geographicFlag(); }
+    bool geographic() const { return mCoordTransform->sourceCrs().geographicFlag(); }
 
     //! sets ellipsoid by its acronym
     bool setEllipsoid( const QString& ellipsoid );
@@ -71,7 +74,7 @@ class CORE_EXPORT QgsDistanceArea
     bool setEllipsoid( double semiMajor, double semiMinor );
 
     //! returns ellipsoid's acronym
-    const QString& ellipsoid() { return mEllipsoid; }
+    const QString& ellipsoid() const { return mEllipsoid; }
 
     //! returns ellipsoid's semi major axis
     double ellipsoidSemiMajor() { return mSemiMajor; }
@@ -105,9 +108,9 @@ class CORE_EXPORT QgsDistanceArea
 
   protected:
     //! measures line distance, line points are extracted from WKB
-    unsigned char* measureLine( unsigned char* feature, double* area, bool hasZptr = false );
+    const unsigned char* measureLine( const unsigned char* feature, double* area, bool hasZptr = false );
     //! measures polygon area and perimeter, vertices are extracted from WKB
-    unsigned char* measurePolygon( unsigned char* feature, double* area, double* perimeter, bool hasZptr = false );
+    const unsigned char* measurePolygon( const unsigned char* feature, double* area, double* perimeter, bool hasZptr = false );
 
     /**
       calculates distance from two points on ellipsoid

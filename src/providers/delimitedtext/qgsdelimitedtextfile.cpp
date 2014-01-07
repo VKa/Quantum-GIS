@@ -1,5 +1,5 @@
 /***************************************************************************
-  qgsdelimitedtextfile.cpp -  Data provider for delimted text
+  qgsdelimitedtextfile.cpp -  Data provider for delimited text
   -------------------
           begin                : 2012-01-20
           copyright            : (C) 201 by Chris Crook
@@ -82,6 +82,11 @@ void QgsDelimitedTextFile::close()
     delete mWatcher;
     mWatcher = 0;
   }
+  mLineNumber = -1;
+  mRecordLineNumber = -1;
+  mRecordNumber = -1;
+  mMaxRecordNumber = -1;
+  mHoldCurrentRecord = false;
 }
 
 bool QgsDelimitedTextFile::open()
@@ -95,25 +100,24 @@ bool QgsDelimitedTextFile::open()
       QgsDebugMsg( "Data file " + mFileName + " could not be opened" );
       delete mFile;
       mFile = 0;
-      return false;
     }
-    mStream = new QTextStream( mFile );
-    if ( ! mEncoding.isEmpty() )
+    if ( mFile )
     {
-      QTextCodec *codec =  QTextCodec::codecForName( mEncoding.toAscii() );
-      mStream->setCodec( codec );
-    }
-    mMaxRecordNumber = -1;
-    mHoldCurrentRecord = false;
-    if ( mWatcher ) delete mWatcher;
-    if( mUseWatcher )
-    {
-      mWatcher = new QFileSystemWatcher( this );
-      mWatcher->addPath( mFileName );
-      connect( mWatcher, SIGNAL( fileChanged( QString ) ), this, SLOT( updateFile() ) );
+      mStream = new QTextStream( mFile );
+      if ( ! mEncoding.isEmpty() )
+      {
+        QTextCodec *codec =  QTextCodec::codecForName( mEncoding.toAscii() );
+        mStream->setCodec( codec );
+      }
+      if ( mUseWatcher )
+      {
+        mWatcher = new QFileSystemWatcher( this );
+        mWatcher->addPath( mFileName );
+        connect( mWatcher, SIGNAL( fileChanged( QString ) ), this, SLOT( updateFile() ) );
+      }
     }
   }
-  return true;
+  return mFile != 0;
 }
 
 void QgsDelimitedTextFile::updateFile()
@@ -264,7 +268,10 @@ QUrl QgsDelimitedTextFile::url()
     url.addQueryItem( "encoding", mEncoding );
   }
 
-  if( ! mUseWatcher ) url.addQueryItem( "useWatcher", "no");
+  if ( !mUseWatcher )
+  {
+    url.addQueryItem( "useWatcher", "no" );
+  }
 
   url.addQueryItem( "type", type() );
   if ( mType == DelimTypeRegexp )
@@ -312,7 +319,7 @@ void QgsDelimitedTextFile::setEncoding( QString encoding )
   mEncoding = encoding;
 }
 
-void QgsDelimitedTextFile::setUseWatcher(bool useWatcher)
+void QgsDelimitedTextFile::setUseWatcher( bool useWatcher )
 {
   resetDefinition();
   mUseWatcher = useWatcher;
@@ -367,7 +374,6 @@ QString QgsDelimitedTextFile::encodeChars( QString chars )
 void QgsDelimitedTextFile::setTypeCSV( QString delim, QString quote, QString escape )
 {
   resetDefinition();
-  mType = DelimTypeRegexp;
   mType = DelimTypeCSV;
   mDelimChars = decodeChars( delim );
   mQuoteChar = decodeChars( quote );
@@ -496,10 +502,11 @@ int QgsDelimitedTextFile::fieldIndex( QString name )
 
 }
 
-bool QgsDelimitedTextFile::setNextRecordId(long nextRecordId )
+bool QgsDelimitedTextFile::setNextRecordId( long nextRecordId )
 {
+  if ( ! mFile ) return false;
   mHoldCurrentRecord = nextRecordId == mRecordLineNumber;
-  if( mHoldCurrentRecord ) return true;
+  if ( mHoldCurrentRecord ) return true;
   return setNextLineNumber( nextRecordId );
 }
 
@@ -509,7 +516,7 @@ QgsDelimitedTextFile::Status QgsDelimitedTextFile::nextRecord( QStringList &reco
   record.clear();
   Status status = RecordOk;
 
-  if( mHoldCurrentRecord )
+  if ( mHoldCurrentRecord )
   {
     mHoldCurrentRecord = false;
   }
@@ -521,7 +528,7 @@ QgsDelimitedTextFile::Status QgsDelimitedTextFile::nextRecord( QStringList &reco
     // Find the first non-blank line to read
     QString buffer;
     status = nextLine( buffer, true );
-    if ( status != RecordOk ) return status;
+    if ( status != RecordOk ) return RecordEOF;
 
     mCurrentRecord.clear();
     mRecordLineNumber = mLineNumber;
@@ -530,11 +537,11 @@ QgsDelimitedTextFile::Status QgsDelimitedTextFile::nextRecord( QStringList &reco
       mRecordNumber++;
       if ( mRecordNumber > mMaxRecordNumber ) mMaxRecordNumber = mRecordNumber;
     }
-    status = (this->*mParser )( buffer, mCurrentRecord );
+    status = ( this->*mParser )( buffer, mCurrentRecord );
   }
-  if( status == RecordOk )
+  if ( status == RecordOk )
   {
-    record.append(mCurrentRecord);
+    record.append( mCurrentRecord );
   }
   return status;
 }
@@ -565,7 +572,7 @@ QgsDelimitedTextFile::Status  QgsDelimitedTextFile::reset()
     result = nextRecord( names );
     setFieldNames( names );
   }
-  if( result == RecordOk ) mRecordNumber = 0;
+  if ( result == RecordOk ) mRecordNumber = 0;
   return result;
 }
 
@@ -593,16 +600,16 @@ QgsDelimitedTextFile::Status QgsDelimitedTextFile::nextLine( QString &buffer, bo
 bool QgsDelimitedTextFile::setNextLineNumber( long nextLineNumber )
 {
   if ( ! mStream ) return false;
-  if ( mLineNumber > nextLineNumber-1 )
+  if ( mLineNumber > nextLineNumber - 1 )
   {
     mRecordNumber = -1;
-    mStream->seek(0);
+    mStream->seek( 0 );
     mLineNumber = 0;
   }
   QString buffer;
-  while( mLineNumber < nextLineNumber-1 )
+  while ( mLineNumber < nextLineNumber - 1 )
   {
-    if( nextLine(buffer,false) != RecordOk ) return false;
+    if ( nextLine( buffer, false ) != RecordOk ) return false;
   }
   return true;
 

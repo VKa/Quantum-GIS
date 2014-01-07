@@ -20,9 +20,8 @@
 #include "ui_qgsdbsourceselectbase.h"
 #include "qgisgui.h"
 #include "qgsdbfilterproxymodel.h"
-#include "qgscontexthelp.h"
-
 #include "qgsoracletablemodel.h"
+#include "qgscontexthelp.h"
 
 #include <QMap>
 #include <QPair>
@@ -31,8 +30,8 @@
 
 class QPushButton;
 class QStringList;
-class QgisApp;
 class QgsOracleColumnTypeThread;
+class QgisApp;
 class QgsOracleSourceSelect;
 
 class QgsOracleSourceSelectDelegate : public QItemDelegate
@@ -52,8 +51,10 @@ class QgsOracleSourceSelectDelegate : public QItemDelegate
 
     QWidget *createEditor( QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index ) const;
     void setModelData( QWidget *editor, QAbstractItemModel *model, const QModelIndex &index ) const;
+    void setEditorData( QWidget *editor, const QModelIndex &index ) const;
 
     void setConn( QgsOracleConn *conn ) { if ( mConn ) mConn->disconnect();  mConn = conn; }
+
   private:
     QgsOracleConn *mConn;
 };
@@ -108,6 +109,7 @@ class QgsOracleSourceSelect : public QDialog, private Ui::QgsDbSourceSelectBase
     void on_btnSave_clicked();
     //! Loads the selected connections from file
     void on_btnLoad_clicked();
+    void on_mSearchGroupBox_toggled( bool );
     void on_mSearchTableEdit_textChanged( const QString & text );
     void on_mSearchColumnComboBox_currentIndexChanged( const QString & text );
     void on_mSearchModeComboBox_currentIndexChanged( const QString & text );

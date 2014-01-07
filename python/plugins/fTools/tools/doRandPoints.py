@@ -91,12 +91,7 @@ class Dialog(QDialog, Ui_Dialog):
             self.progressBar.setValue(1)
             outPath = self.outShape.text()
             self.progressBar.setValue(2.5)
-            if outPath.contains("\\"):
-                outName = outPath.right((outPath.length() - outPath.lastIndexOf("\\")) - 1)
-            else:
-                outName = outPath.right((outPath.length() - outPath.lastIndexOf("/")) - 1)
-            if outName.endsWith(".shp"):
-                outName = outName.left(outName.length() - 4)
+            outName = ftools_utils.getShapefileName( outPath )
             self.progressBar.setValue(5)
             mLayer = ftools_utils.getMapLayerByName(unicode(inName))
             if mLayer.type() == mLayer.VectorLayer:
@@ -121,15 +116,16 @@ class Dialog(QDialog, Ui_Dialog):
                 QMessageBox.information(self, self.tr("Random Points"), self.tr("Unknown layer type..."))
             minimum = 0.00
             self.progressBar.setValue(10)
-            self.randomize(inLayer, outPath, minimum, design, value)
-            self.progressBar.setValue(100)
-            self.outShape.clear()
-            addToTOC = QMessageBox.question(self, self.tr("Random Points"),
-            self.tr("Created output point shapefile:\n%1\n\nWould you like to add the new layer to the TOC?").arg(outPath), QMessageBox.Yes, QMessageBox.No, QMessageBox.NoButton)
-            if addToTOC == QMessageBox.Yes:
-                self.vlayer = QgsVectorLayer(outPath, unicode(outName), "ogr")
-                QgsMapLayerRegistry.instance().addMapLayers([self.vlayer])
+            if self.randomize(inLayer, outPath, minimum, design, value):
+              self.progressBar.setValue(100)
+              self.outShape.clear()
+              if self.addToCanvasCheck.isChecked():
+                addCanvasCheck = ftools_utils.addShapeToCanvas(unicode(outPath))
+                if not addCanvasCheck:
+                    QMessageBox.warning( self, self.tr("Random Points"), self.tr( "Error loading output shapefile:\n%s" ) % ( unicode( outPath ) ))
                 self.populateLayers()
+              else:
+                QMessageBox.information(self, self.tr("Random Points"),self.tr("Created output shapefile:\n%s" ) % ( unicode( outPath )))
         self.progressBar.setValue(0)
         self.buttonOk.setEnabled( True )
 
@@ -138,7 +134,7 @@ class Dialog(QDialog, Ui_Dialog):
         ( self.shapefileName, self.encoding ) = ftools_utils.saveDialog( self )
         if self.shapefileName is None or self.encoding is None:
             return
-        self.outShape.setText( QString( self.shapefileName ) )
+        self.outShape.setText( self.shapefileName )
 
 # combine all polygons in layer to create single polygon (slow for complex polygons)
     def createSinglePolygon(self, vlayer):
@@ -199,17 +195,36 @@ class Dialog(QDialog, Ui_Dialog):
         return points
 
     def randomize(self, inLayer, outPath, minimum, design, value):
-        outFeat = QgsFeature()
-        outFeat.initAttributes(1)
-        if design == self.tr("unstratified"):
-            ext = inLayer.extent()
-            if inLayer.type() == inLayer.RasterLayer:
-                points = self.simpleRandom(int(value), ext, ext.xMinimum(),
-                ext.xMaximum(), ext.yMinimum(), ext.yMaximum())
-            else:
-                points = self.vectorRandom(int(value), inLayer,
-                ext.xMinimum(), ext.xMaximum(), ext.yMinimum(), ext.yMaximum())
-        else: points = self.loopThruPolygons(inLayer, value, design)
+      outFeat = QgsFeature()
+      outFeat.initAttributes(1)
+      if design == self.tr("unstratified"):
+          ext = inLayer.extent()
+          if inLayer.type() == QgsMapLayer.RasterLayer:
+              points = self.simpleRandom(int(value), ext, ext.xMinimum(),
+              ext.xMaximum(), ext.yMinimum(), ext.yMaximum())
+          else:
+              points = self.vectorRandom(int(value), inLayer,
+              ext.xMinimum(), ext.xMaximum(), ext.yMinimum(), ext.yMaximum())
+      else:
+        points, featErrors = self.loopThruPolygons(inLayer, value, design)
+        if featErrors:
+          if len(featErrors) >= 10:
+            err_msg = "Too many features couldn't be calculated due to conversion error. "
+            err_msg += "Please check out message log for more info."
+            msgLogInstance = QgsMessageLog.instance( )
+            msgLogInstance.logMessage( "WARNING - fTools: " + self.tr( "Random Points" ) )
+            msgLogInstance.logMessage( "The following feature ids should be checked." )
+            for feat in featErrors:
+              msgLogInstance.logMessage( "Feature id: %d" % feat.id( ) )
+            msgLogInstance.logMessage( "End of features to be checked." )
+          else:
+            features_ids = []
+            for feat in featErrors:
+              features_ids.append( str( feat.id( ) ) )
+            erroneous_ids = ', '.join(features_ids)
+            err_msg = "The following features IDs couldn't be calculated due to conversion error: %s" % erroneous_ids
+          self.iface.messageBar().pushMessage("Errors", err_msg)
+      if len(points):
         crs = self.iface.mapCanvas().mapRenderer().destinationCrs()
         if not crs.isValid(): crs = None
         fields = QgsFields()
@@ -225,12 +240,14 @@ class Dialog(QDialog, Ui_Dialog):
         add = ( 100.00 - 70.00 ) / len(points)
         for i in points:
             outFeat.setGeometry(i)
-            outFeat.setAttribute(0, QVariant(idVar))
+            outFeat.setAttribute(0, idVar)
             writer.addFeature(outFeat)
             idVar = idVar + 1
             count = count + add
             self.progressBar.setValue(count)
         del writer
+        return True
+      return False
 
 #
     def loopThruPolygons(self, inLayer, numRand, design):
@@ -239,15 +256,11 @@ class Dialog(QDialog, Ui_Dialog):
         sGeom = QgsGeometry()
         sPoints = []
         if design == self.tr("field"):
-            i = 0
-            for attr in sProvider.fields():
-                if (unicode(numRand) == attr.name()):
-                    index = i #get input field index
-                    break
-                i += 1
+          index = sProvider.fieldNameIndex(numRand)
         count = 10.00
         add = 60.00 / sProvider.featureCount()
         sFit = sProvider.getFeatures()
+        featureErrors = []
         while sFit.nextFeature(sFeat):
             sGeom = sFeat.geometry()
             if design == self.tr("density"):
@@ -255,11 +268,15 @@ class Dialog(QDialog, Ui_Dialog):
                 value = int(round(numRand * sDistArea.measure(sGeom)))
             elif design == self.tr("field"):
                 sAtMap = sFeat.attributes()
-                value = sAtMap[index].toInt()[0]
+                try:
+                  value = int(sAtMap[index])
+                except (ValueError,TypeError):
+                  featureErrors.append(sFeat)
+                  continue
             else:
                 value = numRand
             sExt = sGeom.boundingBox()
             sPoints.extend(self.simpleRandom(value, sGeom, sExt.xMinimum(), sExt.xMaximum(), sExt.yMinimum(), sExt.yMaximum()))
             count = count + add
             self.progressBar.setValue(count)
-        return sPoints
+        return sPoints, featureErrors

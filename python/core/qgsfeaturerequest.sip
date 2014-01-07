@@ -8,17 +8,20 @@ class QgsFeatureRequest
   public:
     enum Flag
     {
-      NoGeometry         = 0x01,  //!< Do not fetch geometry
-      SubsetOfAttributes = 0x02,  //!< Fetch only a subset of attributes (setSubsetOfAttributes sets this flag)
-      ExactIntersect     = 0x04   //!< Use exact geometry intersection (slower) instead of bounding boxes
+      NoFlags            = 0,
+      NoGeometry         = 1,
+      SubsetOfAttributes = 2,
+      ExactIntersect     = 4
     };
     typedef QFlags<QgsFeatureRequest::Flag> Flags;
 
     enum FilterType
     {
-      FilterNone,   //!< No filter is applied
-      FilterRect,   //!< Filter using a rectangle
-      FilterFid     //!< Filter using feature ID
+      FilterNone,       //!< No filter is applied
+      FilterRect,       //!< Filter using a rectangle
+      FilterFid,        //!< Filter using feature ID
+      FilterExpression, //!< Filter using expression
+      FilterFids        //!< Filter using feature IDs
     };
 
     //! construct a default request: for all features get attributes and geometries
@@ -27,6 +30,8 @@ class QgsFeatureRequest
     explicit QgsFeatureRequest( QgsFeatureId fid );
     //! construct a request with rectangle filter
     explicit QgsFeatureRequest( const QgsRectangle& rect );
+    //! construct a request with a filter expression
+    explicit QgsFeatureRequest( const QgsExpression& expression );
 
     FilterType filterType() const;
 
@@ -38,6 +43,14 @@ class QgsFeatureRequest
     //! Set feature ID that should be fetched.
     QgsFeatureRequest& setFilterFid( qint64 fid );
     qint64 filterFid() const;
+
+    //! Set feature ID that should be fetched.
+    QgsFeatureRequest& setFilterFids( QgsFeatureIds fids );
+    const QgsFeatureIds& filterFids() const;
+
+    //! Set filter expression. Ownership is taken.
+    QgsFeatureRequest& setFilterExpression( const QString& expression );
+    QgsExpression* filterExpression() const;
 
     //! Set flags that affect how features will be fetched
     QgsFeatureRequest& setFlags( Flags flags );

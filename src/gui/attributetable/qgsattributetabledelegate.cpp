@@ -58,6 +58,8 @@ QWidget *QgsAttributeTableDelegate::createEditor(
 
   QWidget *w = QgsAttributeEditor::createAttributeEditor( parent, 0, vl, fieldIdx, index.model()->data( index, Qt::EditRole ) );
 
+  w->setAutoFillBackground( true );
+
   if ( parent )
   {
     QgsAttributeTableView *tv = dynamic_cast<QgsAttributeTableView *>( parent->parentWidget() );
@@ -72,6 +74,8 @@ QWidget *QgsAttributeTableDelegate::createEditor(
     }
   }
 
+  w->setEnabled( vl->fieldEditable( fieldIdx ) );
+
   return w;
 }
 
@@ -82,14 +86,14 @@ void QgsAttributeTableDelegate::setModelData( QWidget *editor, QAbstractItemMode
     return;
 
   int fieldIdx = model->data( index, QgsAttributeTableModel::FieldIndexRole ).toInt();
-  QgsFeatureId fid = model->data( index, QgsAttributeTableModel::FeatureIdRole ).toInt();
+  QgsFeatureId fid = model->data( index, QgsAttributeTableModel::FeatureIdRole ).toLongLong();
 
   QVariant value;
   if ( !QgsAttributeEditor::retrieveValue( editor, vl, fieldIdx, value ) )
     return;
 
   vl->beginEditCommand( tr( "Attribute changed" ) );
-  vl->changeAttributeValue( fid, fieldIdx, value, true );
+  vl->changeAttributeValue( fid, fieldIdx, value );
   vl->endEditCommand();
 }
 
@@ -112,7 +116,7 @@ void QgsAttributeTableDelegate::paint( QPainter * painter,
                                        const QStyleOptionViewItem & option,
                                        const QModelIndex & index ) const
 {
-  QgsFeatureId fid = index.model()->data( index, QgsAttributeTableModel::FeatureIdRole ).toInt();
+  QgsFeatureId fid = index.model()->data( index, QgsAttributeTableModel::FeatureIdRole ).toLongLong();
 
   QStyleOptionViewItem myOpt = option;
 

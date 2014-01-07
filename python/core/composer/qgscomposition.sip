@@ -27,6 +27,14 @@ class QgsComposition : QGraphicsScene
       Dots,
       Crosses
     };
+    
+    /**Composition atlas modes*/
+    enum AtlasMode
+    {
+      AtlasOff,     // Composition is not being controlled by an atlas
+      PreviewAtlas, // An atlas composition is being previewed in the app
+      ExportAtlas   // The composition is being exported as an atlas
+    };    
 
     QgsComposition( QgsMapRenderer* mapRenderer );
     ~QgsComposition();
@@ -49,6 +57,17 @@ class QgsComposition : QGraphicsScene
 
     void setSnapToGridEnabled( bool b );
     bool snapToGridEnabled() const;
+
+    void setGridVisible( bool b );
+    bool gridVisible() const;
+
+    /**Toggles state of smart guides*/
+    void setSmartGuidesEnabled( bool b );
+    /**Returns true if smart guides are enabled*/
+    bool smartGuidesEnabled() const;   
+    
+    /**Removes all snap lines*/
+    void clearSnapLines();    
 
     void setSnapGridResolution( double r );
     double snapGridResolution() const;
@@ -106,7 +125,7 @@ class QgsComposition : QGraphicsScene
     const QgsComposerHtml* getComposerHtmlByItem( QgsComposerItem *item ) const;
 
     /**Returns a composer item given its text identifier.
-      Ids are not necessarely unique, but this function returns only one element.
+       Ids are not necessarely unique, but this function returns only one element.
       @note added in 2.0
       @param theId - A QString representing the identifier of the item to
         retrieve.
@@ -114,15 +133,10 @@ class QgsComposition : QGraphicsScene
       **/
     const QgsComposerItem* getComposerItemById( QString theId ) const;
 
-
     /**Returns a composer item given its unique identifier.
-      Warning : ids are not necessarely unique, but this function returns only one element.
       @note added in 2.0
-      @param theId - A QString representing the UUID of the item to retrieve.
-      @param inAllComposers - Whether the search should be done in all composers of the project
-      @return QgsComposerItem pointer or 0 pointer if no such item exists.
+      @param theUuid A QString representing the UUID of the item to
       **/
-    //const QgsComposerItem* getComposerItemByUuid( QString theUuid, bool inAllComposers = false ) const;
     const QgsComposerItem* getComposerItemByUuid( QString theUuid ) const;
 
     int printResolution() const;
@@ -131,8 +145,18 @@ class QgsComposition : QGraphicsScene
     bool printAsRaster() const;
     void setPrintAsRaster( bool enabled );
 
-    double selectionTolerance() const;
-    void setSelectionTolerance( double tol );
+    /**Returns true if a composition should use advanced effects such as blend modes
+      @note added in 1.9*/
+    bool useAdvancedEffects() const;
+    /**Used to enable or disable advanced effects such as blend modes in a composition
+      @note: added in version 1.9*/
+    void setUseAdvancedEffects( bool effectsEnabled );
+
+    bool generateWorldFile() const;
+    void setGenerateWorldFile( bool enabled );
+
+    QgsComposerMap* worldFileMap();
+    void setWorldFileMap( QgsComposerMap* map );
 
     /**Returns pointer to map renderer of qgis map canvas*/
     QgsMapRenderer* mapRenderer();
@@ -167,11 +191,12 @@ class QgsComposition : QGraphicsScene
       @param mapsToRestore for reading from project file: set preview move 'rectangle' to all maps and save the preview states to show composer maps on demand
       @param addUndoCommands insert AddItem commands if true (e.g. for copy/paste)
       @param pos item position. Optional, take position from xml if 0
+      @param pasteInPlace whether the position should be kept but mapped to the page origin. (the page is the page under to the mouse cursor)
       @note not available in python bindings
      */
     /*
     void addItemsFromXML( const QDomElement& elem, const QDomDocument& doc, QMap< QgsComposerMap*, int >* mapsToRestore = 0,
-                          bool addUndoCommands = false, QPointF* pos = 0 );
+                          bool addUndoCommands = false, QPointF* pos = 0, bool pasteInPlace = false );
     */
 
     /**Adds item to z list. Usually called from constructor of QgsComposerItem*/
@@ -204,6 +229,19 @@ class QgsComposition : QGraphicsScene
     /**Snaps a scene coordinate point to grid*/
     QPointF snapPointToGrid( const QPointF& scenePoint ) const;
 
+    /**Add a custom snap line (can be horizontal or vertical)*/
+    QGraphicsLineItem* addSnapLine();
+    /**Remove custom snap line (and delete the object)*/
+    void removeSnapLine( QGraphicsLineItem* line );
+    /**Get nearest snap line
+     * @note not available in python bindings
+     */
+    // QGraphicsLineItem* nearestSnapLine( bool horizontal, double x, double y, double tolerance, QList< QPair< QgsComposerItem*, QgsComposerItem::ItemPositionMode > >& snappedItems );
+    /**Hides / shows custom snap lines*/
+    void setSnapLinesVisible( bool visible );
+    /**Returns visibility of custom snap lines*/    
+    bool snapLinesVisible() const;    
+
     /**Allocates new item command and saves initial state in it
       @param item target item
       @param commandText descriptive command text
@@ -222,7 +260,8 @@ class QgsComposition : QGraphicsScene
     void addMultiFrame( QgsComposerMultiFrame* multiFrame );
     /**Removes multi frame (but does not delete it)*/
     void removeMultiFrame( QgsComposerMultiFrame* multiFrame );
-    /**Adds an arrow item to the graphics scene and advices composer to create a widget for it (through signal)*/
+    /**Adds an arrow item to the graphics scene and advices composer to create a widget for it (through signal)
+      @note not available in python bindings*/
     void addComposerArrow( QgsComposerArrow* arrow );
     /**Adds label to the graphics scene and advices composer to create a widget for it (through signal)*/
     void addComposerLabel( QgsComposerLabel* label );
@@ -271,7 +310,15 @@ class QgsComposition : QGraphicsScene
         @note added in version 1.9*/
     void renderPage( QPainter* p, int page );
 
+    /** Compute world file parameters */
+    void computeWorldFileParameters( double& a, double& b, double& c, double& d, double& e, double& f ) const;
+
     QgsAtlasComposition& atlasComposition();
+    
+    /** Returns the current atlas mode of the composition */
+    QgsComposition::AtlasMode atlasMode() const;
+    /** Sets the current atlas mode of the composition. Returns false if the mode could not be changed. */
+    bool setAtlasMode( QgsComposition::AtlasMode mode );
 
   public slots:
     /**Casts object to the proper subclass type and calls corresponding itemAdded signal*/

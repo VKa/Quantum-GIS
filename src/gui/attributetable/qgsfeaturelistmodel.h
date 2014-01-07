@@ -14,7 +14,7 @@ class QgsAttributeTableFilterModel;
 class QgsAttributeTableModel;
 class QgsVectorLayerCache;
 
-class QgsFeatureListModel : public QAbstractProxyModel, public QgsFeatureModel
+class GUI_EXPORT QgsFeatureListModel : public QAbstractProxyModel, public QgsFeatureModel
 {
     Q_OBJECT
 
@@ -56,7 +56,7 @@ class QgsFeatureListModel : public QAbstractProxyModel, public QgsFeatureModel
      */
     QString parserErrorString();
 
-    const QString& displayExpression() const;
+    const QString displayExpression() const;
     bool featureByIndex( const QModelIndex& index, QgsFeature& feat );
     QgsFeatureId idxToFid( const QModelIndex& index ) const;
     QModelIndex fidToIdx( const QgsFeatureId fid ) const;

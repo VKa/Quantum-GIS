@@ -30,7 +30,9 @@
 #include "qgslogger.h"
 #include "qgsmslayercache.h"
 #include "qgsmsutils.h"
+#include "qgsraster.h"
 #include "qgsrasterlayer.h"
+#include "qgsrasterrendererregistry.h"
 #include "qgscolorrampshader.h"
 #include "qgscoordinatereferencesystem.h"
 #include "qgslabelattributes.h"
@@ -56,14 +58,6 @@
 #include "qgsremotedatasourcebuilder.h"
 #include "qgsremoteowsbuilder.h"
 #include "qgssentdatasourcebuilder.h"
-
-#ifdef DIAGRAMSERVER
-#include "qgsdiagramoverlay.h"
-#include "qgsbardiagramfactory.h"
-#include "qgspiediagramfactory.h"
-#include "qgsdiagramrenderer.h"
-#include "qgssvgdiagramfactory.h"
-#endif //DIAGRAMSERVER
 
 //for contours
 #include "gdal_alg.h"
@@ -278,9 +272,6 @@ QList<QgsMapLayer*> QgsSLDParser::mapLayerFromStyle( const QString& layerName, c
           QgsFeatureRendererV2* r = rendererFromUserStyle( userStyleElement, v );
           v->setRendererV2( r );
           labelSettingsFromUserStyle( userStyleElement, v );
-#ifdef DIAGRAMSERVER
-          overlaysFromUserStyle( userStyleElement, v );
-#endif //DIAGRAMSERVER
 #if 0
           setOpacityForLayer( namedLayerElemList[i], v );
 #endif
@@ -387,11 +378,6 @@ QList<QgsMapLayer*> QgsSLDParser::mapLayerFromStyle( const QString& layerName, c
     theRenderer = rendererFromUserStyle( userStyleElement, theVectorLayer );
     //apply labels if <TextSymbolizer> tag is present
     labelSettingsFromUserStyle( userStyleElement, theVectorLayer );
-#ifdef DIAGRAMSERVER
-    //apply any vector overlays
-    QgsDebugMsg( "Trying to get overlays from user style" );
-    overlaysFromUserStyle( userStyleElement, theVectorLayer );
-#endif //DIAGRAMSERVER
   }
 
   if ( !theRenderer )
@@ -1190,7 +1176,7 @@ QgsMapLayer* QgsSLDParser::mapLayerFromUserLayer( const QDomElement& userLayerEl
   return theMapLayer;
 }
 
-QgsVectorLayer* QgsSLDParser::vectorLayerFromGML( const QDomElement gmlRootElement ) const
+QgsVectorLayer* QgsSLDParser::vectorLayerFromGML( const QDomElement &gmlRootElement ) const
 {
   QgsDebugMsg( "Entering." );
 
@@ -1381,7 +1367,7 @@ QgsVectorLayer* QgsSLDParser::contourLayerFromRaster( const QDomElement& userSty
                        hLayer, 0, nElevField,
                        GDALTermProgress, NULL );
 
-  delete adfFixedLevels;
+  delete [] adfFixedLevels;
 
   OGR_DS_Destroy( hDS );
   GDALClose( hSrcDS );
@@ -1488,18 +1474,19 @@ void QgsSLDParser::setOpacityForLayer( const QDomElement& layerElem, QgsMapLayer
   QgsDebugMsg( "Setting opacity value: " + QString::number( opacityValue ) );
   layer->setTransparency( opacityValue );
 }
-#endif
 
-void QgsSLDParser::clearRasterSymbology( QgsRasterLayer* rl ) const
+void QgsSLDParser::clearRasterSymbology( QgsRasterLayer *rl ) const
 {
   if ( rl )
   {
     if ( rl->rasterType() == QgsRasterLayer::GrayOrUndefined )
     {
-      rl->setDrawingStyle( QgsRasterLayer::SingleBandPseudoColor );
+      //rl->setDrawingStyle( QgsRasterLayer::SingleBandPseudoColor );
+      rl->setRenderer( QgsRasterRendererRegistry::instance()->defaultRendererForDrawingStyle( QgsRaster::SingleBandPseudoColor, rl->dataProvider() ) );
     }
   }
 }
+#endif
 
 void QgsSLDParser::setCrsForLayer( const QDomElement& layerElem, QgsMapLayer* ml ) const
 {
@@ -1541,11 +1528,11 @@ void QgsSLDParser::setCrsForLayer( const QDomElement& layerElem, QgsMapLayer* ml
   }
 }
 
-QgsComposition* QgsSLDParser::initComposition( const QString& composerTemplate, QgsMapRenderer* mapRenderer, QList< QgsComposerMap*>& mapList, QList< QgsComposerLabel* >& labelList ) const
+QgsComposition* QgsSLDParser::initComposition( const QString& composerTemplate, QgsMapRenderer* mapRenderer, QList< QgsComposerMap*>& mapList, QList< QgsComposerLabel* >& labelList, QList<const QgsComposerHtml *>& htmlList ) const
 {
   if ( mFallbackParser )
   {
-    return mFallbackParser->initComposition( composerTemplate, mapRenderer, mapList, labelList );
+    return mFallbackParser->initComposition( composerTemplate, mapRenderer, mapList, labelList, htmlList );
   }
   return 0;
 }
@@ -1593,7 +1580,7 @@ void QgsSLDParser::drawOverlays( QPainter* p, int dpi, int width, int height ) c
   }
 }
 
-#ifdef DIAGRAMSERVER
+#if 0 //This part needs to be ported to the new diagram engine
 int QgsSLDParser::overlaysFromUserStyle( const QDomElement& userStyleElement, QgsVectorLayer* vec ) const
 {
   if ( userStyleElement.isNull() || !vec )
@@ -2009,4 +1996,4 @@ double QgsSLDParser::scaleFactorFromScaleTag( const QDomElement& scaleElem ) con
   }
 }
 
-#endif //DIAGRAMSERVER
+#endif //0 part that needs to be ported to the new diagram engine

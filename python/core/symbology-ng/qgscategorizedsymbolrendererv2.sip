@@ -14,15 +14,15 @@ class QgsRendererCategoryV2
     ~QgsRendererCategoryV2();
 
     QVariant value() const;
-    QgsSymbolV2* symbol();
+    QgsSymbolV2* symbol() const;
     QString label() const;
 
     void setValue( const QVariant &value );
     void setSymbol( QgsSymbolV2* s /Transfer/ );
-    void setLabel( QString label );
+    void setLabel( const QString &label );
 
     // debugging
-    QString dump();
+    QString dump() const;
 
     void toSld( QDomDocument& doc, QDomElement &element, QgsStringMap props ) const;
 };
@@ -49,7 +49,7 @@ class QgsCategorizedSymbolRendererV2 : QgsFeatureRendererV2
 
     virtual QList<QString> usedAttributes();
 
-    virtual QString dump();
+    virtual QString dump() const;
 
     virtual QgsFeatureRendererV2* clone() /Factory/;
 
@@ -60,6 +60,8 @@ class QgsCategorizedSymbolRendererV2 : QgsFeatureRendererV2
     virtual int capabilities();
 
     virtual QgsSymbolV2List symbols();
+    //! @note added in 2.0
+    void updateSymbols( QgsSymbolV2 * sym );
 
     const QgsCategoryList& categories();
 
@@ -73,6 +75,12 @@ class QgsCategorizedSymbolRendererV2 : QgsFeatureRendererV2
     void addCategory( const QgsRendererCategoryV2 &category );
     bool deleteCategory( int catIndex );
     void deleteAllCategories();
+
+    //! Moves the category at index position from to index position to.
+    void moveCategory( int from, int to );
+
+    void sortByValue( Qt::SortOrder order = Qt::AscendingOrder );
+    void sortByLabel( Qt::SortOrder order = Qt::AscendingOrder );
 
     QString classAttribute() const;
     void setClassAttribute( QString attr );

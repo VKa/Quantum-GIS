@@ -33,7 +33,6 @@ QgsAttributeTableFilterModel::QgsAttributeTableFilterModel( QgsMapCanvas* canvas
     , mFilterMode( ShowAll )
     , mSelectedOnTop( false )
 {
-  mMasterSelection = new QItemSelectionModel( this, this );
   setSourceModel( sourceModel );
   setDynamicSortFilter( true );
   setSortRole( QgsAttributeTableModel::SortRole );
@@ -78,6 +77,12 @@ bool QgsAttributeTableFilterModel::lessThan( const QModelIndex &left, const QMod
     case QVariant::Double:
       return leftData.toDouble() < rightData.toDouble();
 
+    case QVariant::Date:
+      return leftData.toDate() < rightData.toDate();
+
+    case QVariant::DateTime:
+      return leftData.toDateTime() < rightData.toDateTime();
+
     default:
       return leftData.toString().localeAwareCompare( rightData.toString() ) < 0;
   }
@@ -109,8 +114,6 @@ void QgsAttributeTableFilterModel::setSelectedOnTop( bool selectedOnTop )
 void QgsAttributeTableFilterModel::setSourceModel( QgsAttributeTableModel* sourceModel )
 {
   mTableModel = sourceModel;
-  delete mMasterSelection;
-  mMasterSelection = new QItemSelectionModel( sourceModel, this );
 
   QSortFilterProxyModel::setSourceModel( sourceModel );
 }

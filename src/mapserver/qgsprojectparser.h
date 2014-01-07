@@ -45,14 +45,26 @@ class QgsProjectParser: public QgsConfigParser
 
     virtual void featureTypeList( QDomElement& parentElement, QDomDocument& doc ) const;
 
+    virtual void wcsContentMetadata( QDomElement& parentElement, QDomDocument& doc ) const;
+
+    virtual void owsGeneralAndResourceList( QDomElement& parentElement, QDomDocument& doc, const QString& strHref ) const;
+
     virtual void describeFeatureType( const QString& aTypeName, QDomElement& parentElement, QDomDocument& doc ) const;
+
+    virtual void describeCoverage( const QString& aCoveName, QDomElement& parentElement, QDomDocument& doc ) const;
     /**Returns one or possibly several maplayers for a given type name. If no layers/style are found, an empty list is returned*/
     virtual QList<QgsMapLayer*> mapLayerFromTypeName( const QString& tName, bool useCache = true ) const;
+
+    /**Returns one or possibly several maplayers for a given type name. If no layers/style are found, an empty list is returned*/
+    virtual QList<QgsMapLayer*> mapLayerFromCoverage( const QString& cName, bool useCache = true ) const;
 
     int numberOfLayers() const;
 
     /**Returns one or possibly several maplayers for a given layer name and style. If no layers/style are found, an empty list is returned*/
     virtual QList<QgsMapLayer*> mapLayerFromStyle( const QString& lName, const QString& styleName, bool useCache = true ) const;
+
+    /**Returns maplayers for a layer Id.*/
+    virtual QgsMapLayer* mapLayerFromLayerId( const QString& lId ) const;
 
     /**Fills a layer and a style list. The two list have the same number of entries and the style and the layer at a position belong together (similar to the HTTP parameters 'Layers' and 'Styles'. Returns 0 in case of success*/
     virtual int layersAndStyles( QStringList& layers, QStringList& styles ) const;
@@ -74,6 +86,9 @@ class QgsProjectParser: public QgsConfigParser
     virtual QStringList wfstUpdateLayers() const;
     virtual QStringList wfstInsertLayers() const;
     virtual QStringList wfstDeleteLayers() const;
+
+    /**Returns an ID-list of layers queryable for WCS service (comes from <properties> -> <WCSLayers> in the project file*/
+    virtual QStringList wcsLayers() const;
 
     /**Returns a set of supported epsg codes for the capabilities document. The list comes from the property <WMSEpsgList> in the project file.
        An empty set means that all possible CRS should be advertised (which could result in very long capabilities documents)
@@ -103,7 +118,7 @@ class QgsProjectParser: public QgsConfigParser
     const QDomDocument* xmlDoc() const { return mXMLDoc; }
 
     /**Creates a composition from the project file (probably delegated to the fallback parser)*/
-    QgsComposition* initComposition( const QString& composerTemplate, QgsMapRenderer* mapRenderer, QList< QgsComposerMap*>& mapList, QList< QgsComposerLabel* >& labelList ) const;
+    QgsComposition* initComposition( const QString& composerTemplate, QgsMapRenderer* mapRenderer, QList< QgsComposerMap*>& mapList, QList< QgsComposerLabel* >& labelList, QList<const QgsComposerHtml *>& htmlList ) const;
 
     /**Adds print capabilities to xml document. ParentElem usually is the <Capabilities> element*/
     void printCapabilities( QDomElement& parentElement, QDomDocument& doc ) const;
@@ -113,8 +128,15 @@ class QgsProjectParser: public QgsConfigParser
 
     QString serviceUrl() const;
 
+    QString wfsServiceUrl() const;
+
+    QString wcsServiceUrl() const;
+
     /**Returns the names of the published wfs layers (not the ids as in wfsLayers() )*/
     QStringList wfsLayerNames() const;
+
+    /**Returns the names of the published wcs layers (not the ids as in wcsLayers() )*/
+    QStringList wcsLayerNames() const;
 
     /**Returns map with layer aliases for GetFeatureInfo (or 0 pointer if not supported). Key: layer name, Value: layer alias*/
     virtual QHash<QString, QString> featureInfoLayerAliasMap() const;
@@ -130,6 +152,10 @@ class QgsProjectParser: public QgsConfigParser
 
     /**Draw text annotation items from the QGIS projectfile*/
     void drawOverlays( QPainter* p, int dpi, int width, int height ) const;
+
+    void loadLabelSettings( QgsLabelingEngineInterface* lbl );
+
+    QList< QPair< QString, QgsLayerCoordinateTransform > > layerCoordinateTransforms() const;
 
   private:
 
@@ -184,9 +210,19 @@ class QgsProjectParser: public QgsConfigParser
                     QString version, //1.1.1 or 1.3.0
                     bool fullProjectSettings = false ) const;
 
+    void addOWSLayers( QDomDocument &doc,
+                       QDomElement &parentElem,
+                       const QDomElement &legendElem,
+                       const QMap<QString, QgsMapLayer *> &layerMap,
+                       const QStringList &nonIdentifiableLayers,
+                       const QString& strHref,
+                       QgsRectangle& combinedBBox,
+                       QString strGroup ) const;
+
     static void addLayerProjectSettings( QDomElement& layerElem, QDomDocument& doc, QgsMapLayer* currentLayer );
 
-    void combineExtentAndCrsOfGroupChildren( QDomElement& groupElement, QDomDocument& doc ) const;
+    /**@param considerMapExtent Take user-defined map extent instead of data-calculated extent if present in project file*/
+    void combineExtentAndCrsOfGroupChildren( QDomElement& groupElement, QDomDocument& doc, bool considerMapExtent = false ) const;
 
     /**Returns dom element of composer (identified by composer title) or a null element in case of error*/
     QDomElement composerByName( const QString& composerName ) const;
@@ -253,6 +289,10 @@ class QgsProjectParser: public QgsConfigParser
      * This is for WFS Services
      **/
     void serviceWFSCapabilities( QDomElement& parentElement, QDomDocument& doc ) const;
+    /**Reads service metadata from projectfile or falls back to parent class method if not there
+     * This is for WCS Services
+     **/
+    void serviceWCSCapabilities( QDomElement& parentElement, QDomDocument& doc ) const;
 };
 
 #endif // QGSPROJECTPARSER_H

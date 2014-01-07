@@ -95,7 +95,7 @@ void QgsGPSPlugin::initGui()
   connect( mQActionPointer, SIGNAL( triggered() ), this, SLOT( run() ) );
   connect( mCreateGPXAction, SIGNAL( triggered() ), this, SLOT( createGPX() ) );
 
-  mQGisInterface->layerToolBar()->addAction( mCreateGPXAction );
+  mQGisInterface->layerToolBar()->insertAction( mQGisInterface->actionRemoveLayer(), mCreateGPXAction );
   mQGisInterface->newLayerMenu()->addAction( mCreateGPXAction );
   mQGisInterface->addPluginToVectorMenu( tr( "&GPS" ), mQActionPointer );
   mQGisInterface->addVectorToolBarIcon( mQActionPointer );
@@ -211,6 +211,7 @@ void QgsGPSPlugin::unload()
   mQGisInterface->removePluginVectorMenu( tr( "&GPS" ), mQActionPointer );
   mQGisInterface->removeVectorToolBarIcon( mQActionPointer );
   delete mQActionPointer;
+  mQActionPointer = 0;
 }
 
 void QgsGPSPlugin::loadGPXFile( QString fileName, bool loadWaypoints, bool loadRoutes,
@@ -663,27 +664,30 @@ void QgsGPSPlugin::setCurrentTheme( QString theThemeName )
 {
   Q_UNUSED( theThemeName );
   QString myCurThemePath = QgsApplication::activeThemePath() + "/plugins/gps_importer/";
-  QString myDefThemePath = QgsApplication::defaultThemePath() + "/plugins/gps_importer.png";
-  QString myQrcPath = ":/gps_importer.png";
-  if ( QFile::exists( myCurThemePath ) )
+  QString myDefThemePath = QgsApplication::defaultThemePath() + "/plugins/gps_importer/";
+  QString myQrcPath = ":/";
+  if ( mQActionPointer )
   {
-    mQActionPointer->setIcon( QIcon( myCurThemePath + "import_gpx.png" ) );
-    mCreateGPXAction->setIcon( QIcon( myCurThemePath + "create_gpx.png" ) );
-  }
-  else if ( QFile::exists( myDefThemePath ) )
-  {
-    mQActionPointer->setIcon( QIcon( myDefThemePath ) );
-    mCreateGPXAction->setIcon( QIcon( myDefThemePath ) );
-  }
-  else if ( QFile::exists( myQrcPath ) )
-  {
-    mQActionPointer->setIcon( QIcon( myQrcPath ) );
-    mCreateGPXAction->setIcon( QIcon( myQrcPath ) );
-  }
-  else
-  {
-    mQActionPointer->setIcon( QIcon() );
-    mCreateGPXAction->setIcon( QIcon() );
+    if ( QFile::exists( myCurThemePath ) )
+    {
+      mQActionPointer->setIcon( QIcon( myCurThemePath + "import_gpx.png" ) );
+      mCreateGPXAction->setIcon( QIcon( myCurThemePath + "create_gpx.png" ) );
+    }
+    else if ( QFile::exists( myDefThemePath ) )
+    {
+      mQActionPointer->setIcon( QIcon( myDefThemePath + "import_gpx.png" ) );
+      mCreateGPXAction->setIcon( QIcon( myDefThemePath + "create_gpx.png" ) );
+    }
+    else if ( QFile::exists( myQrcPath ) )
+    {
+      mQActionPointer->setIcon( QIcon( myQrcPath + "import_gpx.png" ) );
+      mCreateGPXAction->setIcon( QIcon( myQrcPath + "create_gpx.png" ) );
+    }
+    else
+    {
+      mQActionPointer->setIcon( QIcon() );
+      mCreateGPXAction->setIcon( QIcon() );
+    }
   }
 }
 

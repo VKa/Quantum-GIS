@@ -24,7 +24,6 @@
 #define DEFAULT_SIMPLEMARKER_BORDERCOLOR  QColor(0,0,0)
 #define DEFAULT_SIMPLEMARKER_SIZE         DEFAULT_POINT_SIZE
 #define DEFAULT_SIMPLEMARKER_ANGLE        0
-#define DEFAULT_SCALE_METHOD              QgsSymbolV2::ScaleArea
 
 #include <QPen>
 #include <QBrush>
@@ -77,6 +76,8 @@ class CORE_EXPORT QgsSimpleMarkerSymbolLayerV2 : public QgsMarkerSymbolLayerV2
     QgsSymbolV2::OutputUnit outlineWidthUnit() const { return mOutlineWidthUnit; }
     void setOutlineWidthUnit( QgsSymbolV2::OutputUnit u ) { mOutlineWidthUnit = u; }
 
+    bool writeDxf( QgsDxfExport& e, double mmMapUnitScaleFactor, const QString& layerName, const QgsSymbolV2RenderContext* context, const QgsFeature* f, const QPointF& shift = QPointF( 0.0, 0.0 ) ) const;
+
   protected:
 
     void drawMarker( QPainter* p, QgsSymbolV2RenderContext& context );
@@ -84,7 +85,9 @@ class CORE_EXPORT QgsSimpleMarkerSymbolLayerV2 : public QgsMarkerSymbolLayerV2
     bool prepareShape( QString name = QString() );
     bool preparePath( QString name = QString() );
 
-    void prepareCache( QgsSymbolV2RenderContext& context );
+    /**Prepares cache image
+    @return true in case of success, false if cache image size too large*/
+    bool prepareCache( QgsSymbolV2RenderContext& context );
 
     QColor mBorderColor;
     double mOutlineWidth;
@@ -99,11 +102,18 @@ class CORE_EXPORT QgsSimpleMarkerSymbolLayerV2 : public QgsMarkerSymbolLayerV2
     QBrush mSelBrush;
     QImage mSelCache;
     bool mUsingCache;
+
+    //Maximum width/height of cache image
+    static const int mMaximumCacheWidth = 3000;
+
+  private:
+    QgsExpression *mAngleExpression;
+    QgsExpression *mNameExpression;
 };
 
 //////////
 
-#define DEFAULT_SVGMARKER_NAME         "/symbol/Star1.svg"
+#define DEFAULT_SVGMARKER_NAME         "/crosses/Star1.svg"
 #define DEFAULT_SVGMARKER_SIZE         2*DEFAULT_POINT_SIZE
 #define DEFAULT_SVGMARKER_ANGLE        0
 
@@ -152,6 +162,8 @@ class CORE_EXPORT QgsSvgMarkerSymbolLayerV2 : public QgsMarkerSymbolLayerV2
 
     void setOutputUnit( QgsSymbolV2::OutputUnit unit );
     QgsSymbolV2::OutputUnit outputUnit() const;
+
+    bool writeDxf( QgsDxfExport& e, double mmMapUnitScaleFactor, const QString& layerName, const QgsSymbolV2RenderContext* context, const QgsFeature* f, const QPointF& shift = QPointF( 0.0, 0.0 ) ) const;
 
   protected:
     QString mPath;

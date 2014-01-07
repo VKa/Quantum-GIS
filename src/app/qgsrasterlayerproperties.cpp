@@ -32,6 +32,7 @@
 #include "qgsmaprenderer.h"
 #include "qgsmaptoolemitpoint.h"
 #include "qgsmaptopixel.h"
+#include "qgsmultibandcolorrenderer.h"
 #include "qgsmultibandcolorrendererwidget.h"
 #include "qgspalettedrendererwidget.h"
 #include "qgsproject.h"
@@ -80,8 +81,8 @@ QgsRasterLayerProperties::QgsRasterLayerProperties( QgsMapLayer* lyr, QgsMapCanv
   // and connecting QDialogButtonBox's accepted/rejected signals to dialog's accept/reject slots
   initOptionsBase( false );
 
-  mMaximumScaleIconLabel->setPixmap( QgsApplication::getThemePixmap( "/mActionZoomIn.png" ) );
-  mMinimumScaleIconLabel->setPixmap( QgsApplication::getThemePixmap( "/mActionZoomOut.png" ) );
+  mMaximumScaleIconLabel->setPixmap( QgsApplication::getThemePixmap( "/mActionZoomIn.svg" ) );
+  mMinimumScaleIconLabel->setPixmap( QgsApplication::getThemePixmap( "/mActionZoomOut.svg" ) );
 
   connect( this, SIGNAL( accepted() ), this, SLOT( apply() ) );
   connect( buttonBox->button( QDialogButtonBox::Apply ), SIGNAL( clicked() ), this, SLOT( apply() ) );
@@ -137,8 +138,8 @@ QgsRasterLayerProperties::QgsRasterLayerProperties( QgsMapLayer* lyr, QgsMapCanv
   pbnAddValuesFromDisplay->setIcon( QgsApplication::getThemeIcon( "/mActionContextHelp.png" ) );
   pbnRemoveSelectedRow->setIcon( QgsApplication::getThemeIcon( "/mActionSignMinus.png" ) );
   pbnDefaultValues->setIcon( QgsApplication::getThemeIcon( "/mActionOpenTable.png" ) );
-  pbnImportTransparentPixelValues->setIcon( QgsApplication::getThemeIcon( "/mActionFileOpen.png" ) );
-  pbnExportTransparentPixelValues->setIcon( QgsApplication::getThemeIcon( "/mActionFileSave.png" ) );
+  pbnImportTransparentPixelValues->setIcon( QgsApplication::getThemeIcon( "/mActionFileOpen.svg" ) );
+  pbnExportTransparentPixelValues->setIcon( QgsApplication::getThemeIcon( "/mActionFileSave.svg" ) );
 
   mMapCanvas = theCanvas;
   mPixelSelectorTool = 0;
@@ -730,6 +731,27 @@ void QgsRasterLayerProperties::sync()
 
   mLayerTitleLineEdit->setText( mRasterLayer->title() );
   mLayerAbstractTextEdit->setPlainText( mRasterLayer->abstract() );
+  mLayerKeywordListLineEdit->setText( mRasterLayer->keywordList() );
+  mLayerDataUrlLineEdit->setText( mRasterLayer->dataUrl() );
+  mLayerDataUrlFormatComboBox->setCurrentIndex(
+    mLayerDataUrlFormatComboBox->findText(
+      mRasterLayer->dataUrlFormat()
+    )
+  );
+  //layer attribution and metadataUrl
+  mLayerAttributionLineEdit->setText( mRasterLayer->attribution() );
+  mLayerAttributionUrlLineEdit->setText( mRasterLayer->attributionUrl() );
+  mLayerMetadataUrlLineEdit->setText( mRasterLayer->metadataUrl() );
+  mLayerMetadataUrlTypeComboBox->setCurrentIndex(
+    mLayerMetadataUrlTypeComboBox->findText(
+      mRasterLayer->metadataUrlType()
+    )
+  );
+  mLayerMetadataUrlFormatComboBox->setCurrentIndex(
+    mLayerMetadataUrlFormatComboBox->findText(
+      mRasterLayer->metadataUrlFormat()
+    )
+  );
 
 } // QgsRasterLayerProperties::sync()
 
@@ -895,6 +917,15 @@ void QgsRasterLayerProperties::apply()
 
   mRasterLayer->setTitle( mLayerTitleLineEdit->text() );
   mRasterLayer->setAbstract( mLayerAbstractTextEdit->toPlainText() );
+  mRasterLayer->setKeywordList( mLayerKeywordListLineEdit->text() );
+  mRasterLayer->setDataUrl( mLayerDataUrlLineEdit->text() );
+  mRasterLayer->setDataUrlFormat( mLayerDataUrlFormatComboBox->currentText() );
+  //layer attribution and metadataUrl
+  mRasterLayer->setAttribution( mLayerAttributionLineEdit->text() );
+  mRasterLayer->setAttributionUrl( mLayerAttributionUrlLineEdit->text() );
+  mRasterLayer->setMetadataUrl( mLayerMetadataUrlLineEdit->text() );
+  mRasterLayer->setMetadataUrlType( mLayerMetadataUrlTypeComboBox->currentText() );
+  mRasterLayer->setMetadataUrlFormat( mLayerMetadataUrlFormatComboBox->currentText() );
 
   // update symbology
   emit refreshLegend( mRasterLayer->id(), false );
@@ -1206,7 +1237,7 @@ void QgsRasterLayerProperties::on_pbnExportTransparentPixelValues_clicked()
     {
       QTextStream myOutputStream( &myOutputFile );
       myOutputStream << "# " << tr( "QGIS Generated Transparent Pixel Value Export File" ) << "\n";
-      if ( /*rbtnThreeBand->isChecked() &&*/ QgsRasterLayer::MultiBandColor == mRasterLayer->drawingStyle() )
+      if ( rasterIsMultiBandColor() )
       {
         myOutputStream << "#\n#\n# " << tr( "Red" ) << "\t" << tr( "Green" ) << "\t" << tr( "Blue" ) << "\t" << tr( "Percent Transparent" );
         for ( int myTableRunner = 0; myTableRunner < tableTransparency->rowCount(); myTableRunner++ )
@@ -1219,17 +1250,7 @@ void QgsRasterLayerProperties::on_pbnExportTransparentPixelValues_clicked()
       }
       else
       {
-        if ( QgsRasterLayer::PalettedColor != mRasterLayer->drawingStyle() &&
-             QgsRasterLayer::PalettedSingleBandGray != mRasterLayer->drawingStyle() &&
-             QgsRasterLayer::PalettedSingleBandPseudoColor != mRasterLayer->drawingStyle() &&
-             QgsRasterLayer::PalettedMultiBandColor != mRasterLayer->drawingStyle() )
-        {
-          myOutputStream << "#\n#\n# " << tr( "Gray" ) << "\t" << tr( "Percent Transparent" );
-        }
-        else
-        {
-          myOutputStream << "#\n#\n# " << tr( "Indexed Value" ) << "\t" << tr( "Percent Transparent" );
-        }
+        myOutputStream << "#\n#\n# " << tr( "Value" ) << "\t" << tr( "Percent Transparent" );
 
         for ( int myTableRunner = 0; myTableRunner < tableTransparency->rowCount(); myTableRunner++ )
         {
@@ -1331,7 +1352,7 @@ void QgsRasterLayerProperties::on_pbnImportTransparentPixelValues_clicked()
   {
     QTextStream myInputStream( &myInputFile );
     QString myInputLine;
-    if ( /*rbtnThreeBand->isChecked() &&*/ QgsRasterLayer::MultiBandColor == mRasterLayer->drawingStyle() )
+    if ( rasterIsMultiBandColor() )
     {
       for ( int myTableRunner = tableTransparency->rowCount() - 1; myTableRunner >= 0; myTableRunner-- )
       {
@@ -1714,3 +1735,9 @@ void QgsRasterLayerProperties::on_mResetColorRenderingBtn_clicked()
   mColorizeCheck->setChecked( false );
   sliderColorizeStrength->setValue( 100 );
 }
+
+bool QgsRasterLayerProperties::rasterIsMultiBandColor()
+{
+  return mRasterLayer && dynamic_cast<QgsMultiBandColorRenderer*>( mRasterLayer->renderer() ) != 0;
+}
+

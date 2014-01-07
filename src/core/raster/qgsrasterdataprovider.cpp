@@ -99,6 +99,12 @@ QgsRasterBlock * QgsRasterDataProvider::block( int theBandNo, QgsRectangle  cons
   {
     // Read smaller extent or lower resolution
 
+    if ( !extent().contains( theExtent ) )
+    {
+      QRect subRect = QgsRasterBlock::subRect( theExtent, theWidth, theHeight, extent() );
+      block->setIsNoDataExcept( subRect );
+    }
+
     // Calculate row/col limits (before tmpExtent is aligned)
     int fromRow = qRound(( theExtent.yMaximum() - tmpExtent.yMaximum() ) / yRes );
     int toRow = qRound(( theExtent.yMaximum() - tmpExtent.yMinimum() ) / yRes ) - 1;
@@ -139,8 +145,6 @@ QgsRasterBlock * QgsRasterDataProvider::block( int theBandNo, QgsRectangle  cons
     QgsDebugMsg( QString( "Reading smaller block tmpWidth = %1 theHeight = %2" ).arg( tmpWidth ).arg( tmpHeight ) );
     QgsDebugMsg( QString( "tmpExtent = %1" ).arg( tmpExtent.toString() ) );
 
-    block->setIsNoData();
-
     QgsRasterBlock *tmpBlock;
     if ( srcHasNoDataValue( theBandNo ) && useSrcNoDataValue( theBandNo ) )
     {
@@ -178,8 +182,8 @@ QgsRasterBlock * QgsRasterDataProvider::block( int theBandNo, QgsRectangle  cons
           return block;
         }
 
-        size_t tmpIndex = tmpRow * tmpWidth + tmpCol;
-        size_t index = row * theWidth + col;
+        qgssize tmpIndex = tmpRow * tmpWidth + tmpCol;
+        qgssize index = row * theWidth + col;
 
         char *tmpBits = tmpBlock->bits( tmpIndex );
         char *bits = block->bits( index );
@@ -233,7 +237,7 @@ QStringList QgsRasterDataProvider::cStringList2Q_( char ** stringList )
   QStringList strings;
 
   // presume null terminated string list
-  for ( size_t i = 0; stringList[i]; ++i )
+  for ( qgssize i = 0; stringList[i]; ++i )
   {
     strings.append( stringList[i] );
   }
@@ -465,7 +469,7 @@ QString QgsRasterDataProvider::identifyFormatLabel( QgsRaster::IdentifyFormat fo
     case QgsRaster::IdentifyFormatValue:
       return tr( "Value" );
     case QgsRaster::IdentifyFormatText:
-      return ( "Text" );
+      return tr( "Text" );
     case QgsRaster::IdentifyFormatHtml:
       return tr( "Html" );
     case QgsRaster::IdentifyFormatFeature:

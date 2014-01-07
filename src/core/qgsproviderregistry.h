@@ -100,6 +100,18 @@ class CORE_EXPORT QgsProviderRegistry
       It'd be nice to eventually be raster/vector neutral.
     */
     virtual QString fileVectorFilters() const;
+    /** return raster file filter string
+
+      Returns a string suitable for a QFileDialog of raster file formats
+      supported by all data providers.
+
+      This walks through all data providers appending calls to their
+      buildSupportedRasterFileFilter to a string, which is then returned.
+
+      @note this method was added in QGIS 2.0
+      @note This replaces QgsRasterLayer::buildSupportedRasterFileFilter()
+    */
+    virtual QString fileRasterFilters() const;
     /** return a string containing the available database drivers
     * @note this method was added in QGIS 1.1
     */
@@ -143,12 +155,8 @@ class CORE_EXPORT QgsProviderRegistry
     typedef std::map<QString, QgsProviderMetadata*> Providers;
 
   private:
-
     /** ctor private since instance() creates it */
     QgsProviderRegistry( QString pluginPath );
-
-    /** pointer to canonical Singleton object */
-    static QgsProviderRegistry* _instance;
 
     /** associative container of provider metadata handles */
     Providers mProviders;
@@ -165,6 +173,9 @@ class CORE_EXPORT QgsProviderRegistry
         one time.
      */
     QString mVectorFileFilters;
+    /** file filter string for raster files
+     */
+    QString mRasterFileFilters;
     /** Available database drivers string for vector databases
 
      This is a string of form:

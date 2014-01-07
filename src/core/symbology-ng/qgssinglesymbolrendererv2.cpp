@@ -27,7 +27,8 @@
 #include <QDomElement>
 
 QgsSingleSymbolRendererV2::QgsSingleSymbolRendererV2( QgsSymbolV2* symbol )
-    : QgsFeatureRendererV2( "singleSymbol" ), mRotationFieldIdx( -1 ), mSizeScaleFieldIdx( -1 ), mTempSymbol( NULL )
+    : QgsFeatureRendererV2( "singleSymbol" ), mScaleMethod( DEFAULT_SCALE_METHOD ), mRotationFieldIdx( -1 ),
+    mSizeScaleFieldIdx( -1 ), mTempSymbol( NULL )
 {
   Q_ASSERT( symbol );
   mSymbol = symbol;
@@ -172,7 +173,7 @@ void QgsSingleSymbolRendererV2::setScaleMethod( QgsSymbolV2::ScaleMethod scaleMe
   setScaleMethodToSymbol( mSymbol, scaleMethod );
 }
 
-QString QgsSingleSymbolRendererV2::dump()
+QString QgsSingleSymbolRendererV2::dump() const
 {
   if ( mSymbol )
   {
@@ -372,8 +373,10 @@ QgsLegendSymbologyList QgsSingleSymbolRendererV2::legendSymbologyItems( QSize ic
   return lst;
 }
 
-QgsLegendSymbolList QgsSingleSymbolRendererV2::legendSymbolItems()
+QgsLegendSymbolList QgsSingleSymbolRendererV2::legendSymbolItems( double scaleDenominator, QString rule )
 {
+  Q_UNUSED( scaleDenominator );
+  Q_UNUSED( rule );
   QgsLegendSymbolList lst;
   lst << qMakePair( QString(), mSymbol );
   return lst;

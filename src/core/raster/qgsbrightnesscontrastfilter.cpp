@@ -112,7 +112,7 @@ bool QgsBrightnessContrastFilter::setInput( QgsRasterInterface* input )
 QgsRasterBlock * QgsBrightnessContrastFilter::block( int bandNo, QgsRectangle  const & extent, int width, int height )
 {
   Q_UNUSED( bandNo );
-  QgsDebugMsg( "Entered" );
+  QgsDebugMsg( QString( "width = %1 height = %2 extent = %3" ).arg( width ).arg( height ).arg( extent.toString() ) );
 
   QgsRasterBlock *outputBlock = new QgsRasterBlock();
   if ( !mInput )
@@ -150,7 +150,7 @@ QgsRasterBlock * QgsBrightnessContrastFilter::block( int bandNo, QgsRectangle  c
   int r, g, b, alpha;
   double f = qPow(( mContrast + 100 ) / 100.0, 2 );
 
-  for ( size_t i = 0; i < ( size_t )width*height; i++ )
+  for ( qgssize i = 0; i < ( qgssize )width*height; i++ )
   {
     if ( inputBlock->color( i ) == myNoDataColor )
     {

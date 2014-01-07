@@ -65,22 +65,6 @@ class QgsRasterLayer : QgsMapLayer
       UserDefinedShader
     };
 
-    /** \brief This enumerator describes the different kinds of drawing we can do */
-    enum DrawingStyle
-    {
-      UndefinedDrawingStyle,
-      SingleBandGray,                 // a single band image drawn as a range of gray colors
-      SingleBandPseudoColor,          // a single band image drawn using a pseudocolor algorithm
-      PalettedColor,                  // a "Palette" image drawn using color table
-      PalettedSingleBandGray,         // a "Palette" layer drawn in gray scale
-      PalettedSingleBandPseudoColor,  // a "Palette" layerdrawn using a pseudocolor algorithm
-      PalettedMultiBandColor,         // currently not supported
-      MultiBandSingleBandGray,        // a layer containing 2 or more bands, but a single band drawn as a range of gray colors
-      MultiBandSingleBandPseudoColor, // a layer containing 2 or more bands, but a single band drawn using a pseudocolor algorithm
-      MultiBandColor,                 // a layer containing 2 or more bands, mapped to RGB color space. In the case of a multiband with only two bands, one band will be mapped to more than one color.
-      SingleBandColorDataStyle        // ARGB values rendered directly
-    };
-
     /** \brief This enumerator describes the type of raster layer */
     enum LayerType
     {
@@ -93,7 +77,6 @@ class QgsRasterLayer : QgsMapLayer
     //
     // Static methods:
     //
-    static void buildSupportedRasterFileFilter( QString & fileFilters );
 
     /** This helper checks to see whether the file name appears to be a valid
      *  raster file name.  If the file name looks like it could be valid,
@@ -113,7 +96,7 @@ class QgsRasterLayer : QgsMapLayer
     void setDataProvider( const QString & provider );
 
     /** \brief Accessor for drawing style */
-    DrawingStyle drawingStyle();
+    //DrawingStyle drawingStyle();
 
     /** \brief Accessor that returns the width of the (unclipped) raster  */
     int width();
@@ -125,7 +108,7 @@ class QgsRasterLayer : QgsMapLayer
     LayerType rasterType();
 
     /** \brief Mutator for drawing style */
-    void setDrawingStyle( const DrawingStyle &  theDrawingStyle );
+    //void setDrawingStyle( const DrawingStyle &  theDrawingStyle );
 
     /**Set raster renderer. Takes ownership of the renderer object*/
     void setRenderer( QgsRasterRenderer* theRenderer /Transfer/ );
@@ -134,6 +117,9 @@ class QgsRasterLayer : QgsMapLayer
     /**Set raster resample filter. Takes ownership of the resample filter object*/
     //void setResampleFilter( QgsRasterResampleFilter* resampleFilter /Transfer/ );
     QgsRasterResampleFilter * resampleFilter() const;
+
+    QgsBrightnessContrastFilter * brightnessFilter() const;
+    QgsHueSaturationFilter * hueSaturationFilter() const;
 
     /** Get raster pipe */
     QgsRasterPipe * pipe();
@@ -262,6 +248,9 @@ class QgsRasterLayer : QgsMapLayer
      *   @note added in 1.7
      */
     void dataChanged();
+
+    /** Signal emitted when the symbology changes, through call to setRenderer() */
+    void rendererChanged();
 
   protected:
 

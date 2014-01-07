@@ -196,6 +196,14 @@ QgsOracleProvider::QgsOracleProvider( QString const & uri )
 QgsOracleProvider::~QgsOracleProvider()
 {
   QgsDebugMsg( "deconstructing." );
+
+  while ( !mActiveIterators.empty() )
+  {
+    QgsOracleFeatureIterator *it = *mActiveIterators.begin();
+    QgsDebugMsg( "closing active iterator" );
+    it->close();
+  }
+
   disconnectDb();
 }
 
@@ -456,15 +464,17 @@ QString QgsOracleProvider::whereClause( QgsFeatureId featureId ) const
       break;
   }
 
-  if ( !mSqlWhereClause.isEmpty() )
-  {
-    if ( !whereClause.isEmpty() )
-      whereClause += " AND ";
-
-    whereClause += "(" + mSqlWhereClause + ")";
-  }
-
   return whereClause;
+}
+
+QString QgsOracleProvider::whereClause( QgsFeatureIds featureIds ) const
+{
+  QStringList whereClauses;
+  foreach ( const QgsFeatureId featureId, featureIds )
+  {
+    whereClauses << whereClause( featureId );
+  }
+  return whereClauses.join( " AND " );
 }
 
 void QgsOracleProvider::setExtent( QgsRectangle& newExtent )
@@ -1278,7 +1288,7 @@ bool QgsOracleProvider::addFeatures( QgsFeatureList &flist )
       throw OracleException( tr( "Could not prepare insert statement" ), qry );
     }
 
-    for ( QgsFeatureList::iterator features = flist.begin(); features != flist.end(); features++ )
+    for ( QgsFeatureList::iterator features = flist.begin(); features != flist.end(); ++features )
     {
       const QgsAttributes &attributevec = features->attributes();
 
@@ -1335,7 +1345,7 @@ bool QgsOracleProvider::addFeatures( QgsFeatureList &flist )
     // update feature ids
     if ( mPrimaryKeyType == pktInt || mPrimaryKeyType == pktFidMap )
     {
-      for ( QgsFeatureList::iterator features = flist.begin(); features != flist.end(); features++ )
+      for ( QgsFeatureList::iterator features = flist.begin(); features != flist.end(); ++features )
       {
         const QgsAttributes &attributevec = features->attributes();
 
@@ -1501,11 +1511,6 @@ bool QgsOracleProvider::addAttributes( const QList<QgsField> &attributes )
   return returnvalue;
 }
 
-static int moreThan( int a, int b )
-{
-  return a > b;
-}
-
 bool QgsOracleProvider::deleteAttributes( const QgsAttributeIds& ids )
 {
   bool returnvalue = true;
@@ -1527,7 +1532,8 @@ bool QgsOracleProvider::deleteAttributes( const QgsAttributeIds& ids )
     qry.finish();
 
     QList<int> idsList = ids.values();
-    qSort( idsList.begin(), idsList.end(), moreThan );
+    qSort( idsList.begin(), idsList.end(), qGreater<int>() );
+
     foreach ( int id, idsList )
     {
       const QgsField &fld = mAttributeFields.at( id );
@@ -1671,12 +1677,12 @@ bool QgsOracleProvider::changeAttributeValues( const QgsChangedAttributesMap & a
   return returnvalue;
 }
 
-void QgsOracleProvider::appendGeomParam( QgsGeometry *geom, QSqlQuery &qry ) const
+void QgsOracleProvider::appendGeomParam( const QgsGeometry *geom, QSqlQuery &qry ) const
 {
   QOCISpatialGeometry g;
 
   wkbPtr ptr;
-  ptr.ucPtr = geom ? geom->asWkb() : 0;
+  ptr.ucPtr = geom ? ( unsigned char * ) geom->asWkb() : 0;
   g.isNull = !ptr.ucPtr;
   g.gtype = -1;
   g.srid  = mSrid < 1 ? -1 : mSrid;
@@ -1798,7 +1804,6 @@ void QgsOracleProvider::appendGeomParam( QgsGeometry *geom, QSqlQuery &qry ) con
           g.ordinates << *ptr.dPtr++;
           if ( dim == 3 )
             g.ordinates << *ptr.dPtr++;
-          iOrdinate  += dim;
         }
       }
       break;
@@ -1986,6 +1991,28 @@ QgsRectangle QgsOracleProvider::extent()
   {
     QString sql;
     QSqlQuery qry( *mConnection );
+
+    if ( mUseEstimatedMetadata )
+    {
+      if ( exec( qry, QString( "SELECT sdo_lb,sdo_ub FROM mdsys.all_sdo_geom_metadata m, table(m.diminfo) WHERE owner=%1 AND table_name=%2 AND column_name=%3 AND sdo_dimname='X'" )
+                 .arg( quotedValue( mOwnerName ) )
+                 .arg( quotedValue( mTableName ) )
+                 .arg( quotedValue( mGeometryColumn ) ) ) && qry.next() )
+      {
+        mLayerExtent.setXMinimum( qry.value( 0 ).toDouble() );
+        mLayerExtent.setXMaximum( qry.value( 1 ).toDouble() );
+
+        if ( exec( qry, QString( "SELECT sdo_lb,sdo_ub FROM mdsys.all_sdo_geom_metadata m, table(m.diminfo) WHERE owner=%1 AND table_name=%2 AND column_name=%3 AND sdo_dimname='Y'" )
+                   .arg( quotedValue( mOwnerName ) )
+                   .arg( quotedValue( mTableName ) )
+                   .arg( quotedValue( mGeometryColumn ) ) )  && qry.next() )
+        {
+          mLayerExtent.setYMinimum( qry.value( 0 ).toDouble() );
+          mLayerExtent.setYMaximum( qry.value( 1 ).toDouble() );
+          return mLayerExtent;
+        }
+      }
+    }
 
     bool ok = false;
 
@@ -2221,13 +2248,13 @@ bool QgsOracleProvider::createSpatialIndex()
                               "mdsys.sdo_dim_element('X', %1, %2, 0.001),"
                               "mdsys.sdo_dim_element('Y', %3, %4, 0.001)"
                               ") WHERE table_name=%5 AND column_name=%6" )
-                .arg( r.xMinimum(), 0, 'f', 16 ).arg( r.xMaximum(), 0, 'f', 16 )
-                .arg( r.yMinimum(), 0, 'f', 16 ).arg( r.yMaximum(), 0, 'f', 16 )
+                .arg( qgsDoubleToString( r.xMinimum() ) ).arg( qgsDoubleToString( r.xMaximum() ) )
+                .arg( qgsDoubleToString( r.yMinimum() ) ).arg( qgsDoubleToString( r.yMaximum() ) )
                 .arg( quotedValue( mTableName ) )
                 .arg( quotedValue( mGeometryColumn ) ) )
        )
     {
-      QgsMessageLog::logMessage( tr( "Could not update metadata for %1.%2.\nSQL:%1\nError: %2" )
+      QgsMessageLog::logMessage( tr( "Could not update metadata for %1.%2.\nSQL:%3\nError: %4" )
                                  .arg( mTableName )
                                  .arg( mGeometryColumn )
                                  .arg( qry.lastQuery() )
@@ -2245,8 +2272,8 @@ bool QgsOracleProvider::createSpatialIndex()
                   .arg( quotedValue( mTableName ) )
                   .arg( quotedValue( mGeometryColumn ) )
                   .arg( mSrid < 1 ? "NULL" : QString::number( mSrid ) )
-                  .arg( r.xMinimum(), 0, 'f', 16 ).arg( r.xMaximum(), 0, 'f', 16 )
-                  .arg( r.yMinimum(), 0, 'f', 16 ).arg( r.yMaximum(), 0, 'f', 16 )
+                  .arg( qgsDoubleToString( r.xMinimum() ) ).arg( qgsDoubleToString( r.xMaximum() ) )
+                  .arg( qgsDoubleToString( r.yMinimum() ) ).arg( qgsDoubleToString( r.yMaximum() ) )
                 ) )
       {
         QgsMessageLog::logMessage( tr( "Could not insert metadata for %1.%2.\nSQL:%3\nError: %4" )
@@ -2552,7 +2579,7 @@ QgsVectorLayerImport::ImportError QgsOracleProvider::createEmptyLayer(
 
         if ( !exec( qry, QString( "INSERT"
                                   " INTO sdo_coord_ref_system(srid,coord_ref_sys_name,coord_ref_sys_kind,legacy_wktext,is_valid,is_legacy,information_source)"
-                                  " VALUES (%1,%2,%3,%4,'TRUE','TRUE','GDAL/OGR via Quantum GIS')" )
+                                  " VALUES (%1,%2,%3,%4,'TRUE','TRUE','GDAL/OGR via QGIS')" )
                     .arg( srid )
                     .arg( quotedValue( srs->description() ) )
                     .arg( quotedValue( srs->geographicFlag() ? "GEOGRAPHIC2D" : "PROJECTED" ) )
@@ -2892,7 +2919,7 @@ QGISEXTERN bool deleteLayer( const QString& uri, QString& errCause )
                                  .arg( QgsOracleConn::quotedValue( tableName ) ) )
        || !qry.next() )
   {
-    errCause = QObject::tr( "Unable determine number of geometry columns of layer %1.%2: \n%3" )
+    errCause = QObject::tr( "Unable to determine number of geometry columns of layer %1.%2: \n%3" )
                .arg( ownerName )
                .arg( tableName )
                .arg( qry.lastError().text() );

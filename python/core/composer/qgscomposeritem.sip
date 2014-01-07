@@ -5,8 +5,6 @@ class QgsComposerItem: QObject, QGraphicsRectItem
 {
 %TypeHeaderCode
 #include <qgscomposeritem.h>
-//#include <qgscomposerarrow.h>
-//#include <qgscomposeritemgroup.h>
 #include <qgscomposerlabel.h>
 #include <qgscomposerlegend.h>
 #include <qgscomposermap.h>
@@ -16,7 +14,6 @@ class QgsComposerItem: QObject, QGraphicsRectItem
 #include <qgscomposershape.h>
 #include <qgscomposertable.h>
 #include <qgscomposerattributetable.h>
-//#include <qgscomposertexttable.h>
 %End
 
 %ConvertToSubClassCode
@@ -231,6 +228,55 @@ class QgsComposerItem: QObject, QGraphicsRectItem
      */
     void setFrameEnabled( bool drawFrame );
 
+
+    /** Whether this item has a Background or not.
+     * @returns true if there is a Background around this item, otherwise false.
+     * @note introduced since 2.0
+     * @see hasBackground
+     */
+    bool hasBackground() const;
+
+    /** Set whether this item has a Background drawn around it or not.
+     * @param drawBackground draw Background
+     * @returns nothing
+     * @note introduced in 2.0
+     * @see hasBackground
+     */
+    void setBackgroundEnabled( bool drawBackground );
+
+    /** Gets the background color for this item
+     * @returns background color
+     * @note introduced in 2.0
+     */
+    QColor backgroundColor() const;
+
+    /** Sets the background color for this item
+     * @param backgroundColor new background color
+     * @returns nothing
+     * @note introduced in 2.0
+     */
+    void setBackgroundColor( const QColor& backgroundColor );
+
+    /** Returns the item's composition blending mode */
+    QPainter::CompositionMode blendMode() const;
+
+    /** Sets the item's composition blending mode*/
+    void setBlendMode( QPainter::CompositionMode blendMode );
+
+    /** Returns the item's transparency */
+    int transparency() const;
+    /** Sets the item's transparency */
+    void setTransparency( int transparency );
+
+    /** Returns true if effects (eg blend modes) are enabled for the item
+     * @note introduced in 2.0
+    */
+    bool effectsEnabled() const;
+    /** Sets whether effects (eg blend modes) are enabled for the item
+     * @note introduced in 2.0
+    */
+    void setEffectsEnabled( bool effectsEnabled );
+
     /**Composite operations for item groups do nothing per default*/
     virtual void addItem( QgsComposerItem* item );
     virtual void removeItems();
@@ -269,6 +315,9 @@ class QgsComposerItem: QObject, QGraphicsRectItem
     /**Returns the font ascent in Millimeters (considers upscaling and downscaling with FONT_WORKAROUND_SCALE*/
     double fontAscentMillimeters( const QFont& font ) const;
 
+    /**Returns the font ascent in Millimeters (considers upscaling and downscaling with FONT_WORKAROUND_SCALE*/
+    double fontDescentMillimeters( const QFont& font ) const;
+
     /**Calculates font to from point size to pixel size*/
     double pixelFontSize( double pointSize ) const;
 
@@ -283,10 +332,14 @@ class QgsComposerItem: QObject, QGraphicsRectItem
     @note this method was added in version 1.2*/
     bool positionLock() const;
 
-    /**Update mouse cursor at (item) position
-    @note this method was added in version 1.2*/
-    void updateCursor( const QPointF& itemPos );
+    /**Returns the rotation for the composer item
+    @note this method was added in version 2.1*/
+    double itemRotation() const;
 
+    /**Returns the rotation for the composer item
+     * @deprecated Use itemRotation()
+     *             instead
+     */    
     double rotation() const;
 
     /**Updates item, with the possibility to do custom update for subclasses*/
@@ -304,33 +357,17 @@ class QgsComposerItem: QObject, QGraphicsRectItem
       @note this method was added in version 2.0
       @note there is not setter since one can't manually set the id*/
     QString uuid() const;
-    
-    /** Gets the background color for this item
-     * @note introduced in 2.0
-     */
-    const QColor backgroundColor() const;
-
-    /** Sets the background color for this item
-     * @note introduced in 2.0
-     */
-    void setBackgroundColor( const QColor& backgroundColor );    
-    
-    /* Returns the current blending mode for the composer item
-        @note added in version 1.9*/
-    const QPainter::CompositionMode blendMode() const;
-    /* Sets the composer item's blending mode
-        @note added in version 1.9*/
-    void setBlendMode( const QPainter::CompositionMode blendMode );
-    
-    /** Returns the composer item's transparency
-        @note added in version 1.9*/    
-    const int transparency() const;
-    /** Sets the composer item's transparency
-        @note added in version 1.9*/
-    void setTransparency( const int transparency );
 
   public slots:
+    /**Sets the item rotation
+     * @deprecated Use setItemRotation( double rotation ) instead
+     */   
     virtual void setRotation( double r );
+
+    /**Sets the item rotation
+      @note this method was added in version 2.1
+    */
+    virtual void setItemRotation( double r );
     void repaint();
 
   protected:
@@ -341,22 +378,6 @@ class QgsComposerItem: QObject, QGraphicsRectItem
     virtual void mouseReleaseEvent( QGraphicsSceneMouseEvent * event );
 
     virtual void hoverMoveEvent( QGraphicsSceneHoverEvent * event );
-
-    /**Finds out the appropriate cursor for the current mouse position in the widget (e.g. move in the middle, resize at border)*/
-    Qt::CursorShape cursorForPosition( const QPointF& itemCoordPos );
-
-    /**Finds out which mouse move action to choose depending on the cursor position inside the widget*/
-    QgsComposerItem::MouseMoveAction mouseMoveActionForPosition( const QPointF& itemCoordPos );
-
-    /**Changes the rectangle of an item depending on current mouse action (resize or move)
-     @param currentPosition current position of mouse cursor
-     @param mouseMoveStartPos cursor position at the start of the current mouse action
-     @param originalItem Item position at the start of the mouse action
-     @param dx x-Change of mouse cursor
-     @param dy y-Change of mouse cursor
-     @param changeItem Item to change size (can be the same as originalItem or a differen one)
-    */
-    void changeItemRectangle( const QPointF& currentPosition, const QPointF& mouseMoveStartPos, const QGraphicsRectItem* originalItem, double dx, double dy, QGraphicsRectItem* changeItem );
 
     /**Draw selection boxes around item*/
     virtual void drawSelectionBoxes( QPainter* p );
@@ -389,11 +410,27 @@ class QgsComposerItem: QObject, QGraphicsRectItem
     //some utility functions
 
     /**Calculates width and hight of the picture (in mm) such that it fits into the item frame with the given rotation*/
+    bool imageSizeConsideringRotation( double& width, double& height, double rotation ) const;
+    /**Calculates width and hight of the picture (in mm) such that it fits into the item frame with the given rotation
+     * @deprecated Use bool imageSizeConsideringRotation( double& width, double& height, double rotation )
+     * instead
+     */
     bool imageSizeConsideringRotation( double& width, double& height ) const;
+    
     /**Calculates corner point after rotation and scaling*/
+    bool cornerPointOnRotatedAndScaledRect( double& x, double& y, double width, double height, double rotation ) const;
+    /**Calculates corner point after rotation and scaling
+     * @deprecated Use bool cornerPointOnRotatedAndScaledRect( double& x, double& y, double width, double height, double rotation )
+     * instead
+     */    
     bool cornerPointOnRotatedAndScaledRect( double& x, double& y, double width, double height ) const;
 
-    /**Calculates width / height of the bounding box of a rotated rectangle (mRotation)*/
+    /**Calculates width / height of the bounding box of a rotated rectangle*/
+    void sizeChangedByRotation( double& width, double& height, double rotation );
+     /**Calculates width / height of the bounding box of a rotated rectangle
+     * @deprecated Use void sizeChangedByRotation( double& width, double& height, double rotation )
+     * instead
+     */      
     void sizeChangedByRotation( double& width, double& height );
     /**Rotates a point / vector
         @param angle rotation angle in degrees, counterclockwise
@@ -401,9 +438,17 @@ class QgsComposerItem: QObject, QGraphicsRectItem
         @param y in/out: y cooreinate before / after the rotation*/
     void rotate( double angle, double& x, double& y ) const;
 
+    /**Return horizontal align snap item. Creates a new graphics line if 0*/
+    QGraphicsLineItem* hAlignSnapItem();
+    void deleteHAlignSnapItem();
+    /**Return vertical align snap item. Creates a new graphics line if 0*/
+    QGraphicsLineItem* vAlignSnapItem();
+    void deleteVAlignSnapItem();
+    void deleteAlignItems();
+
   signals:
     /**Is emitted on rotation change to notify north arrow pictures*/
-    void rotationChanged( double newRotation );
+    void itemRotationChanged( double newRotation );
     /**Used e.g. by the item widgets to update the gui elements*/
     void itemChanged();
     /**Emitted if the rectangle changes*/

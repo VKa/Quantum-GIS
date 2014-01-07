@@ -219,22 +219,6 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
       UserDefinedShader
     };
 
-    /** \brief This enumerator describes the different kinds of drawing we can do */
-    enum DrawingStyle
-    {
-      UndefinedDrawingStyle,
-      SingleBandGray,                 // a single band image drawn as a range of gray colors
-      SingleBandPseudoColor,          // a single band image drawn using a pseudocolor algorithm
-      PalettedColor,                  // a "Palette" image drawn using color table
-      PalettedSingleBandGray,         // a "Palette" layer drawn in gray scale
-      PalettedSingleBandPseudoColor,  // a "Palette" layerdrawn using a pseudocolor algorithm
-      PalettedMultiBandColor,         // currently not supported
-      MultiBandSingleBandGray,        // a layer containing 2 or more bands, but a single band drawn as a range of gray colors
-      MultiBandSingleBandPseudoColor, // a layer containing 2 or more bands, but a single band drawn using a pseudocolor algorithm
-      MultiBandColor,                 // a layer containing 2 or more bands, mapped to RGB color space. In the case of a multiband with only two bands, one band will be mapped to more than one color.
-      SingleBandColorDataStyle        // ARGB values rendered directly
-    };
-
     /** \brief This enumerator describes the type of raster layer */
     enum LayerType
     {
@@ -243,8 +227,6 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
       Multiband,
       ColorLayer
     };
-
-    static void buildSupportedRasterFileFilter( QString & fileFilters );
 
     /** This helper checks to see whether the file name appears to be a valid
      *  raster file name.  If the file name looks like it could be valid,
@@ -260,14 +242,14 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
     /**  [ data provider interface ] Set the data provider */
     void setDataProvider( const QString & provider );
 
-    /** \brief Accessor for drawing style */
-    DrawingStyle drawingStyle() { return mDrawingStyle; }
-
     /** \brief  Accessor for raster layer type (which is a read only property) */
     LayerType rasterType() { return mRasterType; }
 
+    /** \brief Accessor for drawing style */
+    //DrawingStyle drawingStyle() { return mDrawingStyle; }
+
     /** \brief Mutator for drawing style */
-    void setDrawingStyle( const DrawingStyle &  theDrawingStyle ) { mDrawingStyle = theDrawingStyle; setRendererForDrawingStyle( theDrawingStyle ); }
+    //void setDrawingStyle( const DrawingStyle &  theDrawingStyle ) { mDrawingStyle = theDrawingStyle; setRendererForDrawingStyle( theDrawingStyle ); }
 
     /**Set raster renderer. Takes ownership of the renderer object*/
     void setRenderer( QgsRasterRenderer* theRenderer );
@@ -406,6 +388,9 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
      */
     void dataChanged();
 
+    /** Signal emitted when the symbology changes, through call to setRenderer() */
+    void rendererChanged();
+
   protected:
     /** \brief Read the symbology for the current layer from the Dom node supplied */
     bool readSymbology( const QDomNode& node, QString& errorMessage );
@@ -430,7 +415,7 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
     bool update();
 
     /**Sets corresponding renderer for style*/
-    void setRendererForDrawingStyle( const DrawingStyle &  theDrawingStyle );
+    void setRendererForDrawingStyle( const QgsRaster::DrawingStyle &  theDrawingStyle );
 
     /** \brief  Constant defining flag for XML and a constant that signals property not used */
     const QString QSTRING_NOT_SET;
@@ -439,7 +424,7 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
     /** Pointer to data provider */
     QgsRasterDataProvider* mDataProvider;
 
-    DrawingStyle mDrawingStyle;
+    //DrawingStyle mDrawingStyle;
 
     /** [ data provider interface ]The error message associated with the last error */
     QString mError;

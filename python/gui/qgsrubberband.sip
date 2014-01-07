@@ -13,7 +13,8 @@ class QgsRubberBand: QgsMapCanvasItem
       ICON_CROSS,
       ICON_X,
       ICON_BOX,
-      ICON_CIRCLE
+      ICON_CIRCLE,
+      ICON_FULL_BOX
     };
 
     QgsRubberBand( QgsMapCanvas* mapCanvas /TransferThis/, QGis::GeometryType geometryType = QGis::Line );
@@ -33,6 +34,10 @@ class QgsRubberBand: QgsMapCanvasItem
     /** Set the size of the point icons
      *   Added in 1.9 */
     void setIconSize ( int iconSize );
+
+    void setLineStyle( Qt::PenStyle penStyle );
+
+    void setBrushStyle( Qt::BrushStyle brushStyle );
 
     void reset( QGis::GeometryType geometryType = QGis::Line );
     void reset( bool isPolygon );

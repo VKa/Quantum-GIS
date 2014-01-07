@@ -55,7 +55,7 @@ IF (APPLE)
 ENDIF (APPLE)
 
 SET_TARGET_PROPERTIES(pyspatialite PROPERTIES PREFIX "" OUTPUT_NAME _spatialite)
-    
+
 IF (WIN32)
   SET_TARGET_PROPERTIES(pyspatialite PROPERTIES SUFFIX ".pyd")
 ENDIF (WIN32)
@@ -63,7 +63,7 @@ ENDIF (WIN32)
 FOREACH(file lib/__init__.py lib/dbapi2.py lib/dump.py)
   ADD_CUSTOM_COMMAND(TARGET pyspatialite
 	  POST_BUILD
-	  COMMAND ${CMAKE_COMMAND} -E copy ${file} ${PYTHON_OUTPUT_DIRECTORY}/pyspatialite/${file}
+	  COMMAND ${CMAKE_COMMAND} -E copy ${file} ${PYTHON_OUTPUT_DIRECTORY}/pyspatialite/
 	  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   )
 ENDFOREACH(file)

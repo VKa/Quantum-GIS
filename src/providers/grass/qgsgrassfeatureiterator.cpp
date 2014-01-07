@@ -39,13 +39,7 @@ extern "C"
 QgsGrassFeatureIterator::QgsGrassFeatureIterator( QgsGrassProvider* p, const QgsFeatureRequest& request )
     : QgsAbstractFeatureIterator( request ), P( p )
 {
-  // make sure that only one iterator is active
-  if ( P->mActiveIterator )
-  {
-    QgsMessageLog::logMessage( QObject::tr( "Already active iterator on this provider was closed." ), QObject::tr( "GRASS" ) );
-    P->mActiveIterator->close();
-  }
-  P->mActiveIterator = this;
+  P->mActiveIterators << this;
 
   // check if outdated and update if necessary
   P->ensureUpdated();
@@ -77,15 +71,17 @@ void QgsGrassFeatureIterator::setSelectionRect( const QgsRectangle& rect, bool u
   //apply selection rectangle
   resetSelection( 0 );
 
+  BOUND_BOX box;
+  box.N = rect.yMaximum(); box.S = rect.yMinimum();
+  box.E = rect.xMaximum(); box.W = rect.xMinimum();
+  box.T = PORT_DOUBLE_MAX; box.B = -PORT_DOUBLE_MAX;
+
   if ( !useIntersect )
   { // select by bounding boxes only
-    BOUND_BOX box;
-    box.N = rect.yMaximum(); box.S = rect.yMinimum();
-    box.E = rect.xMaximum(); box.W = rect.xMinimum();
-    box.T = PORT_DOUBLE_MAX; box.B = -PORT_DOUBLE_MAX;
     if ( P->mLayerType == QgsGrassProvider::POINT || P->mLayerType == QgsGrassProvider::CENTROID ||
          P->mLayerType == QgsGrassProvider::LINE || P->mLayerType == QgsGrassProvider::FACE ||
-         P->mLayerType == QgsGrassProvider::BOUNDARY )
+         P->mLayerType == QgsGrassProvider::BOUNDARY ||
+         P->mLayerType == QgsGrassProvider::TOPO_POINT || P->mLayerType == QgsGrassProvider::TOPO_LINE )
     {
       Vect_select_lines_by_box( P->mMap, &box, P->mGrassType, mList );
     }
@@ -93,7 +89,10 @@ void QgsGrassFeatureIterator::setSelectionRect( const QgsRectangle& rect, bool u
     {
       Vect_select_areas_by_box( P->mMap, &box, mList );
     }
-
+    else if ( P->mLayerType == QgsGrassProvider::TOPO_NODE )
+    {
+      Vect_select_nodes_by_box( P->mMap, &box, mList );
+    }
   }
   else
   { // check intersection
@@ -112,13 +111,19 @@ void QgsGrassFeatureIterator::setSelectionRect( const QgsRectangle& rect, bool u
 
     if ( P->mLayerType == QgsGrassProvider::POINT || P->mLayerType == QgsGrassProvider::CENTROID ||
          P->mLayerType == QgsGrassProvider::LINE || P->mLayerType == QgsGrassProvider::FACE ||
-         P->mLayerType == QgsGrassProvider::BOUNDARY )
+         P->mLayerType == QgsGrassProvider::BOUNDARY ||
+         P->mLayerType == QgsGrassProvider::TOPO_POINT || P->mLayerType == QgsGrassProvider::TOPO_LINE )
     {
       Vect_select_lines_by_polygon( P->mMap, Polygon, 0, NULL, P->mGrassType, mList );
     }
     else if ( P->mLayerType == QgsGrassProvider::POLYGON )
     {
       Vect_select_areas_by_polygon( P->mMap, Polygon, 0, NULL, mList );
+    }
+    else if ( P->mLayerType == QgsGrassProvider::TOPO_NODE )
+    {
+      // There is no Vect_select_nodes_by_polygon but for nodes it is the same as by box
+      Vect_select_nodes_by_box( P->mMap, &box, mList );
     }
 
     Vect_destroy_line_struct( Polygon );
@@ -142,13 +147,14 @@ QgsGrassFeatureIterator::~QgsGrassFeatureIterator()
   close();
 }
 
-bool QgsGrassFeatureIterator::nextFeature( QgsFeature& feature )
+bool QgsGrassFeatureIterator::fetchFeature( QgsFeature& feature )
 {
   if ( mClosed )
     return false;
 
   feature.setValid( false );
   int cat = -1, type = -1, id = -1;
+  QgsFeatureId featureId = -1;
 
   QgsDebugMsgLevel( "entered.", 3 );
 
@@ -158,7 +164,8 @@ bool QgsGrassFeatureIterator::nextFeature( QgsFeature& feature )
     return false;
   }
 
-  if ( P->mCidxFieldIndex < 0 || mNextCidx >= P->mCidxFieldNumCats )
+  // TODO: is this necessary? the same is checked below
+  if ( !P->isTopoType()  && ( P->mCidxFieldIndex < 0 || mNextCidx >= P->mCidxFieldNumCats ) )
   {
     close();
     return false; // No features, no features in this layer
@@ -168,17 +175,45 @@ bool QgsGrassFeatureIterator::nextFeature( QgsFeature& feature )
 
   // Get next line/area id
   int found = 0;
-  while ( mNextCidx < P->mCidxFieldNumCats )
+  while ( true )
   {
-    Vect_cidx_get_cat_by_index( P->mMap, P->mCidxFieldIndex, mNextCidx++, &cat, &type, &id );
-    // Warning: selection array is only of type line/area of current layer -> check type first
+    QgsDebugMsgLevel( QString( "mNextTopoId = %1" ).arg( mNextTopoId ), 3 );
+    if ( P->mLayerType == QgsGrassProvider::TOPO_POINT || P->mLayerType == QgsGrassProvider::TOPO_LINE )
+    {
+      if ( mNextTopoId > Vect_get_num_lines( P->mMap ) ) break;
+      id = mNextTopoId;
+      type = Vect_read_line( P->mMap, 0, 0, mNextTopoId++ );
+      if ( !( type & P->mGrassType ) ) continue;
+      featureId = id;
+    }
+    else if ( P->mLayerType == QgsGrassProvider::TOPO_NODE )
+    {
+      if ( mNextTopoId > Vect_get_num_nodes( P->mMap ) ) break;
+      id = mNextTopoId;
+      type = 0;
+      mNextTopoId++;
+      featureId = id;
+    }
+    else
+    {
+      if ( mNextCidx >= P->mCidxFieldNumCats ) break;
 
-    if ( filterById && id != mRequest.filterFid() )
+      Vect_cidx_get_cat_by_index( P->mMap, P->mCidxFieldIndex, mNextCidx++, &cat, &type, &id );
+      // Warning: selection array is only of type line/area of current layer -> check type first
+      if ( !( type & P->mGrassType ) )
+        continue;
+
+      // The 'id' is a unique id of a GRASS geometry object (point, line, area)
+      // but it cannot be used as QgsFeatureId because one geometry object may
+      // represent more features because it may have more categories.
+      featureId = makeFeatureId( id, cat );
+    }
+
+    if ( filterById && featureId != mRequest.filterFid() )
       continue;
 
-    if ( !( type & P->mGrassType ) )
-      continue;
-
+    // it is correct to use id with mSelection because mSelection is only used
+    // for geometry selection
     if ( !mSelection[id] )
       continue;
 
@@ -190,11 +225,9 @@ bool QgsGrassFeatureIterator::nextFeature( QgsFeature& feature )
     close();
     return false; // No more features
   }
-#if QGISDEBUG > 3
-  QgsDebugMsg( QString( "cat = %1 type = %2 id = %3" ).arg( cat ).arg( type ).arg( id ) );
-#endif
+  QgsDebugMsgLevel( QString( "cat = %1 type = %2 id = %3 fatureId = %4" ).arg( cat ).arg( type ).arg( id ).arg( featureId ), 3 );
 
-  feature.setFeatureId( id );
+  feature.setFeatureId( featureId );
   feature.initAttributes( P->fields().count() );
   feature.setFields( &P->fields() ); // allow name-based attribute lookups
 
@@ -203,10 +236,52 @@ bool QgsGrassFeatureIterator::nextFeature( QgsFeature& feature )
   else
     setFeatureGeometry( feature, id, type );
 
-  if ( mRequest.flags() & QgsFeatureRequest::SubsetOfAttributes )
-    P->setFeatureAttributes( P->mLayerId, cat, &feature, mRequest.subsetOfAttributes() );
+  if ( ! P->isTopoType() )
+  {
+    if ( mRequest.flags() & QgsFeatureRequest::SubsetOfAttributes )
+      P->setFeatureAttributes( P->mLayerId, cat, &feature, mRequest.subsetOfAttributes() );
+    else
+      P->setFeatureAttributes( P->mLayerId, cat, &feature );
+  }
   else
-    P->setFeatureAttributes( P->mLayerId, cat, &feature );
+  {
+    feature.setAttribute( 0, id );
+    if ( P->mLayerType == QgsGrassProvider::TOPO_POINT || P->mLayerType == QgsGrassProvider::TOPO_LINE )
+    {
+      feature.setAttribute( 1, P->primitiveTypeName( type ) );
+
+      int node1, node2;
+      Vect_get_line_nodes( P->mMap, id, &node1, &node2 );
+      feature.setAttribute( 2, node1 );
+      if ( P->mLayerType == QgsGrassProvider::TOPO_LINE )
+      {
+        feature.setAttribute( 3, node2 );
+      }
+    }
+
+    if ( P->mLayerType == QgsGrassProvider::TOPO_LINE )
+    {
+      if ( type == GV_BOUNDARY )
+      {
+        int left, right;
+        Vect_get_line_areas( P->mMap, id, &left, &right );
+        feature.setAttribute( 4, left );
+        feature.setAttribute( 5, right );
+      }
+    }
+    else if ( P->mLayerType == QgsGrassProvider::TOPO_NODE )
+    {
+      QString lines;
+      int nlines = Vect_get_node_n_lines( P->mMap, id );
+      for ( int i = 0; i < nlines; i++ )
+      {
+        int line = Vect_get_node_line( P->mMap, id, i );
+        if ( i > 0 ) lines += ",";
+        lines += QString::number( line );
+      }
+      feature.setAttribute( 1, lines );
+    }
+  }
 
   feature.setValid( true );
 
@@ -228,6 +303,7 @@ bool QgsGrassFeatureIterator::rewind()
   P->ensureUpdated();
 
   mNextCidx = 0;
+  mNextTopoId = 1;
 
   return true;
 }
@@ -237,15 +313,14 @@ bool QgsGrassFeatureIterator::close()
   if ( mClosed )
     return false;
 
+  P->mActiveIterators.remove( this );
+
   // finalization
   Vect_destroy_line_struct( mPoints );
   Vect_destroy_cats_struct( mCats );
   Vect_destroy_list( mList );
 
   free( mSelection );
-
-  // tell provider that this iterator is not active anymore
-  P->mActiveIterator = 0;
 
   mClosed = true;
   return true;
@@ -260,6 +335,7 @@ void QgsGrassFeatureIterator::resetSelection( bool sel )
   QgsDebugMsg( "entered." );
   memset( mSelection, ( int ) sel, mSelectionSize );
   mNextCidx = 0;
+  mNextTopoId = 1;
 }
 
 
@@ -293,12 +369,26 @@ void QgsGrassFeatureIterator::setFeatureGeometry( QgsFeature& feature, int id, i
   int wkbsize;
 
   // TODO int may be 64 bits (memcpy)
-  if ( type & ( GV_POINTS | GV_LINES | GV_FACE ) ) /* points or lines */
+  if ( type & ( GV_POINTS | GV_LINES | GV_FACE ) || P->mLayerType == QgsGrassProvider::TOPO_NODE ) /* points or lines */
   {
-    Vect_read_line( P->mMap, mPoints, mCats, id );
+    if ( P->mLayerType == QgsGrassProvider::TOPO_NODE )
+    {
+      double x, y, z;
+      Vect_get_node_coor( P->mMap, id, &x, &y, &z );
+      Vect_reset_line( mPoints );
+      Vect_append_point( mPoints, x, y, z );
+    }
+    else
+    {
+      Vect_read_line( P->mMap, mPoints, 0, id );
+    }
     int npoints = mPoints->n_points;
 
-    if ( type & GV_POINTS )
+    if ( P->mLayerType == QgsGrassProvider::TOPO_NODE )
+    {
+      wkbsize = 1 + 4 + 2 * 8;
+    }
+    else if ( type & GV_POINTS )
     {
       wkbsize = 1 + 4 + 2 * 8;
     }
@@ -394,4 +484,11 @@ void QgsGrassFeatureIterator::setFeatureGeometry( QgsFeature& feature, int id, i
   }
 
   feature.setGeometryAndOwnership( wkb, wkbsize );
+}
+
+QgsFeatureId QgsGrassFeatureIterator::makeFeatureId( int grassId, int cat )
+{
+  // Because GRASS object id and category are both int and QgsFeatureId is qint64
+  // we can create unique QgsFeatureId from GRASS id and cat
+  return ( QgsFeatureId )grassId * 1000000000 + cat;
 }

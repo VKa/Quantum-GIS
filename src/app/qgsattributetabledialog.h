@@ -41,7 +41,7 @@ class QgsAttributeTableModel;
 class QgsAttributeTableFilterModel;
 class QgsAttributeTableView;
 
-class QgsAttributeTableDialog : public QDialog, private Ui::QgsAttributeTableDialog
+class APP_EXPORT QgsAttributeTableDialog : public QDialog, private Ui::QgsAttributeTableDialog
 {
     Q_OBJECT
 
@@ -122,6 +122,15 @@ class QgsAttributeTableDialog : public QDialog, private Ui::QgsAttributeTableDia
     void on_mDeleteSelectedButton_clicked();
 
     /**
+     * Called when the current index changes in the main view
+     * i.e. when the view mode is switched from table to form view
+     * or vice versa.
+     *
+     * Will adjust the button state
+     */
+    void on_mMainView_currentChanged( int );
+
+    /**
      * add feature
      */
     void on_mAddFeature_clicked();
@@ -162,6 +171,12 @@ class QgsAttributeTableDialog : public QDialog, private Ui::QgsAttributeTableDia
      * @param event unused
      */
     void closeEvent( QCloseEvent* event );
+
+    /*
+     * Handle KeyPress event of the window
+     * @param event
+     */
+    void keyPressEvent( QKeyEvent* event );
 
   private slots:
     /**

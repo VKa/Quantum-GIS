@@ -29,7 +29,7 @@ extern "C"
 #include <spatialite.h>
 }
 
-class QgsNewSpatialiteLayerDialog: public QDialog, private Ui::QgsNewSpatialiteLayerDialogBase
+class APP_EXPORT QgsNewSpatialiteLayerDialog: public QDialog, private Ui::QgsNewSpatialiteLayerDialogBase
 {
     Q_OBJECT
 
@@ -64,7 +64,7 @@ class QgsNewSpatialiteLayerDialog: public QDialog, private Ui::QgsNewSpatialiteL
     static QString quotedValue( QString value );
 
     QPushButton *mOkButton;
-    int mCrsId;
+    QString mCrsId;
 };
 
 #endif // QGSNEWVECTORLAYERDIALOG_H

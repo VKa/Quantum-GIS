@@ -20,58 +20,132 @@
 #include <QPushButton>
 #include <QTreeWidget>
 #include <QTableWidget>
+#include <QMimeData>
 
 #include "qgsvectorlayer.h"
 #include "ui_qgsfieldspropertiesbase.h"
 
-class QgsAttributesList : public QTableWidget
+class APP_EXPORT QgsFieldsProperties : public QWidget, private Ui_QgsFieldsPropertiesBase
 {
     Q_OBJECT
+
   public:
-    QgsAttributesList( QWidget* parent = 0 )
-        : QTableWidget( parent )
-    {}
 
-  protected:
-    // virtual void dragMoveEvent( QDragMoveEvent *event );
-    // QMimeData *mimeData( const QList<QTableWidgetItem *> items ) const;
-    // Qt::DropActions supportedDropActions() const;
-};
+    enum FieldPropertiesRoles
+    {
+      DesignerTreeRole = Qt::UserRole,
+      FieldConfigRole
+    };
 
-class QgsAttributesTree : public QTreeWidget
-{
-    Q_OBJECT
-  public:
-    QgsAttributesTree( QWidget* parent = 0 )
-        : QTreeWidget( parent )
-    {}
-    QTreeWidgetItem* addContainer( QTreeWidgetItem* parent , QString title );
-    QTreeWidgetItem* addItem( QTreeWidgetItem* parent , QString fieldName );
+    class DesignerTreeItemData
+    {
+      public:
+        enum Type
+        {
+          Field,
+          Relation,
+          Container
+        };
 
-  protected:
-    virtual void dragMoveEvent( QDragMoveEvent *event );
-    virtual void dropEvent( QDropEvent *event );
-    virtual bool dropMimeData( QTreeWidgetItem * parent, int index, const QMimeData * data, Qt::DropAction action );
-    /* Qt::DropActions supportedDropActions() const;*/
-};
+        DesignerTreeItemData()
+        {}
+
+        DesignerTreeItemData( Type type, const QString& name )
+            : mType( type )
+            , mName( name ) {}
+
+        QString name() const { return mName; }
+        void setName( const QString& name ) { mName = name; }
+
+        Type type() const { return mType; }
+        void setType( const Type& type ) { mType = type; }
+
+        QVariant asQVariant() { return QVariant::fromValue<DesignerTreeItemData>( *this ); }
+
+      protected:
+        Type mType;
+        QString mName;
+    };
+
+    /**
+     * This class overrides mime type handling to be able to work with
+     * the drag and drop attribute editor.
+     *
+     * The mime type is application/x-qgsattributetablefield
+     */
+
+    class DragList : public QTableWidget
+    {
+      public:
+        DragList( QWidget* parent = 0 )
+            : QTableWidget( parent )
+        {}
+
+        // QTreeWidget interface
+      protected:
+        virtual QStringList mimeTypes() const;
+
+        virtual QMimeData* mimeData( const QList<QTableWidgetItem*> items ) const;
+    };
 
 
-class QgsFieldsProperties : public QWidget, private Ui_QgsFieldsPropertiesBase
-{
-    Q_OBJECT
+    /**
+     * Graphical representation for the attribute editor drag and drop editor
+     */
+    class DesignerTree : public QTreeWidget
+    {
+      public:
+        DesignerTree( QWidget* parent = 0 )
+            : QTreeWidget( parent )
+        {}
+        QTreeWidgetItem* addItem( QTreeWidgetItem* parent, DesignerTreeItemData data );
+        QTreeWidgetItem* addContainer( QTreeWidgetItem* parent, QString title );
+
+      protected:
+        virtual void dragMoveEvent( QDragMoveEvent *event );
+        virtual void dropEvent( QDropEvent *event );
+        virtual bool dropMimeData( QTreeWidgetItem * parent, int index, const QMimeData * data, Qt::DropAction action );
+        /* Qt::DropActions supportedDropActions() const;*/
+
+        // QTreeWidget interface
+      protected:
+        virtual QStringList mimeTypes() const;
+        virtual QMimeData* mimeData( const QList<QTreeWidgetItem*> items ) const;
+    };
+
+    /**
+     * Holds the configuration for a field
+     */
+    class FieldConfig
+    {
+      public:
+        FieldConfig();
+        FieldConfig( QgsVectorLayer* layer, int idx );
+
+        bool mEditable;
+        bool mEditableEnabled;
+        bool mLabelOnTop;
+        QgsVectorLayer::ValueRelationData mValueRelationData;
+        QMap<QString, QVariant> mValueMap;
+        QgsVectorLayer::RangeData mRange;
+        QPair<QString, QString> mCheckedState;
+        QgsVectorLayer::EditType mEditType;
+        QPushButton* mButton;
+        QString mDateFormat;
+        QSize mWidgetSize;
+        QString mEditorWidgetV2Type;
+        QMap<QString, QVariant> mEditorWidgetV2Config;
+    };
 
   public:
     QgsFieldsProperties( QgsVectorLayer *layer, QWidget* parent = 0 );
+
+    ~QgsFieldsProperties();
 
     /**Adds an attribute to the table (but does not commit it yet)
     @param field the field to add
     @return false in case of a name conflict, true in case of success */
     bool addAttribute( const QgsField &field );
-
-    /**Deletes an attribute (but does not commit it)
-      @param name attribute name
-      @return false in case of a non-existing attribute.*/
-    bool deleteAttribute( int attr );
 
     /**Creates the a proper item to save from the tree
      * @param item The tree widget item to process
@@ -85,6 +159,8 @@ class QgsFieldsProperties : public QWidget, private Ui_QgsFieldsPropertiesBase
     void updateButtons();
     void loadRows();
     void setRow( int row, int idx, const QgsField &field );
+
+    void loadRelations();
 
     void loadAttributeEditorTree();
     QTreeWidgetItem *loadAttributeEditorTreeItem( QgsAttributeEditorElement* const widgetDef, QTreeWidgetItem* parent );
@@ -101,7 +177,6 @@ class QgsFieldsProperties : public QWidget, private Ui_QgsFieldsPropertiesBase
     void on_mEditorLayoutComboBox_currentIndexChanged( int index );
 
     void addAttribute();
-    void deleteAttribute();
     void attributeAdded( int idx );
     void attributeDeleted( int idx );
     void attributeTypeDialog();
@@ -119,25 +194,25 @@ class QgsFieldsProperties : public QWidget, private Ui_QgsFieldsPropertiesBase
     void editingToggled();
 
   protected:
-    QgsVectorLayer* mLayer;
-    QgsAttributesTree* mAttributesTree;
-    QgsAttributesList* mAttributesList;
+    FieldConfig configForRow( int row );
+    void setConfigForRow( int row, FieldConfig cfg );
 
-    QMap<int, bool> mFieldEditables;
-    QMap<int, QgsVectorLayer::ValueRelationData> mValueRelationData;
-    QMap<int, QMap<QString, QVariant> > mValueMaps;
-    QMap<int, QgsVectorLayer::RangeData> mRanges;
-    QMap<int, QPair<QString, QString> > mCheckedStates;
-    QMap<int, QgsVectorLayer::EditType> mEditTypeMap;
-    QMap<int, QPushButton*> mButtonMap;
-    QMap<int, QString> mDateFormat;
-    QMap<int, QSize> mWidgetSize;
+    QgsVectorLayer* mLayer;
+    DesignerTree* mDesignerTree;
+    DragList* mFieldsList;
+    DragList* mRelationsList;
+
+    // Holds all the first column items (header: id) of the table.
+    // The index in the list is the fieldIdx, and therefore acts as a mapping
+    // between fieldIdx and QTableWidgetItem->row()
+    QList<QTableWidgetItem*> mIndexedWidgets;
 
     enum attrColumns
     {
       attrIdCol = 0,
       attrNameCol,
       attrTypeCol,
+      attrTypeNameCol,
       attrLengthCol,
       attrPrecCol,
       attrCommentCol,
@@ -148,11 +223,26 @@ class QgsFieldsProperties : public QWidget, private Ui_QgsFieldsPropertiesBase
       attrColCount,
     };
 
+    enum relationColumns
+    {
+      RelNameCol = 0,
+      RelLayerCol,
+      RelFieldCol,
+      RelIdCol,
+      RelColCount
+    };
+
     static QMap< QgsVectorLayer::EditType, QString > editTypeMap;
     static void setupEditTypes();
     static QString editTypeButtonText( QgsVectorLayer::EditType type );
-    static QgsVectorLayer::EditType editTypeFromButtonText( QString text );
+    static QgsVectorLayer::EditType editTypeFromButton( QPushButton* btn );
 
 };
+
+QDataStream& operator<< ( QDataStream& stream, const QgsFieldsProperties::DesignerTreeItemData& data );
+QDataStream& operator>> ( QDataStream& stream, QgsFieldsProperties::DesignerTreeItemData& data );
+
+Q_DECLARE_METATYPE( QgsFieldsProperties::FieldConfig )
+Q_DECLARE_METATYPE( QgsFieldsProperties::DesignerTreeItemData )
 
 #endif // QGSFIELDSPROPERTIES_H

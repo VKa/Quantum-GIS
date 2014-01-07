@@ -1,7 +1,7 @@
-/*!  \mainpage Quantum GIS
+/*!  \mainpage QGIS
 *
 *  \section about  About QGIS
-* Quantum GIS (QGIS) is a user friendly Open Source Geographic Information
+* QGIS is a user friendly Open Source Geographic Information
 * System (GIS) that runs on Linux, Unix, Mac OSX, and Windows. QGIS supports
 * vector, raster, and database formats. QGIS is licensed under the GNU Public
 * License.
@@ -183,4 +183,7 @@ const double DEFAULT_LINE_WIDTH;
 
 /** default snapping tolerance for segments (@note added in 1.8) */
 const double DEFAULT_SEGMENT_EPSILON;
+
+/** KEEP IN SYNC WITH qgssize defined in qgis.h! */
+typedef unsigned long long qgssize;
 

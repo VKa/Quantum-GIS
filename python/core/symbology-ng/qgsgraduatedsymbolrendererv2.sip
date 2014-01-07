@@ -22,7 +22,7 @@ class QgsRendererRangeV2
     void setUpperValue( double upperValue );
 
     // debugging
-    QString dump();
+    QString dump() const;
 
     void toSld( QDomDocument& doc, QDomElement &element, QgsStringMap props ) const;
 };
@@ -48,7 +48,7 @@ class QgsGraduatedSymbolRendererV2 : QgsFeatureRendererV2
 
     virtual QList<QString> usedAttributes();
 
-    virtual QString dump();
+    virtual QString dump() const;
 
     virtual QgsFeatureRendererV2* clone() /Factory/;
 
@@ -72,6 +72,13 @@ class QgsGraduatedSymbolRendererV2 : QgsFeatureRendererV2
 
     void addClass( QgsSymbolV2* symbol );
     void deleteClass( int idx );
+    void deleteAllClasses();
+
+    //! Moves the category at index position from to index position to.
+    void moveClass( int from, int to );
+
+    void sortByValue( Qt::SortOrder order = Qt::AscendingOrder );
+    void sortByLabel( Qt::SortOrder order = Qt::AscendingOrder );
 
     enum Mode
     {
@@ -105,6 +112,7 @@ class QgsGraduatedSymbolRendererV2 : QgsFeatureRendererV2
 
     //! return a list of item text / symbol
     //! @note: this method was added in version 1.5
+    //! @note not available in python bindings
     // virtual QgsLegendSymbolList legendSymbolItems();
 
     QgsSymbolV2* sourceSymbol();

@@ -3,7 +3,7 @@
 """
 /***************************************************************************
 Name                 : DB Manager
-Description          : Database manager plugin for QuantumGIS
+Description          : Database manager plugin for QGIS
 Date                 : May 23, 2011
 copyright            : (C) 2011 by Giuseppe Sucameli
 email                : brush.tyler@gmail.com
@@ -24,6 +24,7 @@ The content of this file is based on
 
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
+from qgis.core import *
 
 from .db_plugins.plugin import BaseError
 from .dlg_db_error import DlgDbError
@@ -32,6 +33,8 @@ from .ui.ui_DlgSqlWindow import Ui_DbManagerDlgSqlWindow as Ui_Dialog
 
 from .highlighter import SqlHighlighter
 from .completer import SqlCompleter
+
+import re
 
 class DlgSqlWindow(QDialog, Ui_Dialog):
 
@@ -45,9 +48,10 @@ class DlgSqlWindow(QDialog, Ui_Dialog):
     self.defaultLayerName = 'QueryLayer'
 
     settings = QSettings()
-    self.restoreGeometry(settings.value("/DB_Manager/sqlWindow/geometry").toByteArray())
+    self.restoreGeometry(settings.value("/DB_Manager/sqlWindow/geometry", QByteArray(), type=QByteArray))
 
     self.editSql.setAcceptRichText(False)
+    self.editSql.setFocus()
     SqlCompleter(self.editSql, self.db)
     SqlHighlighter(self.editSql, self.db)
 
@@ -61,6 +65,12 @@ class DlgSqlWindow(QDialog, Ui_Dialog):
     self.connect(self.btnClear, SIGNAL("clicked()"), self.clearSql)
     self.connect(self.buttonBox.button(QDialogButtonBox.Close), SIGNAL("clicked()"), self.close)
 
+    self.connect(self.presetStore, SIGNAL("clicked()"), self.storePreset)
+    self.connect(self.presetDelete, SIGNAL("clicked()"), self.deletePreset)
+    self.connect(self.presetCombo, SIGNAL("activated(QString)"), self.loadPreset)
+    self.connect(self.presetCombo, SIGNAL("activated(QString)"), self.presetName.setText)
+    self.updatePresetsCombobox()
+
     # hide the load query as layer if feature is not supported
     self._loadAsLayerAvailable = self.db.connector.hasCustomQuerySupport()
     self.loadAsLayerGroup.setVisible( self._loadAsLayerAvailable )
@@ -71,11 +81,46 @@ class DlgSqlWindow(QDialog, Ui_Dialog):
       self.connect(self.loadAsLayerGroup, SIGNAL("toggled(bool)"), self.loadAsLayerToggled)
       self.loadAsLayerToggled(False)
 
+  def updatePresetsCombobox(self):
+    self.presetCombo.clear()
+
+    names = []
+    entries = QgsProject.instance().subkeyList('DBManager','savedQueries')
+    for entry in entries:
+      name = QgsProject.instance().readEntry('DBManager','savedQueries/'+entry+'/name' )[0]
+      names.append( name )
+
+    for name in sorted(names):
+      self.presetCombo.addItem(name)
+    self.presetCombo.setCurrentIndex(-1)
+
+  def storePreset(self):
+    query = self.editSql.toPlainText()
+    name = self.presetName.text()
+    QgsProject.instance().writeEntry('DBManager','savedQueries/q'+str(name.__hash__())+'/name', name )
+    QgsProject.instance().writeEntry('DBManager','savedQueries/q'+str(name.__hash__())+'/query', query )
+    index = self.presetCombo.findText(name)
+    if index == -1:
+      self.presetCombo.addItem(name)
+      self.presetCombo.setCurrentIndex(self.presetCombo.count()-1)
+    else:
+      self.presetCombo.setCurrentIndex(index)
+
+  def deletePreset(self):
+    name = self.presetCombo.currentText()
+    QgsProject.instance().removeEntry('DBManager','savedQueries/q'+str(name.__hash__()) )
+    self.presetCombo.removeItem( self.presetCombo.findText(name) )
+    self.presetCombo.setCurrentIndex(-1)
+
+  def loadPreset(self, name):
+    query = QgsProject.instance().readEntry('DBManager','savedQueries/q'+str(name.__hash__())+'/query' )[0]
+    name = QgsProject.instance().readEntry('DBManager','savedQueries/q'+str(name.__hash__())+'/name' )[0]
+    self.editSql.setText(query)
 
   def closeEvent(self, e):
     """ save window state """
     settings = QSettings()
-    settings.setValue("/DB_Manager/sqlWindow/geometry", QVariant(self.saveGeometry()))
+    settings.setValue("/DB_Manager/sqlWindow/geometry", self.saveGeometry())
 
     QDialog.closeEvent(self, e)
 
@@ -89,10 +134,10 @@ class DlgSqlWindow(QDialog, Ui_Dialog):
     # character instead of a newline \n character
     # (see https://qt-project.org/doc/qt-4.8/qtextcursor.html#selectedText)
     sql = self.editSql.textCursor().selectedText().replace(unichr(0x2029), "\n")
-    if sql.isEmpty():
+    if sql == "":
       sql = self.editSql.toPlainText()
     # try to sanitize query
-    sql = sql.replace( QRegExp( ";\\s*$" ), "" )
+    sql = re.sub( ";\\s*$", "", sql )
     return sql
 
   def clearSql(self):
@@ -100,7 +145,7 @@ class DlgSqlWindow(QDialog, Ui_Dialog):
 
   def executeSql(self):
     sql = self.getSql()
-    if sql.isEmpty(): return
+    if sql == "": return
 
     QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
@@ -116,7 +161,7 @@ class DlgSqlWindow(QDialog, Ui_Dialog):
       # set the new model
       model = self.db.sqlResultModel( sql, self )
       self.viewResult.setModel( model )
-      self.lblResult.setText("%d rows, %.1f seconds" % (model.affectedRows(), model.secs()))
+      self.lblResult.setText(self.tr("%d rows, %.1f seconds") % (model.affectedRows(), model.secs()))
 
     except BaseError, e:
       QApplication.restoreOverrideCursor()
@@ -135,12 +180,12 @@ class DlgSqlWindow(QDialog, Ui_Dialog):
     uniqueFieldName = self.uniqueCombo.currentText()
     geomFieldName = self.geomCombo.currentText()
 
-    if geomFieldName.isEmpty() or uniqueFieldName.isEmpty():
+    if geomFieldName == "" or uniqueFieldName == "":
       QMessageBox.warning(self, self.tr( "Sorry" ), self.tr( "You must fill the required fields: \ngeometry column - column with unique integer values" ) )
       return
 
     query = self.getSql()
-    if query.isEmpty():
+    if query == "":
       return
 
     QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
@@ -154,7 +199,7 @@ class DlgSqlWindow(QDialog, Ui_Dialog):
       names.append( layer.name() )
 
     layerName = self.layerNameEdit.text()
-    if layerName.isEmpty():
+    if layerName == "":
       layerName = self.defaultLayerName
     newLayerName = layerName
     index = 1
@@ -171,7 +216,7 @@ class DlgSqlWindow(QDialog, Ui_Dialog):
 
   def fillColumnCombos(self):
     query = self.getSql()
-    if query.isEmpty(): return
+    if query == "": return
 
     QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
     self.uniqueCombo.clear()
@@ -181,8 +226,8 @@ class DlgSqlWindow(QDialog, Ui_Dialog):
     aliasIndex = 0
     while True:
       alias = "_%s__%d" % ("subQuery", aliasIndex)
-      escaped = '\\b("?)' + QRegExp.escape(alias) + '\\1\\b'
-      if not query.contains( QRegExp(escaped, Qt.CaseInsensitive) ):
+      escaped = re.compile('\\b("?)' + re.escape(alias) + '\\1\\b')
+      if not escaped.search(query):
         break
       aliasIndex += 1
 

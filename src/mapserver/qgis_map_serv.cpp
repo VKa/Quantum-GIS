@@ -27,12 +27,16 @@ map service syntax for SOAP/HTTP POST
 #include "qgslogger.h"
 #include "qgswmsserver.h"
 #include "qgswfsserver.h"
+#include "qgswcsserver.h"
 #include "qgsmaprenderer.h"
 #include "qgsmapserviceexception.h"
 #include "qgspallabeling.h"
 #include "qgsprojectparser.h"
 #include "qgssldparser.h"
+#include "qgsnetworkaccessmanager.h"
+
 #include <QDomDocument>
+#include <QNetworkDiskCache>
 #include <QImage>
 #include <QSettings>
 #include <QDateTime>
@@ -179,6 +183,28 @@ int main( int argc, char * argv[] )
   }
 #endif
 
+#if defined(MAPSERVER_SKIP_ECW)
+  QgsDebugMsg( "Skipping GDAL ECW drivers in server." );
+  QgsApplication::skipGdalDriver( "ECW" );
+  QgsApplication::skipGdalDriver( "JP2ECW" );
+#endif
+
+  QSettings settings;
+
+  QgsNetworkAccessManager *nam = QgsNetworkAccessManager::instance();
+  QNetworkDiskCache *cache = new QNetworkDiskCache( 0 );
+
+  QString cacheDirectory = settings.value( "cache/directory", QgsApplication::qgisSettingsDirPath() + "cache" ).toString();
+  qint64 cacheSize = settings.value( "cache/size", 50 * 1024 * 1024 ).toULongLong();
+  QgsDebugMsg( QString( "setCacheDirectory: %1" ).arg( cacheDirectory ) );
+  QgsDebugMsg( QString( "setMaximumCacheSize: %1" ).arg( cacheSize ) );
+  cache->setCacheDirectory( cacheDirectory );
+  cache->setMaximumCacheSize( cacheSize );
+  QgsDebugMsg( QString( "cacheDirectory: %1" ).arg( cache->cacheDirectory() ) );
+  QgsDebugMsg( QString( "maximumCacheSize: %1" ).arg( cache->maximumCacheSize() ) );
+
+  nam->setCache( cache );
+
   QDomImplementation::setInvalidDataPolicy( QDomImplementation::DropInvalidChars );
 
   // Instantiate the plugin directory so that providers are loaded
@@ -189,6 +215,7 @@ int main( int argc, char * argv[] )
   QgsDebugMsg( "User DB PATH: " + QgsApplication::qgisUserDbFilePath() );
 
   QgsDebugMsg( qgsapp.applicationDirPath() + "/qgis_wms_server.log" );
+  QgsApplication::createDB(); //init qgis.db (e.g. necessary for user crs)
 
   //create config cache and search for config files in the current directory.
   //These configurations are used if no mapfile parameter is present in the request
@@ -214,9 +241,23 @@ int main( int argc, char * argv[] )
   QgsMapRenderer* theMapRenderer = new QgsMapRenderer();
   theMapRenderer->setLabelingEngine( new QgsPalLabeling() );
 
+#ifdef QGSMSDEBUG
+  // load standard test font from testdata.qrc (for unit tests)
+  bool testFontLoaded = false;
+  QFile testFont( ":/testdata/font/FreeSansQGIS.ttf" );
+  if ( testFont.open( QIODevice::ReadOnly ) )
+  {
+    int fontID = QFontDatabase::addApplicationFontFromData( testFont.readAll() );
+    testFontLoaded = ( fontID != -1 );
+  } // else app wasn't built with ENABLE_TESTS or not GUI app
+#endif
+
   while ( fcgi_accept() >= 0 )
   {
     printRequestInfos(); //print request infos if in debug mode
+#ifdef QGSMSDEBUG
+    QgsDebugMsg( QString( "Test font %1loaded from testdata.qrc" ).arg( testFontLoaded ? "" : "NOT " ) );
+#endif
 
     //use QgsGetRequestHandler in case of HTTP GET and QgsSOAPRequestHandler in case of HTTP POST
     QgsRequestHandler* theRequestHandler = 0;
@@ -259,14 +300,22 @@ int main( int argc, char * argv[] )
     //set admin config file to wms server object
     QString configFilePath( defaultConfigFilePath );
 
-    paramIt = parameterMap.find( "MAP" );
-    if ( paramIt == parameterMap.constEnd() )
+    QString projectFile = getenv( "QGIS_PROJECT_FILE" );
+    if ( !projectFile.isEmpty() )
     {
-      QgsDebugMsg( QString( "Using default configuration file path: %1" ).arg( defaultConfigFilePath ) );
+      configFilePath = projectFile;
     }
     else
     {
-      configFilePath = paramIt.value();
+      paramIt = parameterMap.find( "MAP" );
+      if ( paramIt == parameterMap.constEnd() )
+      {
+        QgsDebugMsg( QString( "Using default configuration file path: %1" ).arg( defaultConfigFilePath ) );
+      }
+      else
+      {
+        configFilePath = paramIt.value();
+      }
     }
 
     QgsConfigParser* adminConfigParser = QgsConfigCache::instance()->searchConfiguration( configFilePath );
@@ -300,15 +349,15 @@ int main( int argc, char * argv[] )
     }
 
     QgsWMSServer* theServer = 0;
-    if ( serviceString == "WFS" )
+    if ( serviceString == "WCS" )
     {
       delete theServer;
-      QgsWFSServer* theServer = 0;
+      QgsWCSServer* theServer = 0;
       try
       {
-        theServer = new QgsWFSServer( parameterMap );
+        theServer = new QgsWCSServer( parameterMap );
       }
-      catch ( QgsMapServiceException e ) //admin.sld may be invalid
+      catch ( const QgsMapServiceException &e ) //admin.sld may be invalid
       {
         theRequestHandler->sendServiceException( e );
         continue;
@@ -329,7 +378,99 @@ int main( int argc, char * argv[] )
         continue;
       }
 
-      if ( request.compare( "GetCapabilities", Qt::CaseInsensitive ) == 0  )
+      if ( request.compare( "GetCapabilities", Qt::CaseInsensitive ) == 0 )
+      {
+        QDomDocument capabilitiesDocument;
+        try
+        {
+          capabilitiesDocument = theServer->getCapabilities();
+        }
+        catch ( QgsMapServiceException& ex )
+        {
+          theRequestHandler->sendServiceException( ex );
+          delete theRequestHandler;
+          delete theServer;
+          continue;
+        }
+        QgsDebugMsg( "sending GetCapabilities response" );
+        theRequestHandler->sendGetCapabilitiesResponse( capabilitiesDocument );
+        delete theRequestHandler;
+        delete theServer;
+        continue;
+      }
+      else if ( request.compare( "DescribeCoverage", Qt::CaseInsensitive ) == 0 )
+      {
+        QDomDocument describeDocument;
+        try
+        {
+          describeDocument = theServer->describeCoverage();
+        }
+        catch ( QgsMapServiceException& ex )
+        {
+          theRequestHandler->sendServiceException( ex );
+          delete theRequestHandler;
+          delete theServer;
+          continue;
+        }
+        QgsDebugMsg( "sending GetCapabilities response" );
+        theRequestHandler->sendGetCapabilitiesResponse( describeDocument );
+        delete theRequestHandler;
+        delete theServer;
+        continue;
+      }
+      else if ( request.compare( "GetCoverage", Qt::CaseInsensitive ) == 0 )
+      {
+        QByteArray* coverageOutput;
+        try
+        {
+          coverageOutput = theServer->getCoverage();
+        }
+        catch ( QgsMapServiceException& ex )
+        {
+          theRequestHandler->sendServiceException( ex );
+          delete theRequestHandler;
+          delete theServer;
+          continue;
+        }
+        if ( coverageOutput )
+        {
+          theRequestHandler->sendGetCoverageResponse( coverageOutput );
+        }
+        delete theRequestHandler;
+        delete theServer;
+        continue;
+      }
+    }
+    else if ( serviceString == "WFS" )
+    {
+      delete theServer;
+      QgsWFSServer* theServer = 0;
+      try
+      {
+        theServer = new QgsWFSServer( parameterMap );
+      }
+      catch ( const QgsMapServiceException &e ) //admin.sld may be invalid
+      {
+        theRequestHandler->sendServiceException( e );
+        continue;
+      }
+
+      theServer->setAdminConfigParser( adminConfigParser );
+
+
+      //request type
+      QString request = parameterMap.value( "REQUEST" );
+      if ( request.isEmpty() )
+      {
+        //do some error handling
+        QgsDebugMsg( "unable to find 'REQUEST' parameter, exiting..." );
+        theRequestHandler->sendServiceException( QgsMapServiceException( "OperationNotSupported", "Please check the value of the REQUEST parameter" ) );
+        delete theRequestHandler;
+        delete theServer;
+        continue;
+      }
+
+      if ( request.compare( "GetCapabilities", Qt::CaseInsensitive ) == 0 )
       {
         QDomDocument capabilitiesDocument;
         try
@@ -375,26 +516,16 @@ int main( int argc, char * argv[] )
         QString outputFormat = parameterMap.value( "OUTPUTFORMAT" );
         try
         {
-          if ( theServer->getFeature( *theRequestHandler, outputFormat ) != 0 )
-          {
-            delete theRequestHandler;
-            delete theServer;
-            continue;
-          }
-          else
-          {
-            delete theRequestHandler;
-            delete theServer;
-            continue;
-          }
+          theServer->getFeature( *theRequestHandler, outputFormat );
         }
         catch ( QgsMapServiceException& ex )
         {
           theRequestHandler->sendServiceException( ex );
-          delete theRequestHandler;
-          delete theServer;
-          continue;
         }
+
+        delete theRequestHandler;
+        delete theServer;
+        continue;
       }
       else if ( request.compare( "Transaction", Qt::CaseInsensitive ) == 0 )
       {
@@ -424,12 +555,13 @@ int main( int argc, char * argv[] )
     {
       theServer = new QgsWMSServer( parameterMap, theMapRenderer );
     }
-    catch ( QgsMapServiceException e ) //admin.sld may be invalid
+    catch ( const QgsMapServiceException &e ) //admin.sld may be invalid
     {
       theRequestHandler->sendServiceException( e );
       continue;
     }
 
+    adminConfigParser->loadLabelSettings( theMapRenderer->labelingEngine() );
     theServer->setAdminConfigParser( adminConfigParser );
 
 
@@ -544,6 +676,22 @@ int main( int argc, char * argv[] )
       delete theServer;
       continue;
     }
+    else if ( request.compare( "GetContext", Qt::CaseInsensitive ) == 0 )
+    {
+      try
+      {
+        QDomDocument doc = theServer->getContext();
+        theRequestHandler->sendGetStyleResponse( doc );
+      }
+      catch ( QgsMapServiceException& ex )
+      {
+        theRequestHandler->sendServiceException( ex );
+      }
+
+      delete theRequestHandler;
+      delete theServer;
+      continue;
+    }
     else if ( request.compare( "GetStyles", Qt::CaseInsensitive ) == 0 || request.compare( "GetStyle", Qt::CaseInsensitive ) == 0 ) // GetStyle for compatibility with earlier QGIS versions
     {
       try
@@ -560,7 +708,9 @@ int main( int argc, char * argv[] )
       delete theServer;
       continue;
     }
-    else if ( request.compare( "GetLegendGraphic", Qt::CaseInsensitive ) == 0 || request.compare( "GetLegendGraphics", Qt::CaseInsensitive ) == 0 ) // GetLegendGraphics for compatibility with earlier QGIS versions
+    else if ( request.compare( "GetLegendGraphic", Qt::CaseInsensitive ) == 0 ||
+              request.compare( "GetLegendGraphics", Qt::CaseInsensitive ) == 0 )
+      // GetLegendGraphics for compatibility with earlier QGIS versions
     {
       QImage* result = 0;
       try
@@ -569,6 +719,7 @@ int main( int argc, char * argv[] )
       }
       catch ( QgsMapServiceException& ex )
       {
+        QgsDebugMsg( "Caught exception during GetLegendGraphic request" );
         theRequestHandler->sendServiceException( ex );
       }
 
@@ -577,6 +728,7 @@ int main( int argc, char * argv[] )
         QgsDebugMsg( "Sending GetLegendGraphic response" );
         //sending is the same for GetMap and GetLegendGraphic
         theRequestHandler->sendGetMapResponse( serviceString, result );
+        QgsDebugMsg( "Response sent" );
       }
       else
       {
@@ -587,7 +739,6 @@ int main( int argc, char * argv[] )
       delete theRequestHandler;
       delete theServer;
       continue;
-
     }
     else if ( request.compare( "GetPrint", Qt::CaseInsensitive ) == 0 )
     {

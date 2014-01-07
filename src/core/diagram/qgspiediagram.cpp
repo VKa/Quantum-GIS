@@ -67,7 +67,15 @@ QSizeF QgsPieDiagram::diagramSize( const QgsAttributes& attributes, const QgsRen
   // Scale, if extension is smaller than the specified minimum
   if ( size.width() <= s.minimumSize && size.height() <= s.minimumSize )
   {
+    bool p = false; // preserve height == width
+    if ( size.width() == size.height() )
+      p = true;
+
     size.scale( s.minimumSize, s.minimumSize, Qt::KeepAspectRatio );
+
+    // If height == width, recover here (overwrite floating point errors)
+    if ( p )
+      size.setWidth( size.height() );
   }
 
   return size;
@@ -128,19 +136,22 @@ void QgsPieDiagram::renderDiagram( const QgsAttributes& att, QgsRenderContext& c
     QList< QColor >::const_iterator colIt = s.categoryColors.constBegin();
     for ( ; valIt != values.constEnd(); ++valIt, ++colIt )
     {
-      currentAngle = *valIt / valSum * 360 * 16;
-      mCategoryBrush.setColor( *colIt );
-      p->setBrush( mCategoryBrush );
-      // if only 1 value is > 0, draw a circle
-      if ( valCount == 1 )
+      if ( *valIt )
       {
-        p->drawEllipse( baseX, baseY, w, h );
+        currentAngle = *valIt / valSum * 360 * 16;
+        mCategoryBrush.setColor( *colIt );
+        p->setBrush( mCategoryBrush );
+        // if only 1 value is > 0, draw a circle
+        if ( valCount == 1 )
+        {
+          p->drawEllipse( baseX, baseY, w, h );
+        }
+        else
+        {
+          p->drawPie( baseX, baseY, w, h, totalAngle + s.angleOffset, currentAngle );
+        }
+        totalAngle += currentAngle;
       }
-      else
-      {
-        p->drawPie( baseX, baseY, w, h, totalAngle + s.angleOffset, currentAngle );
-      }
-      totalAngle += currentAngle;
     }
   }
   else // valSum > 0

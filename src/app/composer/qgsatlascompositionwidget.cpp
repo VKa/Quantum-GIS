@@ -28,7 +28,7 @@ QgsAtlasCompositionWidget::QgsAtlasCompositionWidget( QWidget* parent, QgsCompos
 
   // populate the layer list
   mAtlasCoverageLayerComboBox->clear();
-  QMap< QString, QgsMapLayer * >& layers = QgsMapLayerRegistry::instance()->mapLayers();
+  const QMap< QString, QgsMapLayer * >& layers = QgsMapLayerRegistry::instance()->mapLayers();
   int idx = 0;
   for ( QMap<QString, QgsMapLayer*>::const_iterator it = layers.begin(); it != layers.end(); ++it )
   {
@@ -132,11 +132,13 @@ void QgsAtlasCompositionWidget::onLayerAdded( QgsMapLayer* map )
   if ( vectorLayer )
   {
     mAtlasCoverageLayerComboBox->addItem( map->name(), qVariantFromValue(( void* )map ) );
-  }
-  if ( mAtlasCoverageLayerComboBox->count() == 1 )
-  {
-    atlasMap->setCoverageLayer( vectorLayer );
-    checkLayerType( vectorLayer );
+
+    if ( mAtlasCoverageLayerComboBox->count() == 1 )
+    {
+      atlasMap->setCoverageLayer( vectorLayer );
+      updateAtlasFeatures();
+      checkLayerType( vectorLayer );
+    }
   }
 }
 
@@ -186,8 +188,12 @@ void QgsAtlasCompositionWidget::on_mAtlasCoverageLayerComboBox_currentIndexChang
   {
     QgsVectorLayer* layer = reinterpret_cast<QgsVectorLayer*>( mAtlasCoverageLayerComboBox->itemData( index ).value<void*>() );
 
-    checkLayerType( layer );
-    atlasMap->setCoverageLayer( layer );
+    if ( layer )
+    {
+      checkLayerType( layer );
+      atlasMap->setCoverageLayer( layer );
+      updateAtlasFeatures();
+    }
 
     // update sorting columns
     fillSortColumns();
@@ -197,6 +203,7 @@ void QgsAtlasCompositionWidget::on_mAtlasCoverageLayerComboBox_currentIndexChang
 void QgsAtlasCompositionWidget::checkLayerType( QgsVectorLayer *layer )
 {
   // enable or disable fixed scale control based on layer type
+  if ( !layer ) return;
   switch ( layer->wkbType() )
   {
     case QGis::WKBPoint:
@@ -328,6 +335,36 @@ void QgsAtlasCompositionWidget::on_mAtlasSortFeatureCheckBox_stateChanged( int s
     mAtlasSortFeatureKeyComboBox->setEnabled( false );
   }
   atlasMap->setSortFeatures( state == Qt::Checked );
+  updateAtlasFeatures();
+}
+
+void QgsAtlasCompositionWidget::updateAtlasFeatures()
+{
+  //only do this if composer mode is preview
+  if ( !mComposition->atlasMode() == QgsComposition::PreviewAtlas )
+  {
+    return;
+  }
+
+  //update atlas features
+  QgsAtlasComposition* atlasMap = &mComposition->atlasComposition();
+  if ( !atlasMap )
+  {
+    return;
+  }
+
+  bool updated = atlasMap->updateFeatures();
+  if ( !updated )
+  {
+    QMessageBox::warning( 0, tr( "Atlas preview" ),
+                          tr( "No matching atlas features found!" ),
+                          QMessageBox::Ok,
+                          QMessageBox::Ok );
+
+    //Perhaps atlas preview should be disabled now? If so, it may get annoying if user is editing
+    //the filter expression and it keeps disabling itself.
+    return;
+  }
 }
 
 void QgsAtlasCompositionWidget::on_mAtlasSortFeatureKeyComboBox_currentIndexChanged( int index )
@@ -342,6 +379,7 @@ void QgsAtlasCompositionWidget::on_mAtlasSortFeatureKeyComboBox_currentIndexChan
   {
     atlasMap->setSortKeyAttributeIndex( index );
   }
+  updateAtlasFeatures();
 }
 
 void QgsAtlasCompositionWidget::on_mAtlasFeatureFilterCheckBox_stateChanged( int state )
@@ -363,9 +401,10 @@ void QgsAtlasCompositionWidget::on_mAtlasFeatureFilterCheckBox_stateChanged( int
     mAtlasFeatureFilterButton->setEnabled( false );
   }
   atlasMap->setFilterFeatures( state == Qt::Checked );
+  updateAtlasFeatures();
 }
 
-void QgsAtlasCompositionWidget::on_mAtlasFeatureFilterEdit_textChanged( const QString& text )
+void QgsAtlasCompositionWidget::on_mAtlasFeatureFilterEdit_editingFinished()
 {
   QgsAtlasComposition* atlasMap = &mComposition->atlasComposition();
   if ( !atlasMap )
@@ -373,7 +412,8 @@ void QgsAtlasCompositionWidget::on_mAtlasFeatureFilterEdit_textChanged( const QS
     return;
   }
 
-  atlasMap->setFeatureFilter( text );
+  atlasMap->setFeatureFilter( mAtlasFeatureFilterEdit->text() );
+  updateAtlasFeatures();
 }
 
 void QgsAtlasCompositionWidget::on_mAtlasFeatureFilterButton_clicked()
@@ -391,8 +431,9 @@ void QgsAtlasCompositionWidget::on_mAtlasFeatureFilterButton_clicked()
     QString expression =  exprDlg.expressionText();
     if ( !expression.isEmpty() )
     {
-      // will emit a textChanged signal
       mAtlasFeatureFilterEdit->setText( expression );
+      atlasMap->setFeatureFilter( mAtlasFeatureFilterEdit->text() );
+      updateAtlasFeatures();
     }
   }
 }
@@ -410,6 +451,7 @@ void QgsAtlasCompositionWidget::on_mAtlasSortFeatureDirectionButton_clicked()
   }
 
   atlasMap->setSortAscending( at == Qt::UpArrow );
+  updateAtlasFeatures();
 }
 
 void QgsAtlasCompositionWidget::fillSortColumns()

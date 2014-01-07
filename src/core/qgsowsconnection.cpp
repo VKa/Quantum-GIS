@@ -19,31 +19,14 @@
  *                                                                         *
  ***************************************************************************/
 
-//#include "../providers/wms/qgswmsprovider.h"
 #include "qgis.h" // GEO_EPSG_CRS_ID
-//#include "qgisapp.h" //for getThemeIcon
-//#include "qgscontexthelp.h"
-//#include "qgscoordinatereferencesystem.h"
 #include "qgsdatasourceuri.h"
-//#include "qgsgenericprojectionselector.h"
 #include "qgslogger.h"
-//#include "qgsmanageconnectionsdialog.h"
-//#include "qgsmessageviewer.h"
-//#include "qgsnewhttpconnection.h"
-//#include "qgsnumericsortlistviewitem.h"
 #include "qgsproject.h"
 #include "qgsproviderregistry.h"
 #include "qgsowsconnection.h"
-//#include "qgsnetworkaccessmanager.h"
 
-//#include <QButtonGroup>
-//#include <QFileDialog>
-//#include <QRadioButton>
-//#include <QDomDocument>
-//#include <QHeaderView>
-//#include <QImageReader>
 #include <QInputDialog>
-//#include <QMap>
 #include <QMessageBox>
 #include <QPicture>
 #include <QSettings>
@@ -59,15 +42,6 @@ QgsOWSConnection::QgsOWSConnection( const QString & theService, const QString & 
   QgsDebugMsg( "theConnName = " + theConnName );
 
   QSettings settings;
-
-  // WMS (providers/wfs/qgswmsconnection.cpp):
-  //QString key = "/Qgis/connections-wms/" + mConnName;
-  //QString credentialsKey = "/Qgis/WMS/" + mConnName;
-
-  // WFS (providers/wfs/qgswfsconnection.cpp):
-  //QString key = "/Qgis/connections-wfs/" + mConnName + "/url";
-
-  // WCS - there was no WCS before
 
   QString key = "/Qgis/connections-" + mService.toLower() + "/" + mConnName;
   QString credentialsKey = "/Qgis/" + mService + "/" + mConnName;
@@ -130,8 +104,9 @@ QgsDataSourceURI QgsOWSConnection::uri()
 {
   return mUri;
 }
-/*
-QgsDataProvider * QgsOWSConnection::provider( )
+
+#if 0
+QgsDataProvider * QgsOWSConnection::provider()
 {
   // TODO: remove completely from this class?
 
@@ -145,13 +120,12 @@ QgsDataProvider * QgsOWSConnection::provider( )
 
   return provider;
 }
-*/
+#endif
 
 
 QStringList QgsOWSConnection::connectionList( const QString & theService )
 {
   QSettings settings;
-  //settings.beginGroup( "/Qgis/connections-wms" );
   settings.beginGroup( "/Qgis/connections-" + theService.toLower() );
   return settings.childGroups();
 }
@@ -159,22 +133,18 @@ QStringList QgsOWSConnection::connectionList( const QString & theService )
 QString QgsOWSConnection::selectedConnection( const QString & theService )
 {
   QSettings settings;
-  //return settings.value( "/Qgis/connections-wms/selected" ).toString();
   return settings.value( "/Qgis/connections-" + theService.toLower() + "/selected" ).toString();
 }
 
 void QgsOWSConnection::setSelectedConnection( const QString & theService, const QString & name )
 {
   QSettings settings;
-  //settings.setValue( "/Qgis/connections-wms/selected", name );
   settings.setValue( "/Qgis/connections-" + theService.toLower() + "/selected", name );
 }
 
 void QgsOWSConnection::deleteConnection( const QString & theService, const QString & name )
 {
   QSettings settings;
-  //settings.remove( "/Qgis/connections-wms/" + name );
-  //settings.remove( "/Qgis/WMS/" + name );
   settings.remove( "/Qgis/connections-" + theService.toLower() + "/" + name );
   settings.remove( "/Qgis/" + theService + "/" + name );
 }

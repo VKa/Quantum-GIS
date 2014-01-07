@@ -41,6 +41,7 @@
 #include <gdal.h>
 #include <ogr_api.h>
 #include <cpl_conv.h> // for setting gdal options
+#include <sqlite3.h>
 
 QObject * ABISYM( QgsApplication::mFileOpenEventReceiver );
 QStringList ABISYM( QgsApplication::mFileOpenEventList );
@@ -84,7 +85,7 @@ void QgsApplication::init( QString customConfigPath )
 {
   if ( customConfigPath.isEmpty() )
   {
-    customConfigPath = QDir::homePath() + QString( "/.qgis%1/" ).arg( 2 /* FIXME QGis::QGIS_VERSION_INT / 10000 */ );
+    customConfigPath = QString( "%1/.qgis%2/" ).arg( QDir::homePath() ).arg( QGis::QGIS_VERSION_INT / 10000 );
   }
 
   qRegisterMetaType<QgsGeometry::Error>( "QgsGeometry::Error" );
@@ -96,7 +97,7 @@ void QgsApplication::init( QString customConfigPath )
   // "/../../.." is for Mac bundled app in build directory
   foreach ( QString path, QStringList() << "" << "/.." << "/bin" << "/../../.." )
   {
-    f.setFileName( prefixPath + path + "/path.txt" );
+    f.setFileName( prefixPath + path + "/qgisbuildpath.txt" );
     if ( f.exists() )
       break;
   }
@@ -118,14 +119,18 @@ void QgsApplication::init( QString customConfigPath )
   {
     // we run from source directory - not installed to destination (specified prefix)
     ABISYM( mPrefixPath ) = QString(); // set invalid path
-#if defined(_MSC_VER) && ! defined(USING_NMAKE)
+#if defined(_MSC_VER) && !defined(USING_NMAKE)
     setPluginPath( ABISYM( mBuildOutputPath ) + "/" + QString( QGIS_PLUGIN_SUBDIR ) + "/" + ABISYM( mCfgIntDir ) );
 #else
     setPluginPath( ABISYM( mBuildOutputPath ) + "/" + QString( QGIS_PLUGIN_SUBDIR ) );
 #endif
     setPkgDataPath( ABISYM( mBuildSourcePath ) ); // directly source path - used for: doc, resources, svg
     ABISYM( mLibraryPath ) = ABISYM( mBuildOutputPath ) + "/" + QGIS_LIB_SUBDIR + "/";
+#if defined(_MSC_VER) && !defined(USING_NMAKE)
+    ABISYM( mLibexecPath ) = ABISYM( mBuildOutputPath ) + "/" + QGIS_LIBEXEC_SUBDIR + "/" + ABISYM( mCfgIntDir ) + "/";
+#else
     ABISYM( mLibexecPath ) = ABISYM( mBuildOutputPath ) + "/" + QGIS_LIBEXEC_SUBDIR + "/";
+#endif
   }
   else
   {
@@ -134,6 +139,12 @@ void QgsApplication::init( QString customConfigPath )
     {
 #if defined(Q_WS_MACX) || defined(Q_WS_WIN32) || defined(WIN32)
       setPrefixPath( applicationDirPath(), true );
+#elif defined(ANDROID)
+      // this is  "/data/data/org.qgis.qgis" in android
+      QDir myDir( QDir::homePath() );
+      myDir.cdUp();
+      QString myPrefix = myDir.absolutePath();
+      setPrefixPath( myPrefix, true );
 #else
       QDir myDir( applicationDirPath() );
       myDir.cdUp();
@@ -167,25 +178,6 @@ void QgsApplication::init( QString customConfigPath )
   }
   ABISYM( mSystemEnvVars ) = systemEnvVarMap;
 
-  // set a working directory up for gdal to write .aux.xml files into
-  // for cases where the raster dir is read only to the user
-  // if the env var is already set it will be used preferentially
-  QString myPamPath = qgisSettingsDirPath() + QString( "gdal_pam/" );
-  QDir myDir( myPamPath );
-  if ( !myDir.exists() )
-  {
-    myDir.mkpath( myPamPath ); //fail silently
-  }
-
-
-#if defined(Q_WS_WIN32) || defined(WIN32)
-  CPLSetConfigOption( "GDAL_PAM_PROXY_DIR", myPamPath.toUtf8() );
-#else
-  //under other OS's we use an environment var so the user can
-  //override the path if he likes
-  int myChangeFlag = 0; //whether we want to force the env var to change
-  setenv( "GDAL_PAM_PROXY_DIR", myPamPath.toUtf8(), myChangeFlag );
-#endif
 }
 
 QgsApplication::~QgsApplication()
@@ -269,7 +261,7 @@ void QgsApplication::setFileOpenEventReceiver( QObject * receiver )
   }
 }
 
-void QgsApplication::setPrefixPath( const QString thePrefixPath, bool useDefaultPaths )
+void QgsApplication::setPrefixPath( const QString &thePrefixPath, bool useDefaultPaths )
 {
   ABISYM( mPrefixPath ) = thePrefixPath;
 #if defined(_MSC_VER)
@@ -278,7 +270,7 @@ void QgsApplication::setPrefixPath( const QString thePrefixPath, bool useDefault
     ABISYM( mPrefixPath ).chop( 4 );
   }
 #endif
-  if ( useDefaultPaths )
+  if ( useDefaultPaths && !ABISYM( mRunningFromBuildDir ) )
   {
     setPluginPath( ABISYM( mPrefixPath ) + "/" + QString( QGIS_PLUGIN_SUBDIR ) );
     setPkgDataPath( ABISYM( mPrefixPath ) + "/" + QString( QGIS_DATA_SUBDIR ) );
@@ -287,12 +279,12 @@ void QgsApplication::setPrefixPath( const QString thePrefixPath, bool useDefault
   ABISYM( mLibexecPath ) = ABISYM( mPrefixPath ) + "/" + QGIS_LIBEXEC_SUBDIR + "/";
 }
 
-void QgsApplication::setPluginPath( const QString thePluginPath )
+void QgsApplication::setPluginPath( const QString &thePluginPath )
 {
   ABISYM( mPluginPath ) = thePluginPath;
 }
 
-void QgsApplication::setPkgDataPath( const QString thePkgDataPath )
+void QgsApplication::setPkgDataPath( const QString &thePkgDataPath )
 {
   ABISYM( mPkgDataPath ) = thePkgDataPath;
   QString mySvgPath = thePkgDataPath + ( ABISYM( mRunningFromBuildDir ) ? "/images/svg/" : "/svg/" );
@@ -344,7 +336,7 @@ QString QgsApplication::iconPath( QString iconFile )
   return defaultThemePath() + iconFile;
 }
 
-QIcon QgsApplication::getThemeIcon( const QString theName )
+QIcon QgsApplication::getThemeIcon( const QString &theName )
 {
   QString myPreferredPath = activeThemePath() + QDir::separator() + theName;
   QString myDefaultPath = defaultThemePath() + QDir::separator() + theName;
@@ -365,7 +357,7 @@ QIcon QgsApplication::getThemeIcon( const QString theName )
 }
 
 // TODO: add some caching mechanism ?
-QPixmap QgsApplication::getThemePixmap( const QString theName )
+QPixmap QgsApplication::getThemePixmap( const QString &theName )
 {
   QString myPreferredPath = activeThemePath() + QDir::separator() + theName;
   QString myDefaultPath = defaultThemePath() + QDir::separator() + theName;
@@ -384,7 +376,7 @@ QPixmap QgsApplication::getThemePixmap( const QString theName )
 /*!
   Set the theme path to the specified theme.
 */
-void QgsApplication::setThemeName( const QString theThemeName )
+void QgsApplication::setThemeName( const QString &theThemeName )
 {
   QString myPath = ":/images/themes/" + theThemeName + "/";
   //check it exists and if not roll back to default theme
@@ -444,6 +436,14 @@ const QString QgsApplication::translatorsFilePath()
 }
 
 /*!
+  Returns the path to the licence file.
+*/
+const QString QgsApplication::licenceFilePath()
+{
+  return ABISYM( mPkgDataPath ) + QString( "/doc/LICENCE" );
+}
+
+/*!
   Returns the path to the help application.
 */
 const QString QgsApplication::helpAppPath()
@@ -455,6 +455,9 @@ const QString QgsApplication::helpAppPath()
   helpAppPath = libexecPath();
 #endif
   helpAppPath += "/qgis_help";
+#ifdef Q_OS_WIN
+  helpAppPath += ".exe";
+#endif
   return helpAppPath;
 }
 /*!
@@ -589,7 +592,6 @@ void QgsApplication::initQgis()
 void QgsApplication::exitQgis()
 {
   delete QgsMapLayerRegistry::instance();
-  delete QgsProviderRegistry::instance();
 }
 
 QString QgsApplication::showSettings()
@@ -876,6 +878,137 @@ void QgsApplication::applyGdalSkippedDrivers()
   QgsDebugMsg( myDriverList );
   CPLSetConfigOption( "GDAL_SKIP", myDriverList.toUtf8() );
   GDALAllRegister(); //to update driver list and skip missing ones
+}
+
+bool QgsApplication::createDB( QString *errorMessage )
+{
+  // set a working directory up for gdal to write .aux.xml files into
+  // for cases where the raster dir is read only to the user
+  // if the env var is already set it will be used preferentially
+  QString myPamPath = qgisSettingsDirPath() + QString( "gdal_pam/" );
+  QDir myDir( myPamPath );
+  if ( !myDir.exists() )
+  {
+    myDir.mkpath( myPamPath ); //fail silently
+  }
+
+#if defined(Q_WS_WIN32) || defined(WIN32)
+  CPLSetConfigOption( "GDAL_PAM_PROXY_DIR", myPamPath.toUtf8() );
+#else
+  //under other OS's we use an environment var so the user can
+  //override the path if he likes
+  int myChangeFlag = 0; //whether we want to force the env var to change
+  setenv( "GDAL_PAM_PROXY_DIR", myPamPath.toUtf8(), myChangeFlag );
+#endif
+
+  // Check qgis.db and make private copy if necessary
+  QFile qgisPrivateDbFile( QgsApplication::qgisUserDbFilePath() );
+
+  // first we look for ~/.qgis/qgis.db
+  if ( !qgisPrivateDbFile.exists() )
+  {
+    // if it doesnt exist we copy it in from the global resources dir
+    QString qgisMasterDbFileName = QgsApplication::qgisMasterDbFilePath();
+    QFile masterFile( qgisMasterDbFileName );
+
+    // Must be sure there is destination directory ~/.qgis
+    QDir().mkpath( QgsApplication::qgisSettingsDirPath() );
+
+    //now copy the master file into the users .qgis dir
+    bool isDbFileCopied = masterFile.copy( qgisPrivateDbFile.fileName() );
+
+    if ( !isDbFileCopied )
+    {
+      if ( errorMessage )
+      {
+        *errorMessage = tr( "[ERROR] Can not make qgis.db private copy" );
+      }
+      return false;
+    }
+  }
+  else
+  {
+    // migrate if necessary
+    sqlite3 *db;
+    if ( sqlite3_open( QgsApplication::qgisUserDbFilePath().toUtf8().constData(), &db ) != SQLITE_OK )
+    {
+      if ( errorMessage )
+      {
+        *errorMessage = tr( "Could not open qgis.db" );
+      }
+      return false;
+    }
+
+    char *errmsg;
+    int res = sqlite3_exec( db, "SELECT epsg FROM tbl_srs LIMIT 0", 0, 0, &errmsg );
+    if ( res == SQLITE_OK )
+    {
+      // epsg column exists => need migration
+      if ( sqlite3_exec( db,
+                         "ALTER TABLE tbl_srs RENAME TO tbl_srs_bak;"
+                         "CREATE TABLE tbl_srs ("
+                         "srs_id INTEGER PRIMARY KEY,"
+                         "description text NOT NULL,"
+                         "projection_acronym text NOT NULL,"
+                         "ellipsoid_acronym NOT NULL,"
+                         "parameters text NOT NULL,"
+                         "srid integer,"
+                         "auth_name varchar,"
+                         "auth_id varchar,"
+                         "is_geo integer NOT NULL,"
+                         "deprecated boolean);"
+                         "CREATE INDEX idx_srsauthid on tbl_srs(auth_name,auth_id);"
+                         "INSERT INTO tbl_srs(srs_id,description,projection_acronym,ellipsoid_acronym,parameters,srid,auth_name,auth_id,is_geo,deprecated) SELECT srs_id,description,projection_acronym,ellipsoid_acronym,parameters,srid,'','',is_geo,0 FROM tbl_srs_bak;"
+                         "DROP TABLE tbl_srs_bak", 0, 0, &errmsg ) != SQLITE_OK
+         )
+      {
+        if ( errorMessage )
+        {
+          *errorMessage = tr( "Migration of private qgis.db failed.\n%1" ).arg( QString::fromUtf8( errmsg ) );
+        }
+        sqlite3_free( errmsg );
+        sqlite3_close( db );
+        return false;
+      }
+    }
+    else
+    {
+      sqlite3_free( errmsg );
+    }
+
+    if ( sqlite3_exec( db, "DROP VIEW vw_srs", 0, 0, &errmsg ) != SQLITE_OK )
+    {
+      QgsDebugMsg( QString( "vw_srs didn't exists in private qgis.db: %1" ).arg( errmsg ) );
+    }
+
+    if ( sqlite3_exec( db,
+                       "CREATE VIEW vw_srs AS"
+                       " SELECT"
+                       " a.description AS description"
+                       ",a.srs_id AS srs_id"
+                       ",a.is_geo AS is_geo"
+                       ",coalesce(b.name,a.projection_acronym) AS name"
+                       ",a.parameters AS parameters"
+                       ",a.auth_name AS auth_name"
+                       ",a.auth_id AS auth_id"
+                       ",a.deprecated AS deprecated"
+                       " FROM tbl_srs a"
+                       " LEFT OUTER JOIN tbl_projection b ON a.projection_acronym=b.acronym"
+                       " ORDER BY coalesce(b.name,a.projection_acronym),a.description", 0, 0, &errmsg ) != SQLITE_OK
+       )
+    {
+      if ( errorMessage )
+      {
+        *errorMessage = tr( "Update of view in private qgis.db failed.\n%1" ).arg( QString::fromUtf8( errmsg ) );
+      }
+      sqlite3_free( errmsg );
+      sqlite3_close( db );
+      return false;
+    }
+
+    sqlite3_close( db );
+  }
+  return true;
 }
 
 

@@ -31,13 +31,14 @@ std::map<QString, QPixmap> mugs;
 */
 #ifdef Q_OS_MACX
 QgsAbout::QgsAbout( QWidget *parent )
-    : QDialog( parent, Qt::WindowSystemMenuHint )  // Modeless dialog with close button only
+    : QgsOptionsDialogBase( parent, Qt::WindowSystemMenuHint )  // Modeless dialog with close button only
 #else
 QgsAbout::QgsAbout( QWidget *parent )
-    : QDialog( parent )  // Normal dialog in non Mac-OS
+    : QgsOptionsDialogBase( "about", parent )  // Normal dialog in non Mac-OS
 #endif
 {
   setupUi( this );
+  initOptionsBase();
   init();
 }
 
@@ -48,6 +49,8 @@ QgsAbout::~QgsAbout()
 void QgsAbout::init()
 {
   setPluginInfo();
+
+  setWindowTitle( QString( "%1 - %2 Bit" ).arg( windowTitle() ).arg( QSysInfo::WordSize ) );
 
   // set the 60x60 icon pixmap
   QPixmap icon( QgsApplication::iconsPath() + "qgis-icon-60x60.png" );
@@ -188,6 +191,22 @@ void QgsAbout::init()
     QgsDebugMsg( QString( "translatorHTML:%1" ).arg( translatorHTML.toAscii().constData() ) );
   }
   setWhatsNew();
+  setLicence();
+}
+
+void QgsAbout::setLicence()
+{
+  // read the DONORS file and populate the text widget
+  QFile licenceFile( QgsApplication::licenceFilePath() );
+#ifdef QGISDEBUG
+  printf( "Reading licence file %s.............................................\n",
+          licenceFile.fileName().toLocal8Bit().constData() );
+#endif
+  if ( licenceFile.open( QIODevice::ReadOnly ) )
+  {
+    QString content = licenceFile.readAll();
+    txtLicense->setText( content );
+  }
 }
 
 void QgsAbout::setVersion( QString v )

@@ -22,6 +22,9 @@ class QgsComposerLabel : QgsComposerItem
     QString text();
     void setText( const QString& text );
 
+    int htmlState();
+    void setHtmlState( int state );
+
     /**Returns the text as it appears on screen (with replaced data field)
       @note this function was added in version 1.2*/
     QString displayText() const;
@@ -76,5 +79,11 @@ class QgsComposerLabel : QgsComposerItem
     bool readXML( const QDomElement& itemElem, const QDomDocument& doc );
 
   public slots:
+    /* Sets rotation for the label
+     * @deprecated Use setItemRotation( double rotation ) instead
+     */
     virtual void setRotation( double r );
+  
+    /* Sets rotation for the label */
+    virtual void setItemRotation( double r );
 };

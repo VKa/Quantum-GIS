@@ -52,14 +52,17 @@ cleanup() {
 	trap "" EXIT
 }
 
-trap cleanup EXIT
-
 PATH=$QTDIR/bin:$PATH
 
 if type qmake-qt4 >/dev/null 2>&1; then
 	QMAKE=qmake-qt4
 else
 	QMAKE=qmake
+fi
+
+if ! type pylupdate4 >/dev/null 2>&1; then
+      echo "pylupdate4 not found"
+      exit 1
 fi
 
 if type lupdate-qt4 >/dev/null 2>&1; then
@@ -70,6 +73,7 @@ fi
 
 exclude=
 opts=
+fast=
 while (( $# > 0 )); do
   arg=$1
   shift
@@ -83,6 +87,8 @@ while (( $# > 0 )); do
     else
       add="$add $arg"
     fi
+  elif [ "$arg" = "-f" ]; then
+    fast=--remove-files
   elif [ -f "i18n/qgis_$arg.ts" ]; then
     exclude="$exclude --exclude i18n/qgis_$arg.ts"
   else
@@ -90,13 +96,16 @@ while (( $# > 0 )); do
   fi
 done
 
+trap cleanup EXIT
+
 if [ -n "$exclude" -o -n "$add" ]; then
   echo Saving excluded translations
-  tar --remove-files -cf i18n/qgis_ts.tar i18n/qgis_*.ts$exclude
+  tar $fast -cf i18n/qgis_ts.tar i18n/qgis_*.ts$exclude
 fi
+
 echo Updating python translations
 cd python
-pylupdate4 console/console.py utils.py -ts python-i18n.ts
+pylupdate4 utils.py {console,pyplugin_installer}/*.{py,ui} -ts python-i18n.ts
 perl ../scripts/ts2cpp.pl python-i18n.ts python-i18n.cpp
 rm python-i18n.ts
 cd ..
@@ -127,10 +136,12 @@ fi
 echo Updating translations
 $LUPDATE$opts -verbose qgis_ts.pro
 
-cleanup
+if [ -z "$fast" ]; then
+	echo Updating TRANSLATORS File
+	./scripts/tsstat.pl >doc/TRANSLATORS
+fi
 
-echo Updating TRANSLATORS File
-./scripts/tsstat.pl > doc/TRANSLATORS
+cleanup
 
 if [ -n "$add" ]; then
 	for i in $add; do

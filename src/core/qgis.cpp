@@ -73,6 +73,9 @@ const CORE_EXPORT QString GEO_NONE = "NONE";
 
 const double QGis::DEFAULT_IDENTIFY_RADIUS = 0.5;
 
+//! Default threshold between map coordinates and device coordinates for map2pixel simplification
+const float QGis::DEFAULT_MAPTOPIXEL_THRESHOLD = 1.0f;
+
 // description strings for units
 // Order must match enum indices
 const char* QGis::qgisUnitTypes[] =
@@ -83,7 +86,8 @@ const char* QGis::qgisUnitTypes[] =
   QT_TRANSLATE_NOOP( "QGis::UnitType", "<unknown>" ),
   QT_TRANSLATE_NOOP( "QGis::UnitType", "degrees" ),
   QT_TRANSLATE_NOOP( "QGis::UnitType", "degrees" ),
-  QT_TRANSLATE_NOOP( "QGis::UnitType", "degrees" )
+  QT_TRANSLATE_NOOP( "QGis::UnitType", "degrees" ),
+  QT_TRANSLATE_NOOP( "QGis::UnitType", "nautical miles" )
 };
 
 QGis::UnitType QGis::fromLiteral( QString literal, QGis::UnitType defaultType )
@@ -175,3 +179,19 @@ bool qgsVariantGreaterThan( const QVariant& lhs, const QVariant& rhs )
   return ! qgsVariantLessThan( lhs, rhs );
 }
 
+QString qgsVsiPrefix( QString path )
+{
+  if ( path.startsWith( "/vsizip/", Qt::CaseInsensitive ) ||
+       path.endsWith( ".zip", Qt::CaseInsensitive ) )
+    return "/vsizip/";
+  else if ( path.startsWith( "/vsitar/", Qt::CaseInsensitive ) ||
+            path.endsWith( ".tar", Qt::CaseInsensitive ) ||
+            path.endsWith( ".tar.gz", Qt::CaseInsensitive ) ||
+            path.endsWith( ".tgz", Qt::CaseInsensitive ) )
+    return "/vsitar/";
+  else if ( path.startsWith( "/vsigzip/", Qt::CaseInsensitive ) ||
+            path.endsWith( ".gz", Qt::CaseInsensitive ) )
+    return "/vsigzip/";
+  else
+    return "";
+}

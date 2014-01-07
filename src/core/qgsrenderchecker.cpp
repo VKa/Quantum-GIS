@@ -14,6 +14,7 @@
  ***************************************************************************/
 
 #include "qgsrenderchecker.h"
+#include "qgis.h"
 
 #include <QColor>
 #include <QPainter>
@@ -26,13 +27,13 @@
 
 QgsRenderChecker::QgsRenderChecker( ) :
     mReport( "" ),
-    mExpectedImageFile( "" ),
-    mRenderedImageFile( "" ),
-    mMismatchCount( 0 ),
     mMatchTarget( 0 ),
-    mElapsedTime( 0 ),
-    mElapsedTimeTarget( 0 ),
     mpMapRenderer( NULL ),
+    mElapsedTime( 0 ),
+    mRenderedImageFile( "" ),
+    mExpectedImageFile( "" ),
+    mMismatchCount( 0 ),
+    mElapsedTimeTarget( 0 ),
     mControlPathPrefix( "" )
 {
 
@@ -75,9 +76,9 @@ bool QgsRenderChecker::isKnownAnomaly( QString theDiffImageFile )
   QString myFilename = "*";
   myList = myDirectory.entryList( QStringList( myFilename ),
                                   QDir::Files | QDir::NoSymLinks );
-  //remove the control file from teh list as the anomalies are
+  //remove the control file from the list as the anomalies are
   //all files except the control file
-  myList.removeAt( myList.indexOf( mExpectedImageFile ) );
+  myList.removeAt( myList.indexOf( QFileInfo( mExpectedImageFile ).fileName() ) );
 
   QString myImageHash = imageToHash( theDiffImageFile );
 
@@ -161,8 +162,23 @@ bool QgsRenderChecker::runTest( QString theTestName,
   mRenderedImageFile = QDir::tempPath() + QDir::separator() +
                        theTestName + "_result.png";
   myImage.save( mRenderedImageFile, "PNG", 100 );
-  return compareImages( theTestName, theMismatchCount );
 
+  //create a world file to go with the image...
+
+  QFile wldFile( QDir::tempPath() + QDir::separator() + theTestName + "_result.wld" );
+  if ( wldFile.open( QIODevice::WriteOnly ) )
+  {
+    QgsRectangle r = mpMapRenderer->extent();
+
+    QTextStream stream( &wldFile );
+    stream << QString( "%1\r\n0 \r\n0 \r\n%2\r\n%3\r\n%4\r\n" )
+    .arg( qgsDoubleToString( mpMapRenderer->mapUnitsPerPixel() ) )
+    .arg( qgsDoubleToString( -mpMapRenderer->mapUnitsPerPixel() ) )
+    .arg( qgsDoubleToString( r.xMinimum() + mpMapRenderer->mapUnitsPerPixel() / 2.0 ) )
+    .arg( qgsDoubleToString( r.yMaximum() - mpMapRenderer->mapUnitsPerPixel() / 2.0 ) );
+  }
+
+  return compareImages( theTestName, theMismatchCount );
 }
 
 
@@ -188,7 +204,7 @@ bool QgsRenderChecker::compareImages( QString theTestName,
     qDebug( "QgsRenderChecker::runTest failed - Rendered Image File not set." );
     mReport = "<table>"
               "<tr><td>Test Result:</td><td>Expected Result:</td></tr>\n"
-              "<tr><td>Nothing rendered</td>\n<td>Failed because Expected "
+              "<tr><td>Nothing rendered</td>\n<td>Failed because Rendered "
               "Image File not set.</td></tr></table>\n";
     return false;
   }
@@ -241,11 +257,11 @@ bool QgsRenderChecker::compareImages( QString theTestName,
   //
   QString myDashMessage = "<DartMeasurementFile name=\"Rendered Image " + theTestName + "\""
                           " type=\"image/png\">" + mRenderedImageFile +
-                          "</DartMeasurementFile>"
+                          "</DartMeasurementFile>\n"
                           "<DartMeasurementFile name=\"Expected Image " + theTestName + "\" type=\"image/png\">" +
-                          mExpectedImageFile + "</DartMeasurementFile>"
+                          mExpectedImageFile + "</DartMeasurementFile>\n"
                           "<DartMeasurementFile name=\"Difference Image " + theTestName + "\" type=\"image/png\">" +
-                          myDiffImageFile + "</DartMeasurementFile>";
+                          myDiffImageFile + "</DartMeasurementFile>\n";
   qDebug( ) << myDashMessage;
 
   //
@@ -333,7 +349,7 @@ bool QgsRenderChecker::compareImages( QString theTestName,
                                " If you feel the difference image should be considered an anomaly "
                                "you can do something like this\n"
                                "cp " + myDiffImageFile  + " ../tests/testdata/control_images/" + theTestName +
-                               "/<imagename>.png"
+                               "/<imagename>.{wld,png}"
                                "</DartMeasurement>";
     qDebug() << myMeasureMessage;
   }

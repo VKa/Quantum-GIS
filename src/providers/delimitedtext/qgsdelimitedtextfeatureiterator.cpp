@@ -26,23 +26,17 @@
 #include <QTextStream>
 
 QgsDelimitedTextFeatureIterator::QgsDelimitedTextFeatureIterator( QgsDelimitedTextProvider* p, const QgsFeatureRequest& request )
-    : QgsAbstractFeatureIterator( request ), P( p )
+    : QgsAbstractFeatureIterator( request )
+    , P( p )
 {
-  // make sure that only one iterator is active
-  if ( P->mActiveIterator )
-  {
-    QgsMessageLog::logMessage( QObject::tr( "Already active iterator on this provider was closed." ), QObject::tr( "Delimited text" ) );
-    P->mActiveIterator->close();
-  }
-  P->mActiveIterator = this;
+  P->mActiveIterators << this;
 
   // Determine mode to use based on request...
-
   QgsDebugMsg( "Setting up QgsDelimitedTextIterator" );
 
   // Does the layer have geometry - will revise later to determine if we actually need to
   // load it.
-  mLoadGeometry = P->mGeomRep != QgsDelimitedTextProvider::GeomNone;
+  bool hasGeometry = P->mGeomRep != QgsDelimitedTextProvider::GeomNone;
 
   // Does the layer have an explicit or implicit subset (implicit subset is if we have geometry which can
   // be invalid)
@@ -65,8 +59,7 @@ QgsDelimitedTextFeatureIterator::QgsDelimitedTextFeatureIterator( QgsDelimitedTe
   // requesting no geometry? Have preserved current logic of ignoring spatial filter
   // if not requesting geometry.
 
-  else if ( request.filterType() == QgsFeatureRequest::FilterRect && mLoadGeometry
-            && !( mRequest.flags() & QgsFeatureRequest::NoGeometry ) )
+  else if ( request.filterType() == QgsFeatureRequest::FilterRect && hasGeometry )
   {
     QgsDebugMsg( "Configuring for rectangle select" );
     mTestGeometry = true;
@@ -98,8 +91,8 @@ QgsDelimitedTextFeatureIterator::QgsDelimitedTextFeatureIterator( QgsDelimitedTe
     {
       mFeatureIds = P->mSpatialIndex->intersects( rect );
       // Sort for efficient sequential retrieval
-      qSort(mFeatureIds.begin(), mFeatureIds.end());
-      QgsDebugMsg( QString("Layer has spatial index - selected %1 features from index").arg(mFeatureIds.size()) );
+      qSort( mFeatureIds.begin(), mFeatureIds.end() );
+      QgsDebugMsg( QString( "Layer has spatial index - selected %1 features from index" ).arg( mFeatureIds.size() ) );
       mMode = FeatureIds;
       mTestSubset = false;
       mTestGeometry = mTestGeometryExact;
@@ -109,32 +102,41 @@ QgsDelimitedTextFeatureIterator::QgsDelimitedTextFeatureIterator( QgsDelimitedTe
   // If we have a subset index then use it..
   if ( mMode == FileScan && P->mUseSubsetIndex )
   {
-    QgsDebugMsg( QString("Layer has subset index - use %1 items from subset index").arg(P->mSubsetIndex.size()) );
+    QgsDebugMsg( QString( "Layer has subset index - use %1 items from subset index" ).arg( P->mSubsetIndex.size() ) );
     mTestSubset = false;
     mMode = SubsetIndex;
   }
 
   // Otherwise just have to scan the file
-  if( mMode == FileScan )
+  if ( mMode == FileScan )
   {
     QgsDebugMsg( "File will be scanned for desired features" );
   }
 
-  // If the request does not require geometry, can we avoid loading it?
-  // We need it if we are testing geometry (ie spatial filter), or
-  // if testing the subset expression, and it uses geometry.
-  if ( mRequest.flags() & QgsFeatureRequest::NoGeometry &&
-       ! mTestGeometry &&
-       ! ( mTestSubset && P->mSubsetExpression->needsGeometry() ) )
+  // If the layer has geometry, do we really need to load it?
+  // We need it if it is asked for explicitly in the request,
+  // if we are testing geometry (ie spatial filter), or
+  // if testing the subset expression.
+  if ( hasGeometry
+       && (
+         !( mRequest.flags() & QgsFeatureRequest::NoGeometry )
+         || mTestGeometry
+         || ( mTestSubset && P->mSubsetExpression->needsGeometry() )
+       )
+     )
   {
-    QgsDebugMsg( "Feature geometries not required" );
+    mLoadGeometry = true;
+  }
+  else
+  {
+    QgsDebugMsgLevel( "Feature geometries not required", 4 );
     mLoadGeometry = false;
   }
 
-  QgsDebugMsg( QString("Iterator is scanning file: ") + (scanningFile() ? "Yes" : "No"));
-  QgsDebugMsg( QString("Iterator is loading geometries: ") + (loadGeometry() ? "Yes" : "No"));
-  QgsDebugMsg( QString("Iterator is testing geometries: ") + (testGeometry() ? "Yes" : "No"));
-  QgsDebugMsg( QString("Iterator is testing subset: ") + (testSubset() ? "Yes" : "No"));
+  QgsDebugMsg( QString( "Iterator is scanning file: " ) + ( scanningFile() ? "Yes" : "No" ) );
+  QgsDebugMsg( QString( "Iterator is loading geometries: " ) + ( loadGeometry() ? "Yes" : "No" ) );
+  QgsDebugMsg( QString( "Iterator is testing geometries: " ) + ( testGeometry() ? "Yes" : "No" ) );
+  QgsDebugMsg( QString( "Iterator is testing subset: " ) + ( testSubset() ? "Yes" : "No" ) );
 
   rewind();
 }
@@ -144,7 +146,7 @@ QgsDelimitedTextFeatureIterator::~QgsDelimitedTextFeatureIterator()
   close();
 }
 
-bool QgsDelimitedTextFeatureIterator::nextFeature( QgsFeature& feature )
+bool QgsDelimitedTextFeatureIterator::fetchFeature( QgsFeature& feature )
 {
   // before we do anything else, assume that there's something wrong with
   // the feature
@@ -160,23 +162,23 @@ bool QgsDelimitedTextFeatureIterator::nextFeature( QgsFeature& feature )
   }
   else
   {
-    while( ! gotFeature )
+    while ( ! gotFeature )
     {
       qint64 fid = -1;
       if ( mMode == FeatureIds )
       {
-        if( mNextId < mFeatureIds.size() )
+        if ( mNextId < mFeatureIds.size() )
         {
           fid = mFeatureIds[mNextId];
         }
       }
-      else if( mNextId < P->mSubsetIndex.size() )
+      else if ( mNextId < P->mSubsetIndex.size() )
       {
         fid = P->mSubsetIndex[mNextId];
       }
-      if( fid < 0 ) break;
+      if ( fid < 0 ) break;
       mNextId++;
-      gotFeature = (P->setNextFeatureId( fid ) && P->nextFeature( feature, P->mFile, this ));
+      gotFeature = ( P->setNextFeatureId( fid ) && P->nextFeature( feature, P->mFile, this ) );
     }
   }
 
@@ -212,8 +214,8 @@ bool QgsDelimitedTextFeatureIterator::close()
   if ( mClosed )
     return false;
 
-  // tell provider that this iterator is not active anymore
-  P->mActiveIterator = 0;
+  P->mActiveIterators.remove( this );
+
   mFeatureIds = QList<QgsFeatureId>();
   mClosed = true;
   return true;

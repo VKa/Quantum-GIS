@@ -26,12 +26,8 @@
 #include "qgsmaplayer.h"
 #include "qgsmaplayerregistry.h"
 #include "qgsdistancearea.h"
-#include "qgscentralpointpositionmanager.h"
-#include "qgsoverlayobjectpositionmanager.h"
-#include "qgspalobjectpositionmanager.h"
 #include "qgsproject.h"
 #include "qgsvectorlayer.h"
-#include "qgsvectoroverlay.h"
 
 
 #include <QDomDocument>
@@ -194,9 +190,9 @@ void QgsMapRenderer::adjustExtentToSize()
     dymax = mExtent.yMaximum() + whitespace;
   }
 
-  QgsDebugMsg( QString( "Map units per pixel (x,y) : %1, %2" ).arg( mapUnitsPerPixelX, 0, 'f', 8 ).arg( mapUnitsPerPixelY, 0, 'f', 8 ) );
-  QgsDebugMsg( QString( "Pixmap dimensions (x,y) : %1, %2" ).arg( myWidth, 0, 'f', 8 ).arg( myHeight, 0, 'f', 8 ) );
-  QgsDebugMsg( QString( "Extent dimensions (x,y) : %1, %2" ).arg( mExtent.width(), 0, 'f', 8 ).arg( mExtent.height(), 0, 'f', 8 ) );
+  QgsDebugMsg( QString( "Map units per pixel (x,y) : %1, %2" ).arg( qgsDoubleToString( mapUnitsPerPixelX ) ).arg( qgsDoubleToString( mapUnitsPerPixelY ) ) );
+  QgsDebugMsg( QString( "Pixmap dimensions (x,y) : %1, %2" ).arg( qgsDoubleToString( myWidth ) ).arg( qgsDoubleToString( myHeight ) ) );
+  QgsDebugMsg( QString( "Extent dimensions (x,y) : %1, %2" ).arg( qgsDoubleToString( mExtent.width() ) ).arg( qgsDoubleToString( mExtent.height() ) ) );
   QgsDebugMsg( mExtent.toString() );
 
   // update extent
@@ -205,14 +201,14 @@ void QgsMapRenderer::adjustExtentToSize()
   mExtent.setYMinimum( dymin );
   mExtent.setYMaximum( dymax );
 
-  QgsDebugMsg( QString( "Adjusted map units per pixel (x,y) : %1, %2" ).arg( mExtent.width() / myWidth, 0, 'f', 8 ).arg( mExtent.height() / myHeight, 0, 'f', 8 ) );
+  QgsDebugMsg( QString( "Adjusted map units per pixel (x,y) : %1, %2" ).arg( qgsDoubleToString( mExtent.width() / myWidth ) ).arg( qgsDoubleToString( mExtent.height() / myHeight ) ) );
 
-  QgsDebugMsg( QString( "Recalced pixmap dimensions (x,y) : %1, %2" ).arg( mExtent.width() / mMapUnitsPerPixel, 0, 'f', 8 ).arg( mExtent.height() / mMapUnitsPerPixel, 0, 'f', 8 ) );
+  QgsDebugMsg( QString( "Recalced pixmap dimensions (x,y) : %1, %2" ).arg( qgsDoubleToString( mExtent.width() / mMapUnitsPerPixel ) ).arg( qgsDoubleToString( mExtent.height() / mMapUnitsPerPixel ) ) );
 
   // update the scale
   updateScale();
 
-  QgsDebugMsg( QString( "Scale (assuming meters as map units) = 1:%1" ).arg( mScale, 0, 'f', 8 ) );
+  QgsDebugMsg( QString( "Scale (assuming meters as map units) = 1:%1" ).arg( qgsDoubleToString( mScale ) ) );
 
   newCoordXForm.setParameters( mMapUnitsPerPixel, dxmin, dymin, myHeight );
   mRenderContext.setMapToPixel( newCoordXForm );
@@ -265,7 +261,7 @@ void QgsMapRenderer::render( QPainter* painter, double* forceWidthScale )
 
   mDrawing = true;
 
-  const QgsCoordinateTransform* ct;
+  const QgsCoordinateTransform *ct;
 
 #ifdef QGISDEBUG
   QgsDebugMsg( "Starting to render layer stack." );
@@ -345,9 +341,6 @@ void QgsMapRenderer::render( QPainter* painter, double* forceWidthScale )
     }
   }
 
-  QgsOverlayObjectPositionManager* overlayManager = overlayManagerFromSettings();
-  QList<QgsVectorOverlay*> allOverlayList; //list of all overlays, used to draw them after layers have been rendered
-
   // render all layers in the stack, starting at the base
   QListIterator<QString> li( mLayerSet );
   li.toBack();
@@ -419,7 +412,7 @@ void QgsMapRenderer::render( QPainter* painter, double* forceWidthScale )
       {
         r1 = mExtent;
         split = splitLayersExtent( ml, r1, r2 );
-        ct = QgsCoordinateTransformCache::instance()->transform( ml->crs().authid(), mDestCRS->authid() );
+        ct = transformation( ml );
         mRenderContext.setExtent( r1 );
         QgsDebugMsg( "  extent 1: " + r1.toString() );
         QgsDebugMsg( "  extent 2: " + r2.toString() );
@@ -446,30 +439,6 @@ void QgsMapRenderer::render( QPainter* painter, double* forceWidthScale )
         scaleRaster = true;
       }
 
-
-      //create overlay objects for features within the view extent
-      if ( ml->type() == QgsMapLayer::VectorLayer && overlayManager )
-      {
-        QgsVectorLayer* vl = qobject_cast<QgsVectorLayer *>( ml );
-        if ( vl )
-        {
-          QList<QgsVectorOverlay*> thisLayerOverlayList;
-          vl->vectorOverlays( thisLayerOverlayList );
-
-          QList<QgsVectorOverlay*>::iterator overlayIt = thisLayerOverlayList.begin();
-          for ( ; overlayIt != thisLayerOverlayList.end(); ++overlayIt )
-          {
-            if (( *overlayIt )->displayFlag() )
-            {
-              ( *overlayIt )->createOverlayObjects( mRenderContext );
-              allOverlayList.push_back( *overlayIt );
-            }
-          }
-
-          overlayManager->addLayer( vl, thisLayerOverlayList );
-        }
-      }
-
       // Force render of layers that are being edited
       // or if there's a labeling engine that needs the layer to register features
       if ( ml->type() == QgsMapLayer::VectorLayer )
@@ -483,15 +452,24 @@ void QgsMapRenderer::render( QPainter* painter, double* forceWidthScale )
       }
 
       QSettings mySettings;
+      bool useRenderCaching = false;
       if ( ! split )//render caching does not yet cater for split extents
       {
         if ( mySettings.value( "/qgis/enable_render_caching", false ).toBool() )
         {
+          useRenderCaching = true;
           if ( !mySameAsLastFlag || ml->cacheImage() == 0 )
           {
             QgsDebugMsg( "Caching enabled but layer redraw forced by extent change or empty cache" );
             QImage * mypImage = new QImage( mRenderContext.painter()->device()->width(),
                                             mRenderContext.painter()->device()->height(), QImage::Format_ARGB32 );
+            if ( mypImage->isNull() )
+            {
+              QgsDebugMsg( "insufficient memory for image " + QString::number( mRenderContext.painter()->device()->width() ) + "x" + QString::number( mRenderContext.painter()->device()->height() ) );
+              emit drawError( ml );
+              painter->end(); // drawError is not caught by anyone, so we end painting to notify caller
+              return;
+            }
             mypImage->fill( 0 );
             ml->setCacheImage( mypImage ); //no need to delete the old one, maplayer does it for you
             QPainter * mypPainter = new QPainter( ml->cacheImage() );
@@ -518,20 +496,46 @@ void QgsMapRenderer::render( QPainter* painter, double* forceWidthScale )
       // before compositing this on the map. This effectively flattens the layer and prevents
       // blending occuring between objects on the layer
       // (this is not required for raster layers or when layer caching is enabled, since that has the same effect)
-      if (( mRenderContext.useAdvancedEffects() ) && ( ml->blendMode()  != QPainter::CompositionMode_SourceOver ) &&
-          ( ml->type() != QgsMapLayer::RasterLayer ) &&
-          ( split || !mySettings.value( "/qgis/enable_render_caching", false ).toBool() ) )
+      bool flattenedLayer = false;
+      if (( mRenderContext.useAdvancedEffects() ) && ( ml->type() == QgsMapLayer::VectorLayer ) )
       {
-        mypFlattenedImage = new QImage( mRenderContext.painter()->device()->width(),
-                                        mRenderContext.painter()->device()->height(), QImage::Format_ARGB32 );
-        mypFlattenedImage->fill( 0 );
-        QPainter * mypPainter = new QPainter( mypFlattenedImage );
-        if ( mySettings.value( "/qgis/enable_anti_aliasing", true ).toBool() )
+        QgsVectorLayer* vl = qobject_cast<QgsVectorLayer *>( ml );
+        if (( !useRenderCaching )
+            && (( vl->blendMode() != QPainter::CompositionMode_SourceOver )
+                || ( vl->featureBlendMode() != QPainter::CompositionMode_SourceOver )
+                || ( vl->layerTransparency() != 0 ) ) )
         {
-          mypPainter->setRenderHint( QPainter::Antialiasing );
+          flattenedLayer = true;
+          mypFlattenedImage = new QImage( mRenderContext.painter()->device()->width(),
+                                          mRenderContext.painter()->device()->height(), QImage::Format_ARGB32 );
+          if ( mypFlattenedImage->isNull() )
+          {
+            QgsDebugMsg( "insufficient memory for image " + QString::number( mRenderContext.painter()->device()->width() ) + "x" + QString::number( mRenderContext.painter()->device()->height() ) );
+            emit drawError( ml );
+            painter->end(); // drawError is not caught by anyone, so we end painting to notify caller
+            return;
+          }
+          mypFlattenedImage->fill( 0 );
+          QPainter * mypPainter = new QPainter( mypFlattenedImage );
+          if ( mySettings.value( "/qgis/enable_anti_aliasing", true ).toBool() )
+          {
+            mypPainter->setRenderHint( QPainter::Antialiasing );
+          }
+          mypPainter->scale( rasterScaleFactor,  rasterScaleFactor );
+          mRenderContext.setPainter( mypPainter );
         }
-        mypPainter->scale( rasterScaleFactor,  rasterScaleFactor );
-        mRenderContext.setPainter( mypPainter );
+      }
+
+      // Per feature blending mode
+      if (( mRenderContext.useAdvancedEffects() ) && ( ml->type() == QgsMapLayer::VectorLayer ) )
+      {
+        QgsVectorLayer* vl = qobject_cast<QgsVectorLayer *>( ml );
+        if ( vl->featureBlendMode() != QPainter::CompositionMode_SourceOver )
+        {
+          // set the painter to the feature blend mode, so that features drawn
+          // on this layer will interact and blend with each other
+          mRenderContext.painter()->setCompositionMode( vl->featureBlendMode() );
+        }
       }
 
       if ( scaleRaster )
@@ -569,25 +573,35 @@ void QgsMapRenderer::render( QPainter* painter, double* forceWidthScale )
         mRenderContext.painter()->restore();
       }
 
-      if ( mySettings.value( "/qgis/enable_render_caching", false ).toBool() )
+      //apply layer transparency for vector layers
+      if (( mRenderContext.useAdvancedEffects() ) && ( ml->type() == QgsMapLayer::VectorLayer ) )
       {
-        if ( !split )
+        QgsVectorLayer* vl = qobject_cast<QgsVectorLayer *>( ml );
+        if ( vl->layerTransparency() != 0 )
         {
-          // composite the cached image into our view and then clean up from caching
-          // by reinstating the painter as it was swapped out for caching renders
-          delete mRenderContext.painter();
-          mRenderContext.setPainter( mypContextPainter );
-          //draw from cached image that we created further up
-          if ( ml->cacheImage() )
-            mypContextPainter->drawImage( 0, 0, *( ml->cacheImage() ) );
+          // a layer transparency has been set, so update the alpha for the flattened layer
+          // by combining it with the layer transparency
+          QColor transparentFillColor = QColor( 0, 0, 0, 255 - ( 255 * vl->layerTransparency() / 100 ) );
+          // use destination in composition mode to merge source's alpha with destination
+          mRenderContext.painter()->setCompositionMode( QPainter::CompositionMode_DestinationIn );
+          mRenderContext.painter()->fillRect( 0, 0, mRenderContext.painter()->device()->width(),
+                                              mRenderContext.painter()->device()->height(), transparentFillColor );
         }
       }
 
-      // If we flattened this layer for alternate blend modes, composite it now
-      if (( mRenderContext.useAdvancedEffects() ) && ( ml->blendMode()  != QPainter::CompositionMode_SourceOver ) &&
-          ( ml->type() != QgsMapLayer::RasterLayer ) &&
-          ( split || !mySettings.value( "/qgis/enable_render_caching", false ).toBool() ) )
+      if ( useRenderCaching )
       {
+        // composite the cached image into our view and then clean up from caching
+        // by reinstating the painter as it was swapped out for caching renders
+        delete mRenderContext.painter();
+        mRenderContext.setPainter( mypContextPainter );
+        //draw from cached image that we created further up
+        if ( ml->cacheImage() )
+          mypContextPainter->drawImage( 0, 0, *( ml->cacheImage() ) );
+      }
+      else if ( flattenedLayer )
+      {
+        // If we flattened this layer for alternate blend modes, composite it now
         delete mRenderContext.painter();
         mRenderContext.setPainter( mypContextPainter );
         mypContextPainter->save();
@@ -641,7 +655,7 @@ void QgsMapRenderer::render( QPainter* painter, double* forceWidthScale )
           {
             QgsRectangle r1 = mExtent;
             split = splitLayersExtent( ml, r1, r2 );
-            ct = new QgsCoordinateTransform( ml->crs(), *mDestCRS );
+            ct = transformation( ml );
             mRenderContext.setExtent( r1 );
           }
           else
@@ -662,20 +676,6 @@ void QgsMapRenderer::render( QPainter* painter, double* forceWidthScale )
     }
   } // if (!mOverview)
 
-  //find overlay positions and draw the vector overlays
-  if ( overlayManager && allOverlayList.size() > 0 )
-  {
-    overlayManager->findObjectPositions( mRenderContext, mScaleCalculator->mapUnits() );
-    //draw all the overlays
-    QList<QgsVectorOverlay*>::iterator allOverlayIt = allOverlayList.begin();
-    for ( ; allOverlayIt != allOverlayList.end(); ++allOverlayIt )
-    {
-      ( *allOverlayIt )->drawOverlayObjects( mRenderContext );
-    }
-    overlayManager->removeLayers();
-  }
-
-  delete overlayManager;
   // make sure progress bar arrives at 100%!
   emit drawingProgress( 1, 1 );
 
@@ -736,12 +736,16 @@ bool QgsMapRenderer::hasCrsTransformEnabled() const
   return mProjectionsEnabled;
 }
 
-void QgsMapRenderer::setDestinationCrs( const QgsCoordinateReferenceSystem& crs )
+void QgsMapRenderer::setDestinationCrs( const QgsCoordinateReferenceSystem& crs, bool refreshCoordinateTransformInfo )
 {
   QgsDebugMsg( "* Setting destCRS : = " + crs.toProj4() );
   QgsDebugMsg( "* DestCRS.srsid() = " + QString::number( crs.srsid() ) );
   if ( *mDestCRS != crs )
   {
+    if ( refreshCoordinateTransformInfo )
+    {
+      mLayerCoordinateTransformInfo.clear();
+    }
     QgsRectangle rect;
     if ( !mExtent.isEmpty() )
     {
@@ -790,17 +794,23 @@ bool QgsMapRenderer::splitLayersExtent( QgsMapLayer* layer, QgsRectangle& extent
       // extent separately.
       static const double splitCoord = 180.0;
 
+      const QgsCoordinateTransform *transform = transformation( layer );
       if ( layer->crs().geographicFlag() )
       {
         // Note: ll = lower left point
         //   and ur = upper right point
-        QgsPoint ll = tr( layer )->transform( extent.xMinimum(), extent.yMinimum(),
-                                              QgsCoordinateTransform::ReverseTransform );
 
-        QgsPoint ur = tr( layer )->transform( extent.xMaximum(), extent.yMaximum(),
-                                              QgsCoordinateTransform::ReverseTransform );
+        QgsPoint ll( extent.xMinimum(), extent.yMinimum() );
+        QgsPoint ur( extent.xMaximum(), extent.yMaximum() );
 
-        extent = tr( layer )->transformBoundingBox( extent, QgsCoordinateTransform::ReverseTransform );
+        if ( transform )
+        {
+          ll = transform->transform( ll.x(), ll.y(),
+                                     QgsCoordinateTransform::ReverseTransform );
+          ur = transform->transform( ur.x(), ur.y(),
+                                     QgsCoordinateTransform::ReverseTransform );
+          extent = transform->transformBoundingBox( extent, QgsCoordinateTransform::ReverseTransform );
+        }
 
         if ( ll.x() > ur.x() )
         {
@@ -812,7 +822,10 @@ bool QgsMapRenderer::splitLayersExtent( QgsMapLayer* layer, QgsRectangle& extent
       }
       else // can't cross 180
       {
-        extent = tr( layer )->transformBoundingBox( extent, QgsCoordinateTransform::ReverseTransform );
+        if ( transform )
+        {
+          extent = transform->transformBoundingBox( extent, QgsCoordinateTransform::ReverseTransform );
+        }
       }
     }
     catch ( QgsCsException &cse )
@@ -828,14 +841,18 @@ bool QgsMapRenderer::splitLayersExtent( QgsMapLayer* layer, QgsRectangle& extent
 
 QgsRectangle QgsMapRenderer::layerExtentToOutputExtent( QgsMapLayer* theLayer, QgsRectangle extent )
 {
-  QgsDebugMsg( QString( "sourceCrs = " + tr( theLayer )->sourceCrs().authid() ) );
-  QgsDebugMsg( QString( "destCRS = " + tr( theLayer )->destCRS().authid() ) );
-  QgsDebugMsg( QString( "extent = " + extent.toString() ) );
+  //QgsDebugMsg( QString( "sourceCrs = " + tr( theLayer )->sourceCrs().authid() ) );
+  //QgsDebugMsg( QString( "destCRS = " + tr( theLayer )->destCRS().authid() ) );
+  //QgsDebugMsg( QString( "extent = " + extent.toString() ) );
   if ( hasCrsTransformEnabled() )
   {
     try
     {
-      extent = tr( theLayer )->transformBoundingBox( extent );
+      const QgsCoordinateTransform *transform = transformation( theLayer );
+      if ( transform )
+      {
+        extent = transform->transformBoundingBox( extent );
+      }
     }
     catch ( QgsCsException &cse )
     {
@@ -850,14 +867,21 @@ QgsRectangle QgsMapRenderer::layerExtentToOutputExtent( QgsMapLayer* theLayer, Q
 
 QgsRectangle QgsMapRenderer::outputExtentToLayerExtent( QgsMapLayer* theLayer, QgsRectangle extent )
 {
-  QgsDebugMsg( QString( "layer sourceCrs = " + tr( theLayer )->sourceCrs().authid() ) );
-  QgsDebugMsg( QString( "layer destCRS = " + tr( theLayer )->destCRS().authid() ) );
+#if QGISDEBUG
+  const QgsCoordinateTransform *transform = transformation( theLayer );
+  QgsDebugMsg( QString( "layer sourceCrs = " + ( transform ? transform->sourceCrs().authid() : "none" ) ) );
+  QgsDebugMsg( QString( "layer destCRS = " + ( transform ? transform->destCRS().authid() : "none" ) ) );
   QgsDebugMsg( QString( "extent = " + extent.toString() ) );
+#endif
   if ( hasCrsTransformEnabled() )
   {
     try
     {
-      extent = tr( theLayer )->transformBoundingBox( extent, QgsCoordinateTransform::ReverseTransform );
+      const QgsCoordinateTransform *transform = transformation( theLayer );
+      if ( transform )
+      {
+        extent = transform->transformBoundingBox( extent, QgsCoordinateTransform::ReverseTransform );
+      }
     }
     catch ( QgsCsException &cse )
     {
@@ -876,7 +900,11 @@ QgsPoint QgsMapRenderer::layerToMapCoordinates( QgsMapLayer* theLayer, QgsPoint 
   {
     try
     {
-      point = tr( theLayer )->transform( point, QgsCoordinateTransform::ForwardTransform );
+      const QgsCoordinateTransform *transform = transformation( theLayer );
+      if ( transform )
+      {
+        point = transform->transform( point, QgsCoordinateTransform::ForwardTransform );
+      }
     }
     catch ( QgsCsException &cse )
     {
@@ -896,7 +924,11 @@ QgsRectangle QgsMapRenderer::layerToMapCoordinates( QgsMapLayer* theLayer, QgsRe
   {
     try
     {
-      rect = tr( theLayer )->transform( rect, QgsCoordinateTransform::ForwardTransform );
+      const QgsCoordinateTransform *transform = transformation( theLayer );
+      if ( transform )
+      {
+        rect = transform->transform( rect, QgsCoordinateTransform::ForwardTransform );
+      }
     }
     catch ( QgsCsException &cse )
     {
@@ -916,7 +948,9 @@ QgsPoint QgsMapRenderer::mapToLayerCoordinates( QgsMapLayer* theLayer, QgsPoint 
   {
     try
     {
-      point = tr( theLayer )->transform( point, QgsCoordinateTransform::ReverseTransform );
+      const QgsCoordinateTransform *transform = transformation( theLayer );
+      if ( transform )
+        point = transform->transform( point, QgsCoordinateTransform::ReverseTransform );
     }
     catch ( QgsCsException &cse )
     {
@@ -936,7 +970,9 @@ QgsRectangle QgsMapRenderer::mapToLayerCoordinates( QgsMapLayer* theLayer, QgsRe
   {
     try
     {
-      rect = tr( theLayer )->transform( rect, QgsCoordinateTransform::ReverseTransform );
+      const QgsCoordinateTransform *transform = transformation( theLayer );
+      if ( transform )
+        rect = transform->transform( rect, QgsCoordinateTransform::ReverseTransform );
     }
     catch ( QgsCsException &cse )
     {
@@ -972,6 +1008,12 @@ void QgsMapRenderer::updateFullExtent()
       QgsDebugMsg( "Updating extent using " + lyr->name() );
       QgsDebugMsg( "Input extent: " + lyr->extent().toString() );
 
+      if ( lyr->extent().isEmpty() )
+      {
+        ++it;
+        continue;
+      }
+
       // Layer extents are stored in the coordinate system (CS) of the
       // layer. The extent must be projected to the canvas CS
       QgsRectangle extent = layerExtentToOutputExtent( lyr, lyr->extent() );
@@ -980,7 +1022,7 @@ void QgsMapRenderer::updateFullExtent()
       mFullExtent.unionRect( extent );
 
     }
-    it++;
+    ++it;
   }
 
   if ( mFullExtent.width() == 0.0 || mFullExtent.height() == 0.0 )
@@ -1028,42 +1070,6 @@ QStringList& QgsMapRenderer::layerSet()
   return mLayerSet;
 }
 
-QgsOverlayObjectPositionManager* QgsMapRenderer::overlayManagerFromSettings()
-{
-  QSettings settings;
-  QString overlayAlgorithmQString = settings.value( "qgis/overlayPlacementAlgorithm", "Central point" ).toString();
-
-  QgsOverlayObjectPositionManager* result = 0;
-
-  if ( overlayAlgorithmQString != "Central point" )
-  {
-    QgsPALObjectPositionManager* palManager = new QgsPALObjectPositionManager();
-    if ( overlayAlgorithmQString == "Chain" )
-    {
-      palManager->setPlacementAlgorithm( "Chain" );
-    }
-    else if ( overlayAlgorithmQString == "Popmusic tabu chain" )
-    {
-      palManager->setPlacementAlgorithm( "Popmusic tabu chain" );
-    }
-    else if ( overlayAlgorithmQString == "Popmusic tabu" )
-    {
-      palManager->setPlacementAlgorithm( "Popmusic tabu" );
-    }
-    else if ( overlayAlgorithmQString == "Popmusic chain" )
-    {
-      palManager->setPlacementAlgorithm( "Popmusic chain" );
-    }
-    result = palManager;
-  }
-  else
-  {
-    result = new QgsCentralPointPositionManager();
-  }
-
-  return result;
-}
-
 bool QgsMapRenderer::readXML( QDomNode & theNode )
 {
   QDomNode myNode = theNode.namedItem( "units" );
@@ -1078,6 +1084,10 @@ bool QgsMapRenderer::readXML( QDomNode & theNode )
   else if ( "feet" == element.text() )
   {
     units = QGis::Feet;
+  }
+  else if ( "nautical miles" == element.text() )
+  {
+    units = QGis::NauticalMiles;
   }
   else if ( "degrees" == element.text() )
   {
@@ -1099,11 +1109,36 @@ bool QgsMapRenderer::readXML( QDomNode & theNode )
   element = projNode.toElement();
   setProjectionsEnabled( element.text().toInt() );
 
+  //load coordinate transform into
+  mLayerCoordinateTransformInfo.clear();
+  QDomElement layerCoordTransformInfoElem = theNode.firstChildElement( "layer_coordinate_transform_info" );
+  if ( !layerCoordTransformInfoElem.isNull() )
+  {
+    QDomNodeList layerCoordinateTransformList = layerCoordTransformInfoElem.elementsByTagName( "layer_coordinate_transform" );
+    QDomElement layerCoordTransformElem;
+    for ( int i = 0; i < layerCoordinateTransformList.size(); ++i )
+    {
+      layerCoordTransformElem = layerCoordinateTransformList.at( i ).toElement();
+      QString layerId = layerCoordTransformElem.attribute( "layerid" );
+      if ( layerId.isEmpty() )
+      {
+        continue;
+      }
+
+      QgsLayerCoordinateTransform lct;
+      lct.srcAuthId = layerCoordTransformElem.attribute( "srcAuthId" );
+      lct.destAuthId = layerCoordTransformElem.attribute( "destAuthId" );
+      lct.srcDatumTransform = layerCoordTransformElem.attribute( "srcDatumTransform", "-1" ).toInt();
+      lct.destDatumTransform = layerCoordTransformElem.attribute( "destDatumTransform", "-1" ).toInt();
+      mLayerCoordinateTransformInfo.insert( layerId, lct );
+    }
+  }
+
   // set destination CRS
   QgsCoordinateReferenceSystem srs;
   QDomNode srsNode = theNode.namedItem( "destinationsrs" );
   srs.readXML( srsNode );
-  setDestinationCrs( srs );
+  setDestinationCrs( srs, false );
 
   // set extent
   QgsRectangle aoi;
@@ -1131,6 +1166,7 @@ bool QgsMapRenderer::readXML( QDomNode & theNode )
   aoi.setYMaximum( ymax );
 
   setExtent( aoi );
+
   return true;
 }
 
@@ -1150,6 +1186,9 @@ bool QgsMapRenderer::writeXML( QDomNode & theNode, QDomDocument & theDoc )
       break;
     case QGis::Feet:
       unitsString = "feet";
+      break;
+    case QGis::NauticalMiles:
+      unitsString = "nautical miles";
       break;
     case QGis::Degrees:
       unitsString = "degrees";
@@ -1173,10 +1212,10 @@ bool QgsMapRenderer::writeXML( QDomNode & theNode, QDomDocument & theDoc )
   QDomElement yMax = theDoc.createElement( "ymax" );
 
   QgsRectangle r = extent();
-  QDomText xMinText = theDoc.createTextNode( QString::number( r.xMinimum(), 'f' ) );
-  QDomText yMinText = theDoc.createTextNode( QString::number( r.yMinimum(), 'f' ) );
-  QDomText xMaxText = theDoc.createTextNode( QString::number( r.xMaximum(), 'f' ) );
-  QDomText yMaxText = theDoc.createTextNode( QString::number( r.yMaximum(), 'f' ) );
+  QDomText xMinText = theDoc.createTextNode( qgsDoubleToString( r.xMinimum() ) );
+  QDomText yMinText = theDoc.createTextNode( qgsDoubleToString( r.yMinimum() ) );
+  QDomText xMaxText = theDoc.createTextNode( qgsDoubleToString( r.xMaximum() ) );
+  QDomText yMaxText = theDoc.createTextNode( qgsDoubleToString( r.yMaximum() ) );
 
   xMin.appendChild( xMinText );
   yMin.appendChild( yMinText );
@@ -1200,6 +1239,20 @@ bool QgsMapRenderer::writeXML( QDomNode & theNode, QDomDocument & theDoc )
   theNode.appendChild( srsNode );
   destinationCrs().writeXML( srsNode, theDoc );
 
+  // layer coordinate transform infos
+  QDomElement layerCoordTransformInfo = theDoc.createElement( "layer_coordinate_transform_info" );
+  QHash< QString, QgsLayerCoordinateTransform >::const_iterator coordIt = mLayerCoordinateTransformInfo.constBegin();
+  for ( ; coordIt != mLayerCoordinateTransformInfo.constEnd(); ++coordIt )
+  {
+    QDomElement layerCoordTransformElem = theDoc.createElement( "layer_coordinate_transform" );
+    layerCoordTransformElem.setAttribute( "layerid", coordIt.key() );
+    layerCoordTransformElem.setAttribute( "srcAuthId", coordIt->srcAuthId );
+    layerCoordTransformElem.setAttribute( "destAuthId", coordIt->destAuthId );
+    layerCoordTransformElem.setAttribute( "srcDatumTransform", QString::number( coordIt->srcDatumTransform ) );
+    layerCoordTransformElem.setAttribute( "destDatumTransform", QString::number( coordIt->destDatumTransform ) );
+    layerCoordTransformInfo.appendChild( layerCoordTransformElem );
+  }
+  theNode.appendChild( layerCoordTransformInfo );
   return true;
 }
 
@@ -1211,18 +1264,45 @@ void QgsMapRenderer::setLabelingEngine( QgsLabelingEngineInterface* iface )
   mLabelingEngine = iface;
 }
 
-const QgsCoordinateTransform* QgsMapRenderer::tr( QgsMapLayer *layer )
+const QgsCoordinateTransform *QgsMapRenderer::transformation( const QgsMapLayer *layer ) const
 {
   if ( !layer || !mDestCRS )
   {
     return 0;
   }
-  return QgsCoordinateTransformCache::instance()->transform( layer->crs().authid(), mDestCRS->authid() );
+
+  if ( layer->crs().authid() == mDestCRS->authid() )
+  {
+    return 0;
+  }
+
+  QHash< QString, QgsLayerCoordinateTransform >::const_iterator ctIt = mLayerCoordinateTransformInfo.find( layer->id() );
+  if ( ctIt != mLayerCoordinateTransformInfo.constEnd()
+       && ctIt->srcAuthId == layer->crs().authid()
+       && ctIt->destAuthId == mDestCRS->authid() )
+  {
+    return QgsCoordinateTransformCache::instance()->transform( ctIt->srcAuthId, ctIt->destAuthId, ctIt->srcDatumTransform, ctIt->destDatumTransform );
+  }
+  else
+  {
+    emit datumTransformInfoRequested( layer, layer->crs().authid(), mDestCRS->authid() );
+  }
+
+  //still not present? get coordinate transformation with -1/-1 datum transform as default
+  ctIt = mLayerCoordinateTransformInfo.find( layer->id() );
+  if ( ctIt == mLayerCoordinateTransformInfo.constEnd()
+       || ctIt->srcAuthId == layer->crs().authid()
+       || ctIt->destAuthId == mDestCRS->authid()
+     )
+  {
+    return QgsCoordinateTransformCache::instance()->transform( layer->crs().authid(), mDestCRS->authid(), -1, -1 );
+  }
+  return QgsCoordinateTransformCache::instance()->transform( ctIt->srcAuthId, ctIt->destAuthId, ctIt->srcDatumTransform, ctIt->destDatumTransform );
 }
 
 /** Returns a QPainter::CompositionMode corresponding to a QgsMapRenderer::BlendMode
  */
-QPainter::CompositionMode QgsMapRenderer::getCompositionMode( const QgsMapRenderer::BlendMode blendMode )
+QPainter::CompositionMode QgsMapRenderer::getCompositionMode( const QgsMapRenderer::BlendMode &blendMode )
 {
   // Map QgsMapRenderer::BlendNormal to QPainter::CompositionMode
   switch ( blendMode )
@@ -1258,7 +1338,7 @@ QPainter::CompositionMode QgsMapRenderer::getCompositionMode( const QgsMapRender
   }
 }
 
-QgsMapRenderer::BlendMode QgsMapRenderer::getBlendModeEnum( const QPainter::CompositionMode blendMode )
+QgsMapRenderer::BlendMode QgsMapRenderer::getBlendModeEnum( const QPainter::CompositionMode &blendMode )
 {
   // Map QPainter::CompositionMode to QgsMapRenderer::BlendNormal
   switch ( blendMode )
@@ -1292,6 +1372,21 @@ QgsMapRenderer::BlendMode QgsMapRenderer::getBlendModeEnum( const QPainter::Comp
     default:
       return QgsMapRenderer::BlendNormal;
   }
+}
+
+void QgsMapRenderer::addLayerCoordinateTransform( const QString& layerId, const QString& srcAuthId, const QString& destAuthId, int srcDatumTransform, int destDatumTransform )
+{
+  QgsLayerCoordinateTransform lt;
+  lt.srcAuthId = srcAuthId;
+  lt.destAuthId = destAuthId;
+  lt.srcDatumTransform = srcDatumTransform;
+  lt.destDatumTransform = destDatumTransform;
+  mLayerCoordinateTransformInfo.insert( layerId, lt );
+}
+
+void QgsMapRenderer::clearLayerCoordinateTransforms()
+{
+  mLayerCoordinateTransformInfo.clear();
 }
 
 bool QgsMapRenderer::mDrawing = false;

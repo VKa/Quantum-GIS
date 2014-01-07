@@ -24,6 +24,7 @@
 
 #include <QMessageBox>
 #include <QProgressDialog>
+#include <climits>
 
 QGISEXTERN bool deleteLayer( const QString& uri, QString& errCause );
 
@@ -122,8 +123,8 @@ void QgsPGConnectionItem::setLayerType( QgsPostgresLayerProperty layerProperties
   for ( int i = 0; i < layerProperties.size(); i++ )
   {
     QgsPostgresLayerProperty layerProperty = layerProperties.at( i );
-
-    if ( layerProperty.types[0] == QGis::WKBUnknown && !layerProperty.geometryColName.isEmpty() )
+    if ( layerProperty.types[0] == QGis::WKBUnknown ||
+         ( !layerProperty.geometryColName.isEmpty() && layerProperty.srids[0] == INT_MIN ) )
       continue;
 
     if ( !schemaItem )
@@ -374,7 +375,7 @@ void QgsPGSchemaItem::addLayer( QgsPostgresLayerProperty layerProperty )
       tip = tr( "as geometryless table" );
   }
 
-  QgsPGLayerItem *layerItem = new QgsPGLayerItem( this, layerProperty.tableName, mPath + "/" + layerProperty.tableName, layerType, layerProperty );
+  QgsPGLayerItem *layerItem = new QgsPGLayerItem( this, layerProperty.defaultName(), mPath + "/" + layerProperty.tableName, layerType, layerProperty );
   layerItem->setToolTip( tip );
   addChild( layerItem );
 }
@@ -383,7 +384,7 @@ void QgsPGSchemaItem::addLayer( QgsPostgresLayerProperty layerProperty )
 QgsPGRootItem::QgsPGRootItem( QgsDataItem* parent, QString name, QString path )
     : QgsDataCollectionItem( parent, name, path )
 {
-  mIcon = QgsApplication::getThemeIcon( "mIconPostgis.png" );
+  mIcon = QgsApplication::getThemeIcon( "mIconPostgis.svg" );
   populate();
 }
 

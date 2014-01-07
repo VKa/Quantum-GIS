@@ -54,9 +54,9 @@
       <property name="geometry">
        <rect>
         <x>0</x>
-        <y>0</y>
-        <width>369</width>
-        <height>1088</height>
+        <y>-309</y>
+        <width>373</width>
+        <height>1387</height>
        </rect>
       </property>
       <layout class="QVBoxLayout" name="mainLayout">
@@ -193,9 +193,6 @@
             <property name="headerHidden">
              <bool>false</bool>
             </property>
-            <attribute name="headerVisible">
-             <bool>true</bool>
-            </attribute>
             <attribute name="headerVisible">
              <bool>true</bool>
             </attribute>
@@ -541,6 +538,73 @@
         </widget>
        </item>
        <item>
+        <widget class="QgsCollapsibleGroupBoxBasic" name="mSymbolsColGroupBox_2">
+         <property name="title">
+          <string>WMS LegendGraphic</string>
+         </property>
+         <property name="syncGroup" stdset="0">
+          <string notr="true">composeritem</string>
+         </property>
+         <property name="collapsed" stdset="0">
+          <bool>true</bool>
+         </property>
+         <layout class="QFormLayout" name="formLayout_5">
+          <property name="fieldGrowthPolicy">
+           <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
+          </property>
+          <property name="labelAlignment">
+           <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+          </property>
+          <item row="0" column="0">
+           <widget class="QLabel" name="label_13">
+            <property name="text">
+             <string>Legend width</string>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QDoubleSpinBox" name="mWmsLegendWidthSpinBox">
+            <property name="prefix">
+             <string/>
+            </property>
+            <property name="suffix">
+             <string> mm</string>
+            </property>
+            <property name="maximum">
+             <double>9999.000000000000000</double>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="label_14">
+            <property name="text">
+             <string>Legend height</string>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QDoubleSpinBox" name="mWmsLegendHeightSpinBox">
+            <property name="prefix">
+             <string/>
+            </property>
+            <property name="suffix">
+             <string> mm</string>
+            </property>
+            <property name="maximum">
+             <double>9999.000000000000000</double>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
         <widget class="QgsCollapsibleGroupBoxBasic" name="mSpacingColGroupBox">
          <property name="title">
           <string>Spacing</string>
@@ -558,7 +622,7 @@
           <property name="labelAlignment">
            <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
           </property>
-          <item row="0" column="0">
+          <item row="1" column="0">
            <widget class="QLabel" name="label_5">
             <property name="toolTip">
              <string>Space above text using group style.</string>
@@ -571,7 +635,7 @@
             </property>
            </widget>
           </item>
-          <item row="0" column="1">
+          <item row="1" column="1">
            <widget class="QDoubleSpinBox" name="mGroupSpaceSpinBox">
             <property name="prefix">
              <string/>
@@ -581,7 +645,7 @@
             </property>
            </widget>
           </item>
-          <item row="1" column="0">
+          <item row="2" column="0">
            <widget class="QLabel" name="label_6">
             <property name="toolTip">
              <string>Space above text using subgroup style.</string>
@@ -594,7 +658,7 @@
             </property>
            </widget>
           </item>
-          <item row="1" column="1">
+          <item row="2" column="1">
            <widget class="QDoubleSpinBox" name="mLayerSpaceSpinBox">
             <property name="prefix">
              <string/>
@@ -604,7 +668,7 @@
             </property>
            </widget>
           </item>
-          <item row="2" column="0">
+          <item row="3" column="0">
            <widget class="QLabel" name="label_7">
             <property name="toolTip">
              <string>Space above symbol and symbol label.</string>
@@ -617,7 +681,7 @@
             </property>
            </widget>
           </item>
-          <item row="2" column="1">
+          <item row="3" column="1">
            <widget class="QDoubleSpinBox" name="mSymbolSpaceSpinBox">
             <property name="prefix">
              <string/>
@@ -627,7 +691,7 @@
             </property>
            </widget>
           </item>
-          <item row="3" column="0">
+          <item row="4" column="0">
            <widget class="QLabel" name="label_8">
             <property name="toolTip">
              <string>Space between symbol icon and symbol label (symbol label left margin).</string>
@@ -640,7 +704,7 @@
             </property>
            </widget>
           </item>
-          <item row="3" column="1">
+          <item row="4" column="1">
            <widget class="QDoubleSpinBox" name="mIconLabelSpaceSpinBox">
             <property name="prefix">
              <string/>
@@ -650,7 +714,7 @@
             </property>
            </widget>
           </item>
-          <item row="4" column="0">
+          <item row="5" column="0">
            <widget class="QLabel" name="label_9">
             <property name="text">
              <string>Box space</string>
@@ -660,7 +724,7 @@
             </property>
            </widget>
           </item>
-          <item row="4" column="1">
+          <item row="5" column="1">
            <widget class="QDoubleSpinBox" name="mBoxSpaceSpinBox">
             <property name="prefix">
              <string/>
@@ -670,20 +734,40 @@
             </property>
            </widget>
           </item>
-          <item row="5" column="0">
+          <item row="6" column="0">
            <widget class="QLabel" name="label_12">
             <property name="text">
              <string>Column space</string>
             </property>
            </widget>
           </item>
-          <item row="5" column="1">
+          <item row="6" column="1">
            <widget class="QDoubleSpinBox" name="mColumnSpaceSpinBox">
             <property name="prefix">
              <string/>
             </property>
             <property name="suffix">
              <string> mm</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="0">
+           <widget class="QLabel" name="label_10">
+            <property name="toolTip">
+             <string>Space below title.</string>
+            </property>
+            <property name="text">
+             <string>Title space</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QDoubleSpinBox" name="mTitleSpaceBottomSpinBox">
+            <property name="toolTip">
+             <string>Space below title.</string>
+            </property>
+            <property name="suffix">
+             <string>mm</string>
             </property>
            </widget>
           </item>

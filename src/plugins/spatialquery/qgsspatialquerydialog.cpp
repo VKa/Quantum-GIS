@@ -408,15 +408,15 @@ QIcon QgsSpatialQueryDialog::getIconTypeGeometry( QGis::GeometryType geomType )
   QString theName;
   if ( geomType == QGis::Point )
   {
-    theName = "/mIconPointLayer.png";
+    theName = "/mIconPointLayer.svg";
   }
   else if ( geomType == QGis::Line )
   {
-    theName = "/mIconLineLayer.png";
+    theName = "/mIconLineLayer.svg";
   }
   else // Polygon
   {
-    theName = "/mIconPolygonLayer.png";
+    theName = "/mIconPolygonLayer.svg";
   }
   // Copy from qgisapp.cpp
   QString myPreferredPath = QgsApplication::activeThemePath() + QDir::separator() + theName;
@@ -1077,8 +1077,3 @@ void QgsSpatialQueryDialog::signal_layerReference_selectionFeaturesChanged()
 {
   evaluateCheckBoxLayer( false );
 } // void QgsSpatialQueryDialog::signal_layerReference_selectionFeaturesChanged()
-
-void QgsSpatialQueryDialog::MsgDEBUG( QString sMSg )
-{
-  QMessageBox::warning( 0, tr( "DEBUG" ), sMSg, QMessageBox::Ok );
-}

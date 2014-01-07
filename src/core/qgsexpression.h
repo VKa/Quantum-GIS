@@ -29,6 +29,7 @@ class QgsFeature;
 class QgsGeometry;
 class QgsOgcUtils;
 class QgsVectorLayer;
+class QgsVectorDataProvider;
 
 class QDomElement;
 
@@ -113,11 +114,19 @@ class CORE_EXPORT QgsExpression
 
     //! Evaluate the feature and return the result
     //! @note prepare() should be called before calling this method
-    QVariant evaluate( QgsFeature* f = NULL );
+    QVariant evaluate( const QgsFeature* f = NULL );
+
+    //! Evaluate the feature and return the result
+    //! @note prepare() should be called before calling this method
+    inline QVariant evaluate( const QgsFeature& f ) { return evaluate( &f ); }
 
     //! Evaluate the feature and return the result
     //! @note this method does not expect that prepare() has been called on this instance
-    QVariant evaluate( QgsFeature* f, const QgsFields& fields );
+    QVariant evaluate( const QgsFeature* f, const QgsFields& fields );
+
+    //! Evaluate the feature and return the result
+    //! @note this method does not expect that prepare() has been called on this instance
+    inline QVariant evaluate( const QgsFeature& f, const QgsFields& fields ) { return evaluate( &f, fields ); }
 
     //! Returns true if an error occurred when evaluating last input
     bool hasEvalError() const { return !mEvalErrorString.isNull(); }
@@ -142,18 +151,21 @@ class CORE_EXPORT QgsExpression
 
     int scale() {return mScale; }
 
-    const QString& expression() const { return mExpression; }
+    //! Return the expression string that was given when created.
+    const QString expression() const { return mExp; }
 
-    //! Return the parsed expression as a string - useful for debugging
+    //! Return the a debugging string of the expression.
+    //! This can be used for debugging. Use {@link expression()}
+    //! if you need the full expression string.
     QString dump() const;
 
     //! Return calculator used for distance and area calculations
     //! (used by internal functions)
-    QgsDistanceArea* geomCalculator() { return & mCalc; }
+    QgsDistanceArea *geomCalculator() { initGeomCalculator(); return mCalc; }
 
     //! Sets the geometry calculator used in evaluation of expressions,
     // instead of the default.
-    void setGeomCalculator( QgsDistanceArea& calc );
+    void setGeomCalculator( const QgsDistanceArea &calc );
 
     /** This function currently replaces each expression between [% and %]
        in the string with the result of its evaluation on the feature
@@ -162,13 +174,8 @@ class CORE_EXPORT QgsExpression
        Additional substitutions can be passed through the substitutionMap
        parameter
     */
-    static QString replaceExpressionText( QString action, QgsFeature* feat,
-                                          QgsVectorLayer* layer,
-                                          const QMap<QString, QVariant> *substitutionMap = 0 );
-
-
-    static QString replaceExpressionText( QString action, QgsFeature& feat,
-                                          QgsVectorLayer* layer,
+    static QString replaceExpressionText( const QString &action, const QgsFeature *feat,
+                                          QgsVectorLayer *layer,
                                           const QMap<QString, QVariant> *substitutionMap = 0 );
     enum UnaryOperator
     {
@@ -223,7 +230,7 @@ class CORE_EXPORT QgsExpression
     static const char* BinaryOperatorText[];
     static const char* UnaryOperatorText[];
 
-    typedef QVariant( *FcnEval )( const QVariantList& values, QgsFeature* f, QgsExpression* parent );
+    typedef QVariant( *FcnEval )( const QVariantList& values, const QgsFeature* f, QgsExpression* parent );
 
 
     /**
@@ -243,9 +250,9 @@ class CORE_EXPORT QgsExpression
         /** The group the function belongs to. */
         QString group() { return mGroup; }
         /** The help text for the function. */
-        QString helptext() { return mHelpText; }
+        QString helptext() { return mHelpText.isEmpty() ? QgsExpression::helptext( mName ) : mHelpText; }
 
-        virtual QVariant func( const QVariantList& values, QgsFeature* f, QgsExpression* parent ) = 0;
+        virtual QVariant func( const QVariantList& values, const QgsFeature* f, QgsExpression* parent ) = 0;
 
         bool operator==( const Function& other ) const
         {
@@ -269,7 +276,7 @@ class CORE_EXPORT QgsExpression
         StaticFunction( QString fnname, int params, FcnEval fcn, QString group, QString helpText = QString(), bool usesGeometry = false )
             : Function( fnname, params, group, helpText, usesGeometry ), mFnc( fcn ) {}
 
-        virtual QVariant func( const QVariantList& values, QgsFeature* f, QgsExpression* parent )
+        virtual QVariant func( const QVariantList& values, const QgsFeature* f, QgsExpression* parent )
         {
           return mFnc( values, f, parent );
         }
@@ -330,7 +337,7 @@ class CORE_EXPORT QgsExpression
         virtual NodeType nodeType() const = 0;
         // abstract virtual eval function
         // errors are reported to the parent
-        virtual QVariant eval( QgsExpression* parent, QgsFeature* f ) = 0;
+        virtual QVariant eval( QgsExpression* parent, const QgsFeature* f ) = 0;
 
         // abstract virtual preparation function
         // errors are reported to the parent
@@ -401,7 +408,7 @@ class CORE_EXPORT QgsExpression
 
         virtual NodeType nodeType() const { return ntUnaryOperator; }
         virtual bool prepare( QgsExpression* parent, const QgsFields& fields );
-        virtual QVariant eval( QgsExpression* parent, QgsFeature* f );
+        virtual QVariant eval( QgsExpression* parent, const QgsFeature* f );
         virtual QString dump() const;
 
         virtual QStringList referencedColumns() const { return mOperand->referencedColumns(); }
@@ -425,7 +432,7 @@ class CORE_EXPORT QgsExpression
 
         virtual NodeType nodeType() const { return ntBinaryOperator; }
         virtual bool prepare( QgsExpression* parent, const QgsFields& fields );
-        virtual QVariant eval( QgsExpression* parent, QgsFeature* f );
+        virtual QVariant eval( QgsExpression* parent, const QgsFeature* f );
         virtual QString dump() const;
 
         virtual QStringList referencedColumns() const { return mOpLeft->referencedColumns() + mOpRight->referencedColumns(); }
@@ -455,7 +462,7 @@ class CORE_EXPORT QgsExpression
 
         virtual NodeType nodeType() const { return ntInOperator; }
         virtual bool prepare( QgsExpression* parent, const QgsFields& fields );
-        virtual QVariant eval( QgsExpression* parent, QgsFeature* f );
+        virtual QVariant eval( QgsExpression* parent, const QgsFeature* f );
         virtual QString dump() const;
 
         virtual QStringList referencedColumns() const { QStringList lst( mNode->referencedColumns() ); foreach ( Node* n, mList->list() ) lst.append( n->referencedColumns() ); return lst; }
@@ -480,7 +487,7 @@ class CORE_EXPORT QgsExpression
 
         virtual NodeType nodeType() const { return ntFunction; }
         virtual bool prepare( QgsExpression* parent, const QgsFields& fields );
-        virtual QVariant eval( QgsExpression* parent, QgsFeature* f );
+        virtual QVariant eval( QgsExpression* parent, const QgsFeature* f );
         virtual QString dump() const;
 
         virtual QStringList referencedColumns() const { QStringList lst; if ( !mArgs ) return lst; foreach ( Node* n, mArgs->list() ) lst.append( n->referencedColumns() ); return lst; }
@@ -502,7 +509,7 @@ class CORE_EXPORT QgsExpression
 
         virtual NodeType nodeType() const { return ntLiteral; }
         virtual bool prepare( QgsExpression* parent, const QgsFields& fields );
-        virtual QVariant eval( QgsExpression* parent, QgsFeature* f );
+        virtual QVariant eval( QgsExpression* parent, const QgsFeature* f );
         virtual QString dump() const;
 
         virtual QStringList referencedColumns() const { return QStringList(); }
@@ -522,11 +529,12 @@ class CORE_EXPORT QgsExpression
 
         virtual NodeType nodeType() const { return ntColumnRef; }
         virtual bool prepare( QgsExpression* parent, const QgsFields& fields );
-        virtual QVariant eval( QgsExpression* parent, QgsFeature* f );
+        virtual QVariant eval( QgsExpression* parent, const QgsFeature* f );
         virtual QString dump() const;
 
         virtual QStringList referencedColumns() const { return QStringList( mName ); }
         virtual bool needsGeometry() const { return false; }
+
         virtual void accept( Visitor& v ) const { v.visit( *this ); }
 
       protected:
@@ -553,7 +561,7 @@ class CORE_EXPORT QgsExpression
         ~NodeCondition() { delete mElseExp; foreach ( WhenThen* cond, mConditions ) delete cond; }
 
         virtual NodeType nodeType() const { return ntCondition; }
-        virtual QVariant eval( QgsExpression* parent, QgsFeature* f );
+        virtual QVariant eval( QgsExpression* parent, const QgsFeature* f );
         virtual bool prepare( QgsExpression* parent, const QgsFields& fields );
         virtual QString dump() const;
 
@@ -586,13 +594,15 @@ class CORE_EXPORT QgsExpression
     /** entry function for the visitor pattern */
     void acceptVisitor( Visitor& v ) const;
 
+    static QString helptext( QString name );
+    static QString group( QString group );
+
   protected:
     // internally used to create an empty expression
-    QgsExpression() : mRootNode( NULL ), mRowNumber( 0 ) {}
+    QgsExpression() : mRootNode( 0 ), mRowNumber( 0 ), mCalc( 0 ) {}
 
     void initGeomCalculator();
 
-    QString mExpression;
     Node* mRootNode;
 
     QString mParserErrorString;
@@ -600,11 +610,16 @@ class CORE_EXPORT QgsExpression
 
     int mRowNumber;
     double mScale;
+    QString mExp;
 
     static QMap<QString, QVariant> gmSpecialColumns;
-    QgsDistanceArea mCalc;
+    QgsDistanceArea *mCalc;
 
     friend class QgsOgcUtils;
+
+    static void initFunctionHelp();
+    static QHash<QString, QString> gFunctionHelpTexts;
+    static QHash<QString, QString> gGroups;
 };
 
 Q_DECLARE_METATYPE( QgsExpression::Interval );

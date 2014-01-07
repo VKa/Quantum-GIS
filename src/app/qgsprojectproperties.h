@@ -24,6 +24,7 @@
 #include "qgscontexthelp.h"
 
 class QgsMapCanvas;
+class QgsRelationManagerDialog;
 class QgsStyleV2;
 
 /*!  Dialog to set project level properties
@@ -31,7 +32,7 @@ class QgsStyleV2;
   @note actual state is stored in QgsProject singleton instance
 
  */
-class QgsProjectProperties : public QgsOptionsDialogBase, private Ui::QgsProjectPropertiesBase
+class APP_EXPORT QgsProjectProperties : public QgsOptionsDialogBase, private Ui::QgsProjectPropertiesBase
 {
     Q_OBJECT
 
@@ -115,6 +116,12 @@ class QgsProjectProperties : public QgsOptionsDialogBase, private Ui::QgsProject
     void on_pbnWFSLayersUnselectAll_clicked();
 
     /*!
+     * Slots to select/unselect all the WCS layers
+     */
+    void on_pbnWCSLayersSelectAll_clicked();
+    void on_pbnWCSLayersUnselectAll_clicked();
+
+    /*!
      * Slots for Styles
      */
     void on_pbtnStyleManager_clicked();
@@ -135,10 +142,15 @@ class QgsProjectProperties : public QgsOptionsDialogBase, private Ui::QgsProject
     /*!
      * Slot to link WFS checkboxes
      */
-    void on_cbxWFSPublied_stateChanged( int aIdx );
-    void on_cbxWFSUpdate_stateChanged( int aIdx );
-    void on_cbxWFSInsert_stateChanged( int aIdx );
-    void on_cbxWFSDelete_stateChanged( int aIdx );
+    void cbxWFSPubliedStateChanged( int aIdx );
+    void cbxWFSUpdateStateChanged( int aIdx );
+    void cbxWFSInsertStateChanged( int aIdx );
+    void cbxWFSDeleteStateChanged( int aIdx );
+
+    /*!
+     * Slot to link WCS checkboxes
+     */
+    void cbxWCSPubliedStateChanged( int aIdx );
 
     /*!
       * If user changes the CRS, set the corresponding map units
@@ -162,6 +174,7 @@ class QgsProjectProperties : public QgsOptionsDialogBase, private Ui::QgsProject
     void refresh();
 
   private:
+    QgsRelationManagerDialog *mRelationManagerDlg;
     QgsMapCanvas* mMapCanvas;
     QgsStyleV2* mStyle;
 

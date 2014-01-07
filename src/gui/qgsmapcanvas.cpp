@@ -30,6 +30,7 @@ email                : sherman at mrcc.com
 #include <QPaintEvent>
 #include <QPixmap>
 #include <QRect>
+#include <QSettings>
 #include <QTextStream>
 #include <QResizeEvent>
 #include <QString>
@@ -38,6 +39,8 @@ email                : sherman at mrcc.com
 
 #include "qgis.h"
 #include "qgsapplication.h"
+#include "qgscrscache.h"
+#include "qgsdatumtransformdialog.h"
 #include "qgslogger.h"
 #include "qgsmapcanvas.h"
 #include "qgsmapcanvasmap.h"
@@ -110,6 +113,8 @@ QgsMapCanvas::QgsMapCanvas( QWidget * parent, const char *name )
   setFocusPolicy( Qt::StrongFocus );
 
   mMapRenderer = new QgsMapRenderer;
+  connect( mMapRenderer, SIGNAL( datumTransformInfoRequested( const QgsMapLayer*, const QString&, const QString& ) ),
+           this, SLOT( getDatumTransformInfo( const QgsMapLayer*, const QString& , const QString& ) ) );
 
   // create map canvas item which will show the map
   mMap = new QgsMapCanvasMap( this );
@@ -129,6 +134,13 @@ QgsMapCanvas::QgsMapCanvas( QWidget * parent, const char *name )
   connect( QgsProject::instance(), SIGNAL( writeProject( QDomDocument & ) ),
            this, SLOT( writeProject( QDomDocument & ) ) );
   mMap->resize( size() );
+
+#ifdef Q_OS_WIN
+  // Enable touch event on Windows.
+  // Qt on Windows needs to be told it can take touch events or else it ignores them.
+  grabGesture( Qt::PinchGesture );
+  viewport()->setAttribute( Qt::WA_AcceptTouchEvents );
+#endif
 } // QgsMapCanvas ctor
 
 
@@ -150,7 +162,7 @@ QgsMapCanvas::~QgsMapCanvas()
   {
     QGraphicsItem* item = *it;
     delete item;
-    it++;
+    ++it;
   }
 
   mScene->deleteLater();  // crashes in python tests on windows
@@ -405,6 +417,9 @@ void QgsMapCanvas::refresh()
 
   mDrawing = true;
 
+  //update $map variable to canvas
+  QgsExpression::setSpecialColumn( "$map", tr( "canvas" ) );
+
   if ( mRenderFlag && !mFrozen )
   {
     clear();
@@ -488,18 +503,18 @@ void QgsMapCanvas::saveAsImage( QString theFileName, QPixmap * theQPixmap, QStri
   QString myHeader;
   // note: use 17 places of precision for all numbers output
   //Pixel XDim
-  myHeader += QString::number( mapUnitsPerPixel(), 'g', 17 ) + "\r\n";
+  myHeader += qgsDoubleToString( mapUnitsPerPixel() ) + "\r\n";
   //Rotation on y axis - hard coded
   myHeader += "0 \r\n";
   //Rotation on x axis - hard coded
   myHeader += "0 \r\n";
   //Pixel YDim - almost always negative - see
   //http://en.wikipedia.org/wiki/World_file#cite_note-2
-  myHeader += "-" + QString::number( mapUnitsPerPixel(), 'g', 17 ) + "\r\n";
+  myHeader += "-" + qgsDoubleToString( mapUnitsPerPixel() ) + "\r\n";
   //Origin X (center of top left cell)
-  myHeader += QString::number( myRect.xMinimum() + ( mapUnitsPerPixel() / 2 ), 'g', 17 ) + "\r\n";
+  myHeader += qgsDoubleToString( myRect.xMinimum() + ( mapUnitsPerPixel() / 2 ) ) + "\r\n";
   //Origin Y (center of top left cell)
-  myHeader += QString::number( myRect.yMaximum() - ( mapUnitsPerPixel() / 2 ), 'g', 17 ) + "\r\n";
+  myHeader += qgsDoubleToString( myRect.yMaximum() - ( mapUnitsPerPixel() / 2 ) ) + "\r\n";
   QFileInfo myInfo  = QFileInfo( theFileName );
   // allow dotted names
   QString myWorldFileName = myInfo.absolutePath() + "/" + myInfo.completeBaseName() + "." + theFormat + "w";
@@ -739,7 +754,7 @@ void QgsMapCanvas::zoomToSelected( QgsVectorLayer* layer )
     // zoom in
     QgsPoint c = rect.center();
     rect = extent();
-    rect.scale( 0.5, &c );
+    rect.scale( 1.0, &c );
   }
   //zoom to an area
   else
@@ -790,10 +805,11 @@ void QgsMapCanvas::keyPressEvent( QKeyEvent * e )
     e->ignore();
   }
 
-  emit keyPressed( e );
-
   if ( mCanvasProperties->mouseButtonDown || mCanvasProperties->panSelectorDown )
+  {
+    emit keyPressed( e );
     return;
+  }
 
   QPainter paint;
   QPen     pen( Qt::gray );
@@ -874,12 +890,14 @@ void QgsMapCanvas::keyPressEvent( QKeyEvent * e )
         {
           mMapTool->keyPressEvent( e );
         }
-        e->ignore();
+        else e->ignore();
 
         QgsDebugMsg( "Ignoring key: " + QString::number( e->key() ) );
-
     }
   }
+
+  emit keyPressed( e );
+
 } //keyPressEvent()
 
 void QgsMapCanvas::keyReleaseEvent( QKeyEvent * e )
@@ -909,8 +927,7 @@ void QgsMapCanvas::keyReleaseEvent( QKeyEvent * e )
       {
         mMapTool->keyReleaseEvent( e );
       }
-
-      e->ignore();
+      else e->ignore();
 
       QgsDebugMsg( "Ignoring key release: " + QString::number( e->key() ) );
   }
@@ -1077,7 +1094,7 @@ void QgsMapCanvas::updateCanvasItemPositions()
       item->updatePosition();
     }
 
-    it++;
+    ++it;
   }
 }
 
@@ -1471,7 +1488,7 @@ void QgsMapCanvas::moveCanvasContents( bool reset )
         canvasItem->setPanningOffset( pnt );
     }
 
-    it++;
+    ++it;
   }
 
   // show items
@@ -1534,6 +1551,63 @@ void QgsMapCanvas::writeProject( QDomDocument & doc )
   QDomElement mapcanvasNode = doc.createElement( "mapcanvas" );
   qgisNode.appendChild( mapcanvasNode );
   mMapRenderer->writeXML( mapcanvasNode, doc );
+}
+
+/**Ask user which datum transform to use*/
+void QgsMapCanvas::getDatumTransformInfo( const QgsMapLayer* ml, const QString& srcAuthId, const QString& destAuthId )
+{
+  if ( !ml )
+  {
+    return;
+  }
+
+  //check if default datum transformation available
+  QSettings s;
+  QString settingsString = "/Projections/" + srcAuthId + "//" + destAuthId;
+  QVariant defaultSrcTransform = s.value( settingsString + "_srcTransform" );
+  QVariant defaultDestTransform = s.value( settingsString + "_destTransform" );
+  if ( defaultSrcTransform.isValid() && defaultDestTransform.isValid() )
+  {
+    mMapRenderer->addLayerCoordinateTransform( ml->id(), srcAuthId, destAuthId, defaultSrcTransform.toInt(), defaultDestTransform.toInt() );
+    return;
+  }
+
+  const QgsCoordinateReferenceSystem& srcCRS = QgsCRSCache::instance()->crsByAuthId( srcAuthId );
+  const QgsCoordinateReferenceSystem& destCRS = QgsCRSCache::instance()->crsByAuthId( destAuthId );
+
+  //get list of datum transforms
+  QList< QList< int > > dt = QgsCoordinateTransform::datumTransformations( srcCRS, destCRS );
+  if ( dt.size() < 2 )
+  {
+    return;
+  }
+
+  //if several possibilities:  present dialog
+  QgsDatumTransformDialog d( ml->name(), dt );
+  if ( mMapRenderer && ( d.exec() == QDialog::Accepted ) )
+  {
+    int srcTransform = -1;
+    int destTransform = -1;
+    QList<int> t = d.selectedDatumTransform();
+    if ( t.size() > 0 )
+    {
+      srcTransform = t.at( 0 );
+    }
+    if ( t.size() > 1 )
+    {
+      destTransform = t.at( 1 );
+    }
+    mMapRenderer->addLayerCoordinateTransform( ml->id(), srcAuthId, destAuthId, srcTransform, destTransform );
+    if ( d.rememberSelection() )
+    {
+      s.setValue( settingsString + "_srcTransform", srcTransform );
+      s.setValue( settingsString + "_destTransform", destTransform );
+    }
+  }
+  else
+  {
+    mMapRenderer->addLayerCoordinateTransform( ml->id(), srcAuthId, destAuthId, -1, -1 );
+  }
 }
 
 void QgsMapCanvas::zoomByFactor( double scaleFactor )

@@ -142,6 +142,14 @@ void GRASS_LIB_EXPORT QgsGrass::init( void )
     // Use the applicationDirPath()/grass
     gisBase = shortPath( QCoreApplication::applicationDirPath() + "/grass" );
     QgsDebugMsg( QString( "GRASS gisBase = %1" ).arg( gisBase ) );
+#elif defined(Q_OS_MACX)
+    // check for bundled GRASS, fall back to configured path
+    gisBase = QCoreApplication::applicationDirPath().append( "/grass" ) ;
+    if ( !isValidGrassBaseDir( gisBase ) )
+    {
+      gisBase = GRASS_BASE;
+    }
+    QgsDebugMsg( QString( "GRASS gisBase = %1" ).arg( gisBase ) );
 #else
     // Use the location specified --with-grass during configure
     gisBase = GRASS_BASE;
@@ -869,6 +877,21 @@ QStringList GRASS_LIB_EXPORT QgsGrass::vectorLayers( QString gisdbase,
       list.append( l );
     }
   }
+
+  // add topology layers
+  if ( Vect_get_num_primitives( &map, GV_POINTS ) > 0 )
+  {
+    list.append( "topo_point" );
+  }
+  if ( Vect_get_num_primitives( &map, GV_LINES ) > 0 )
+  {
+    list.append( "topo_line" );
+  }
+  if ( Vect_get_num_nodes( &map ) > 0 )
+  {
+    list.append( "topo_node" );
+  }
+
   Vect_close( &map );
 
   return list;

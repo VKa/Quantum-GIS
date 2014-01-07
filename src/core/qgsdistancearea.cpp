@@ -98,6 +98,11 @@ void QgsDistanceArea::setSourceCrs( long srsid )
   mCoordTransform->setSourceCrs( srcCRS );
 }
 
+void QgsDistanceArea::setSourceCrs( const QgsCoordinateReferenceSystem& srcCRS )
+{
+  mCoordTransform->setSourceCrs( srcCRS );
+}
+
 void QgsDistanceArea::setSourceAuthId( QString authId )
 {
   QgsCoordinateReferenceSystem srcCRS;
@@ -257,11 +262,11 @@ double QgsDistanceArea::measure( QgsGeometry* geometry )
   if ( !geometry )
     return 0.0;
 
-  unsigned char* wkb = geometry->asWkb();
+  const unsigned char* wkb = geometry->asWkb();
   if ( !wkb )
     return 0.0;
 
-  unsigned char* ptr;
+  const unsigned char* ptr;
   unsigned int wkbType;
   double res, resTotal = 0;
   int count, i;
@@ -308,6 +313,11 @@ double QgsDistanceArea::measure( QgsGeometry* geometry )
       for ( i = 0; i < count; i++ )
       {
         ptr = measurePolygon( ptr, &res, 0, hasZptr );
+        if ( !ptr )
+        {
+          QgsDebugMsg( "measurePolygon returned 0" );
+          break;
+        }
         resTotal += res;
       }
       QgsDebugMsg( "returning " + QString::number( resTotal ) );
@@ -324,13 +334,13 @@ double QgsDistanceArea::measurePerimeter( QgsGeometry* geometry )
   if ( !geometry )
     return 0.0;
 
-  unsigned char* wkb = geometry->asWkb();
+  const unsigned char* wkb = geometry->asWkb();
   if ( !wkb )
     return 0.0;
 
-  unsigned char* ptr;
+  const unsigned char* ptr;
   unsigned int wkbType;
-  double res, resTotal = 0;
+  double res = 0.0, resTotal = 0.0;
   int count, i;
 
   memcpy( &wkbType, ( wkb + 1 ), sizeof( wkbType ) );
@@ -361,6 +371,11 @@ double QgsDistanceArea::measurePerimeter( QgsGeometry* geometry )
       for ( i = 0; i < count; i++ )
       {
         ptr = measurePolygon( ptr, 0, &res, hasZptr );
+        if ( !ptr )
+        {
+          QgsDebugMsg( "measurePolygon returned 0" );
+          break;
+        }
         resTotal += res;
       }
       QgsDebugMsg( "returning " + QString::number( resTotal ) );
@@ -373,9 +388,9 @@ double QgsDistanceArea::measurePerimeter( QgsGeometry* geometry )
 }
 
 
-unsigned char* QgsDistanceArea::measureLine( unsigned char* feature, double* area, bool hasZptr )
+const unsigned char* QgsDistanceArea::measureLine( const unsigned char* feature, double* area, bool hasZptr )
 {
-  unsigned char *ptr = feature + 5;
+  const unsigned char *ptr = feature + 5;
   unsigned int nPoints = *(( int* )ptr );
   ptr = feature + 9;
 
@@ -453,20 +468,20 @@ double QgsDistanceArea::measureLine( const QgsPoint& p1, const QgsPoint& p2 )
   {
     QgsPoint pp1 = p1, pp2 = p2;
 
-    QgsDebugMsg( QString( "Measuring from %1 to %2" ).arg( p1.toString( 4 ) ).arg( p2.toString( 4 ) ) );
+    QgsDebugMsgLevel( QString( "Measuring from %1 to %2" ).arg( p1.toString( 4 ) ).arg( p2.toString( 4 ) ), 3 );
     if ( mEllipsoidalMode && ( mEllipsoid != GEO_NONE ) )
     {
-      QgsDebugMsg( QString( "Ellipsoidal calculations is enabled, using ellipsoid %1" ).arg( mEllipsoid ) );
-      QgsDebugMsg( QString( "From proj4 : %1" ).arg( mCoordTransform->sourceCrs().toProj4() ) );
-      QgsDebugMsg( QString( "To   proj4 : %1" ).arg( mCoordTransform->destCRS().toProj4() ) );
+      QgsDebugMsgLevel( QString( "Ellipsoidal calculations is enabled, using ellipsoid %1" ).arg( mEllipsoid ), 4 );
+      QgsDebugMsgLevel( QString( "From proj4 : %1" ).arg( mCoordTransform->sourceCrs().toProj4() ), 4 );
+      QgsDebugMsgLevel( QString( "To   proj4 : %1" ).arg( mCoordTransform->destCRS().toProj4() ), 4 );
       pp1 = mCoordTransform->transform( p1 );
       pp2 = mCoordTransform->transform( p2 );
-      QgsDebugMsg( QString( "New points are %1 and %2, calculating..." ).arg( pp1.toString( 4 ) ).arg( pp2.toString( 4 ) ) );
+      QgsDebugMsgLevel( QString( "New points are %1 and %2, calculating..." ).arg( pp1.toString( 4 ) ).arg( pp2.toString( 4 ) ), 4 );
       result = computeDistanceBearing( pp1, pp2 );
     }
     else
     {
-      QgsDebugMsg( "Cartesian calculation on canvas coordinates" );
+      QgsDebugMsgLevel( "Cartesian calculation on canvas coordinates", 4 );
       result = sqrt(( p2.x() - p1.x() ) * ( p2.x() - p1.x() ) + ( p2.y() - p1.y() ) * ( p2.y() - p1.y() ) );
     }
   }
@@ -476,21 +491,30 @@ double QgsDistanceArea::measureLine( const QgsPoint& p1, const QgsPoint& p2 )
     QgsMessageLog::logMessage( QObject::tr( "Caught a coordinate system exception while trying to transform a point. Unable to calculate line length." ) );
     result = 0.0;
   }
-  QgsDebugMsg( QString( "The result was %1" ).arg( result ) );
+  QgsDebugMsgLevel( QString( "The result was %1" ).arg( result ), 3 );
   return result;
 }
 
 
-unsigned char* QgsDistanceArea::measurePolygon( unsigned char* feature, double* area, double* perimeter, bool hasZptr )
+const unsigned char* QgsDistanceArea::measurePolygon( const unsigned char* feature, double* area, double* perimeter, bool hasZptr )
 {
+  if ( !feature )
+  {
+    QgsDebugMsg( "no feature to measure" );
+    return 0;
+  }
+
   // get number of rings in the polygon
   unsigned int numRings = *(( int* )( feature + 1 + sizeof( int ) ) );
 
   if ( numRings == 0 )
+  {
+    QgsDebugMsg( "no rings to measure" );
     return 0;
+  }
 
   // Set pointer to the first ring
-  unsigned char* ptr = feature + 1 + 2 * sizeof( int );
+  const unsigned char* ptr = feature + 1 + 2 * sizeof( int );
 
   QList<QgsPoint> points;
   QgsPoint pnt;
@@ -571,7 +595,6 @@ unsigned char* QgsDistanceArea::measurePolygon( unsigned char* feature, double* 
 
 double QgsDistanceArea::measurePolygon( const QList<QgsPoint>& points )
 {
-
   try
   {
     if ( mEllipsoidalMode && ( mEllipsoid != GEO_NONE ) )
@@ -931,6 +954,16 @@ QString QgsDistanceArea::textUnit( double value, int decimals, QGis::UnitType u,
         }
       }
       break;
+    case QGis::NauticalMiles:
+      if ( isArea )
+      {
+        unitLabel = QObject::tr( " sq. NM" );
+      }
+      else
+      {
+        unitLabel = QObject::tr( " NM" );
+      }
+      break;
     case QGis::Degrees:
       if ( isArea )
       {
@@ -959,7 +992,7 @@ void QgsDistanceArea::convertMeasurement( double &measure, QGis::UnitType &measu
   // Helper for converting between meters and feet
   // The parameters measure and measureUnits are in/out
 
-  if (( measureUnits == QGis::Degrees || measureUnits == QGis::Feet ) &&
+  if (( measureUnits == QGis::Degrees || measureUnits == QGis::Feet || measureUnits == QGis::NauticalMiles ) &&
       mEllipsoid != GEO_NONE &&
       mEllipsoidalMode )
   {
@@ -990,5 +1023,51 @@ void QgsDistanceArea::convertMeasurement( double &measure, QGis::UnitType &measu
     }
     QgsDebugMsg( QString( "to %1 meters" ).arg( QString::number( measure ) ) );
     measureUnits = QGis::Meters;
+  }
+
+  if ( measureUnits == QGis::Meters && displayUnits == QGis::NauticalMiles )
+  {
+    QgsDebugMsg( QString( "Converting %1 meters" ).arg( QString::number( measure ) ) );
+    measure /= 1852.0;
+    if ( isArea )
+    {
+      measure /= 1852.0;
+    }
+    QgsDebugMsg( QString( "to %1 nautical miles" ).arg( QString::number( measure ) ) );
+    measureUnits = QGis::NauticalMiles;
+  }
+  if ( measureUnits == QGis::NauticalMiles && displayUnits == QGis::Meters )
+  {
+    QgsDebugMsg( QString( "Converting %1 nautical miles" ).arg( QString::number( measure ) ) );
+    measure *= 1852.0;
+    if ( isArea )
+    {
+      measure *= 1852.0;
+    }
+    QgsDebugMsg( QString( "to %1 meters" ).arg( QString::number( measure ) ) );
+    measureUnits = QGis::Meters;
+  }
+
+  if ( measureUnits == QGis::Feet && displayUnits == QGis::NauticalMiles )
+  {
+    QgsDebugMsg( QString( "Converting %1 meters" ).arg( QString::number( measure ) ) );
+    measure /= 6076.12;
+    if ( isArea )
+    {
+      measure /= 6076.12;
+    }
+    QgsDebugMsg( QString( "to %1 nautical miles" ).arg( QString::number( measure ) ) );
+    measureUnits = QGis::Feet;
+  }
+  if ( measureUnits == QGis::NauticalMiles && displayUnits == QGis::Feet )
+  {
+    QgsDebugMsg( QString( "Converting %1 nautical miles" ).arg( QString::number( measure ) ) );
+    measure *= 6076.12;
+    if ( isArea )
+    {
+      measure *= 6076.12;
+    }
+    QgsDebugMsg( QString( "to %1 meters" ).arg( QString::number( measure ) ) );
+    measureUnits = QGis::Feet;
   }
 }

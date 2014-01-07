@@ -35,6 +35,8 @@ QgsVectorGradientColorRampV2Dialog::QgsVectorGradientColorRampV2Dialog( QgsVecto
   setWindowModality( Qt::WindowModal );
 #endif
 
+  btnColor1->setColorDialogOptions( QColorDialog::ShowAlphaChannel );
+  btnColor2->setColorDialogOptions( QColorDialog::ShowAlphaChannel );
   connect( btnColor1, SIGNAL( colorChanged( const QColor& ) ), this, SLOT( setColor1( const QColor& ) ) );
   connect( btnColor2, SIGNAL( colorChanged( const QColor& ) ), this, SLOT( setColor2( const QColor& ) ) );
 
@@ -266,12 +268,13 @@ void QgsVectorGradientColorRampV2Dialog::stopDoubleClicked( QTreeWidgetItem* ite
       mCurrentItem = item;
       color = QgsColorDialog::getLiveColor(
                 item->data( 0, StopColorRole ).value<QColor>(),
-                this, SLOT( setItemStopColor( const QColor& ) ), this );
+                this, SLOT( setItemStopColor( const QColor& ) ),
+                this, tr( "Edit Stop Color" ), QColorDialog::ShowAlphaChannel );
       mCurrentItem = 0;
     }
     else
     {
-      color = QColorDialog::getColor( item->data( 0, StopColorRole ).value<QColor>(), this );
+      color = QColorDialog::getColor( item->data( 0, StopColorRole ).value<QColor>(), this, tr( "Edit Stop Color" ), QColorDialog::ShowAlphaChannel );
     }
     if ( !color.isValid() )
       return;
@@ -285,19 +288,9 @@ void QgsVectorGradientColorRampV2Dialog::stopDoubleClicked( QTreeWidgetItem* ite
     double key = item->data( 0, StopOffsetRole ).toDouble();
     // allow for floating-point values
     double val = key * 100;
-#if QT_VERSION >= 0x40500
     val = QInputDialog::getDouble( this, tr( "Offset of the stop" ),
                                    tr( "Please enter offset in percents (%) of the new stop" ),
                                    val, 0, 100, 2, &ok );
-#else
-    QString res = QInputDialog::getText( this, tr( "Offset of the stop" ),
-                                         tr( "Please enter offset in percents (%) of the new stop" ),
-                                         QLineEdit::Normal, QString::number( val ), &ok );
-    if ( ok )
-      val = res.toDouble( &ok );
-    if ( ok )
-      ok = val >= 0 && val <= 100;
-#endif
     if ( !ok )
       return;
 
@@ -318,7 +311,7 @@ void QgsVectorGradientColorRampV2Dialog::addStop()
 // but not needed at this time because of the other Qt bug
 // FIXME need to also check max QT_VERSION when Qt bug(s) fixed
 #ifndef Q_WS_MAC
-  QColor color = QColorDialog::getColor( QColor(), this );
+  QColor color = QColorDialog::getColor( QColor(), this, tr( "Add Color Stop" ), QColorDialog::ShowAlphaChannel );
 
   if ( !color.isValid() )
     return;
@@ -327,19 +320,9 @@ void QgsVectorGradientColorRampV2Dialog::addStop()
 
   bool ok;
   double val = 50.0;
-#if QT_VERSION >= 0x40500
   val = QInputDialog::getDouble( this, tr( "Offset of the stop" ),
                                  tr( "Please enter offset in percents (%) of the new stop" ),
                                  val, 0, 100, 2, &ok );
-#else
-  QString res = QInputDialog::getText( this, tr( "Offset of the stop" ),
-                                       tr( "Please enter offset in percents (%) of the new stop" ),
-                                       QLineEdit::Normal, QString::number( val ), &ok );
-  if ( ok )
-    val = res.toDouble( &ok );
-  if ( ok )
-    ok = val >= 0 && val <= 100;
-#endif
   if ( !ok )
     return;
   activateWindow();
@@ -349,7 +332,7 @@ void QgsVectorGradientColorRampV2Dialog::addStop()
   lst << "." << QString(( val < 10 ) ? '0' + QString::number( val ) : QString::number( val ) );
 
 #ifdef Q_WS_MAC
-  QColor color = QColorDialog::getColor( QColor(), this );
+  QColor color = QColorDialog::getColor( QColor(), this, tr( "Add Color Stop" ), QColorDialog::ShowAlphaChannel );
 
   if ( !color.isValid() )
     return;

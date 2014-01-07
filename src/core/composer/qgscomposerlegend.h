@@ -48,7 +48,6 @@ class CORE_EXPORT QgsComposerLegend : public QgsComposerItem
     /**Paints the legend and calculates its size. If painter is 0, only size is calculated*/
     QSizeF paintAndDetermineSize( QPainter* painter );
 
-
     /**Sets item box to the whole content*/
     void adjustBoxSize();
 
@@ -87,6 +86,12 @@ class CORE_EXPORT QgsComposerLegend : public QgsComposerItem
 
     double symbolHeight() const {return mSymbolHeight;}
     void setSymbolHeight( double h ) {mSymbolHeight = h;}
+
+    double wmsLegendWidth() const {return mWmsLegendWidth;}
+    void setWmsLegendWidth( double w ) {mWmsLegendWidth = w;}
+
+    double wmsLegendHeight() const {return mWmsLegendHeight;}
+    void setWmsLegendHeight( double h ) {mWmsLegendHeight = h;}
 
     void setWrapChar( const QString& t ) {mWrapChar = t;}
     QString wrapChar() const {return mWrapChar;}
@@ -139,6 +144,11 @@ class CORE_EXPORT QgsComposerLegend : public QgsComposerItem
     double mSymbolWidth;
     /**Height of symbol icon*/
     double mSymbolHeight;
+
+    /**Width of WMS legendGraphic pixmap*/
+    double mWmsLegendWidth;
+    /**Height of WMS legendGraphic pixmap*/
+    double mWmsLegendHeight;
 
     /** Spacing between lines when wrapped */
     double mlineSpacing;
@@ -219,7 +229,9 @@ class CORE_EXPORT QgsComposerLegend : public QgsComposerItem
      it is possible that it differs from mSymbolHeight*/
     void drawSymbolV2( QPainter* p, QgsSymbolV2* s, double currentYCoord, double& currentXPosition, double& symbolHeight ) const;
 
-    /** Draw atom and return its actual size */
+    /** Draw atom and return its actual size, the atom is drawn with the space above it
+     *  so that first atoms in column are all aligned to the same line regardles their
+     * style top space */
     QSizeF drawAtom( Atom atom, QPainter* painter = 0, QPointF point = QPointF() );
 
     double spaceAboveAtom( Atom atom );

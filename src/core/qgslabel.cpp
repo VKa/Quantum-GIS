@@ -65,12 +65,8 @@ QgsLabel::~QgsLabel()
 
 QString QgsLabel::fieldValue( int attr, QgsFeature &feature )
 {
-  if ( mLabelFieldIdx[attr] == -1 )
-  {
-    return QString();
-  }
-
-  return feature.attribute( attr ).toString();
+  int idx = mLabelFieldIdx[attr];
+  return idx < 0 ? QString() : feature.attribute( idx ).toString();
 }
 
 void QgsLabel::renderLabel( QgsRenderContext &renderContext,
@@ -519,7 +515,7 @@ QgsLabelAttributes *QgsLabel::labelAttributes( void )
 void QgsLabel::labelPoint( std::vector<labelpoint>& points, QgsFeature & feature )
 {
   QgsGeometry *geometry = feature.geometry();
-  unsigned char *geom = geometry->asWkb();
+  const unsigned char *geom = geometry->asWkb();
   size_t geomlen = geometry->wkbSize();
   QGis::WkbType wkbType = geometry->wkbType();
   labelpoint point;
@@ -551,7 +547,7 @@ void QgsLabel::labelPoint( std::vector<labelpoint>& points, QgsFeature & feature
       int nFeatures = *( unsigned int * )geom;
       geom += sizeof( int );
 
-      unsigned char *feature = geom;
+      const unsigned char *feature = geom;
       for ( int i = 0; i < nFeatures && feature; ++i )
       {
         feature = labelPoint( point, feature, geom + geomlen - feature );
@@ -564,7 +560,7 @@ void QgsLabel::labelPoint( std::vector<labelpoint>& points, QgsFeature & feature
   }
 }
 
-unsigned char* QgsLabel::labelPoint( labelpoint& point, unsigned char *geom, size_t geomlen )
+const unsigned char* QgsLabel::labelPoint( labelpoint& point, const unsigned char *geom, size_t geomlen )
 {
   // verify that local types match sizes as WKB spec
   Q_ASSERT( sizeof( int ) == 4 );
@@ -579,7 +575,7 @@ unsigned char* QgsLabel::labelPoint( labelpoint& point, unsigned char *geom, siz
 
   QGis::WkbType wkbType;
 #ifndef QT_NO_DEBUG
-  unsigned char *geomend = geom + geomlen;
+  const unsigned char *geomend = geom + geomlen;
 #else
   Q_UNUSED( geomlen );
 #endif

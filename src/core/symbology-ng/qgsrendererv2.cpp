@@ -34,7 +34,7 @@
 
 
 
-unsigned char* QgsFeatureRendererV2::_getPoint( QPointF& pt, QgsRenderContext& context, unsigned char* wkb )
+const unsigned char* QgsFeatureRendererV2::_getPoint( QPointF& pt, QgsRenderContext& context, const unsigned char* wkb )
 {
   wkb++; // jump over endian info
   unsigned int wkbType = *(( int* ) wkb );
@@ -58,7 +58,7 @@ unsigned char* QgsFeatureRendererV2::_getPoint( QPointF& pt, QgsRenderContext& c
   return wkb;
 }
 
-unsigned char* QgsFeatureRendererV2::_getLineString( QPolygonF& pts, QgsRenderContext& context, unsigned char* wkb )
+const unsigned char* QgsFeatureRendererV2::_getLineString( QPolygonF& pts, QgsRenderContext& context, const unsigned char* wkb )
 {
   wkb++; // jump over endian info
   unsigned int wkbType = *(( int* ) wkb );
@@ -67,6 +67,10 @@ unsigned char* QgsFeatureRendererV2::_getLineString( QPolygonF& pts, QgsRenderCo
   wkb += sizeof( unsigned int );
 
   bool hasZValue = ( wkbType == QGis::WKBLineString25D );
+
+  int sizeOfDoubleX = sizeof( double );
+  int sizeOfDoubleY = hasZValue ? 2 * sizeof( double ) : sizeof( double );
+
   double x, y;
   const QgsCoordinateTransform* ct = context.coordinateTransform();
   const QgsMapToPixel& mtp = context.mapToPixel();
@@ -86,13 +90,8 @@ unsigned char* QgsFeatureRendererV2::_getLineString( QPolygonF& pts, QgsRenderCo
     QPointF* ptr = pts.data();
     for ( unsigned int i = 0; i < nPoints; ++i, ++ptr )
     {
-      x = *(( double * ) wkb );
-      wkb += sizeof( double );
-      y = *(( double * ) wkb );
-      wkb += sizeof( double );
-
-      if ( hasZValue ) // ignore Z value
-        wkb += sizeof( double );
+      memcpy( &x, wkb, sizeof( double ) ); wkb += sizeOfDoubleX;
+      memcpy( &y, wkb, sizeof( double ) ); wkb += sizeOfDoubleY;
 
       *ptr = QPointF( x, y );
     }
@@ -114,7 +113,7 @@ unsigned char* QgsFeatureRendererV2::_getLineString( QPolygonF& pts, QgsRenderCo
   return wkb;
 }
 
-unsigned char* QgsFeatureRendererV2::_getPolygon( QPolygonF& pts, QList<QPolygonF>& holes, QgsRenderContext& context, unsigned char* wkb )
+const unsigned char* QgsFeatureRendererV2::_getPolygon( QPolygonF& pts, QList<QPolygonF>& holes, QgsRenderContext& context, const unsigned char* wkb )
 {
   wkb++; // jump over endian info
   unsigned int wkbType = *(( int* ) wkb );
@@ -126,6 +125,10 @@ unsigned char* QgsFeatureRendererV2::_getPolygon( QPolygonF& pts, QList<QPolygon
     return wkb;
 
   bool hasZValue = ( wkbType == QGis::WKBPolygon25D );
+
+  int sizeOfDoubleX = sizeof( double );
+  int sizeOfDoubleY = hasZValue ? 2 * sizeof( double ) : sizeof( double );
+
   double x, y;
   holes.clear();
 
@@ -146,20 +149,18 @@ unsigned char* QgsFeatureRendererV2::_getPolygon( QPolygonF& pts, QList<QPolygon
     QPointF* ptr = poly.data();
     for ( unsigned int jdx = 0; jdx < nPoints; ++jdx, ++ptr )
     {
-      x = *(( double * ) wkb ); wkb += sizeof( double );
-      y = *(( double * ) wkb ); wkb += sizeof( double );
+      memcpy( &x, wkb, sizeof( double ) ); wkb += sizeOfDoubleX;
+      memcpy( &y, wkb, sizeof( double ) ); wkb += sizeOfDoubleY;
 
       *ptr = QPointF( x, y );
-
-      if ( hasZValue )
-        wkb += sizeof( double );
     }
 
     if ( nPoints < 1 )
       continue;
 
-    //clip close to view extent
-    QgsClipper::trimPolygon( poly, clipRect );
+    //clip close to view extent, if needed
+    QRectF ptsRect = poly.boundingRect();
+    if ( !context.extent().contains( ptsRect ) ) QgsClipper::trimPolygon( poly, clipRect );
 
     //transform the QPolygonF to screen coordinates
     if ( ct )
@@ -290,9 +291,9 @@ void QgsFeatureRendererV2::renderFeatureWithSymbol( QgsFeature& feature, QgsSymb
         break;
       }
 
-      unsigned char* wkb = geom->asWkb();
+      const unsigned char* wkb = geom->asWkb();
       unsigned int num = *(( int* )( wkb + 5 ) );
-      unsigned char* ptr = wkb + 9;
+      const unsigned char* ptr = wkb + 9;
       QPointF pt;
 
       for ( unsigned int i = 0; i < num; ++i )
@@ -315,9 +316,9 @@ void QgsFeatureRendererV2::renderFeatureWithSymbol( QgsFeature& feature, QgsSymb
         break;
       }
 
-      unsigned char* wkb = geom->asWkb();
+      const unsigned char* wkb = geom->asWkb();
       unsigned int num = *(( int* )( wkb + 5 ) );
-      unsigned char* ptr = wkb + 9;
+      const unsigned char* ptr = wkb + 9;
       QPolygonF pts;
 
       for ( unsigned int i = 0; i < num; ++i )
@@ -340,9 +341,9 @@ void QgsFeatureRendererV2::renderFeatureWithSymbol( QgsFeature& feature, QgsSymb
         break;
       }
 
-      unsigned char* wkb = geom->asWkb();
+      const unsigned char* wkb = geom->asWkb();
       unsigned int num = *(( int* )( wkb + 5 ) );
-      unsigned char* ptr = wkb + 9;
+      const unsigned char* ptr = wkb + 9;
       QPolygonF pts;
       QList<QPolygonF> holes;
 
@@ -362,7 +363,7 @@ void QgsFeatureRendererV2::renderFeatureWithSymbol( QgsFeature& feature, QgsSymb
   }
 }
 
-QString QgsFeatureRendererV2::dump()
+QString QgsFeatureRendererV2::dump() const
 {
   return "UNKNOWN RENDERER\n";
 }
@@ -507,8 +508,10 @@ QgsLegendSymbologyList QgsFeatureRendererV2::legendSymbologyItems( QSize iconSiz
   return QgsLegendSymbologyList();
 }
 
-QgsLegendSymbolList QgsFeatureRendererV2::legendSymbolItems()
+QgsLegendSymbolList QgsFeatureRendererV2::legendSymbolItems( double scaleDenominator, QString rule )
 {
+  Q_UNUSED( scaleDenominator );
+  Q_UNUSED( rule );
   return QgsLegendSymbolList();
 }
 

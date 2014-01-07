@@ -16,9 +16,11 @@
 #include "qgsspatialindex.h"
 #include "qgswfsprovider.h"
 #include "qgsmessagelog.h"
+#include "qgsgeometry.h"
 
-QgsWFSFeatureIterator::QgsWFSFeatureIterator( QgsWFSProvider* provider, const QgsFeatureRequest& request ):
-    QgsAbstractFeatureIterator( request ), mProvider( provider )
+QgsWFSFeatureIterator::QgsWFSFeatureIterator( QgsWFSProvider* provider, const QgsFeatureRequest& request )
+    : QgsAbstractFeatureIterator( request )
+    , mProvider( provider )
 {
   //select ids
   //get iterator
@@ -27,12 +29,7 @@ QgsWFSFeatureIterator::QgsWFSFeatureIterator( QgsWFSProvider* provider, const Qg
     return;
   }
 
-  if ( mProvider->mActiveIterator )
-  {
-    QgsMessageLog::logMessage( QObject::tr( "Already active iterator on this provider was closed." ), QObject::tr( "WFS" ) );
-    mProvider->mActiveIterator->close();
-  }
-  mProvider->mActiveIterator = this;
+  mProvider->mActiveIterators << this;
 
   switch ( request.filterType() )
   {
@@ -59,7 +56,7 @@ QgsWFSFeatureIterator::~QgsWFSFeatureIterator()
   close();
 }
 
-bool QgsWFSFeatureIterator::nextFeature( QgsFeature& f )
+bool QgsWFSFeatureIterator::fetchFeature( QgsFeature& f )
 {
   if ( !mProvider )
   {
@@ -71,23 +68,26 @@ bool QgsWFSFeatureIterator::nextFeature( QgsFeature& f )
     return false;
   }
 
-  QMap<QgsFeatureId, QgsFeature* >::iterator it = mProvider->mFeatures.find( *mFeatureIterator );
-  if ( it == mProvider->mFeatures.end() )
-  {
-    return false;
-  }
-  QgsFeature* fet =  it.value();
+  QgsFeature *fet = 0;
 
-  QgsAttributeList attributes;
-  if ( mRequest.flags() & QgsFeatureRequest::SubsetOfAttributes )
+  for ( ;; )
   {
-    attributes = mRequest.subsetOfAttributes();
+    QMap<QgsFeatureId, QgsFeature* >::iterator it = mProvider->mFeatures.find( *mFeatureIterator );
+    if ( it == mProvider->mFeatures.end() )
+      return false;
+
+    fet = it.value();
+    if (( mRequest.flags() & QgsFeatureRequest::ExactIntersect ) == 0 )
+      break;
+
+    if ( fet->geometry() && fet->geometry()->intersects( mRequest.filterRect() ) )
+      break;
+
+    ++mFeatureIterator;
   }
-  else
-  {
-    attributes = mProvider->attributeIndexes();
-  }
-  mProvider->copyFeature( fet, f, !( mRequest.flags() & QgsFeatureRequest::NoGeometry ), attributes );
+
+
+  mProvider->copyFeature( fet, f, !( mRequest.flags() & QgsFeatureRequest::NoGeometry ) );
   ++mFeatureIterator;
   return true;
 }
@@ -107,10 +107,10 @@ bool QgsWFSFeatureIterator::rewind()
 bool QgsWFSFeatureIterator::close()
 {
   if ( !mProvider )
-  {
     return false;
-  }
-  mProvider->mActiveIterator = 0;
+
+  mProvider->mActiveIterators.remove( this );
+
   mProvider = 0;
   return true;
 }

@@ -27,6 +27,12 @@ QgsRendererV2Widget::QgsRendererV2Widget( QgsVectorLayer* layer, QgsStyleV2* sty
 {
   contextMenu = new QMenu( "Renderer Options " );
 
+  mCopyAction = contextMenu->addAction( tr( "Copy" ), this, SLOT( copy() ) );
+  mCopyAction->setShortcut( QKeySequence( QKeySequence::Copy ) );
+  mPasteAction = contextMenu->addAction( tr( "Paste" ), this, SLOT( paste() ) );
+  mPasteAction->setShortcut( QKeySequence( QKeySequence::Paste ) );
+
+  contextMenu->addSeparator();
   contextMenu->addAction( tr( "Change color" ), this, SLOT( changeSymbolColor( ) ) );
   contextMenu->addAction( tr( "Change transparency" ), this, SLOT( changeSymbolTransparency() ) );
   contextMenu->addAction( tr( "Change output unit" ), this, SLOT( changeSymbolUnit() ) );
@@ -54,7 +60,7 @@ void QgsRendererV2Widget::changeSymbolColor()
     return;
   }
 
-  QColor color = QColorDialog::getColor( symbolList.at( 0 )->color(), this );
+  QColor color = QColorDialog::getColor( symbolList.at( 0 )->color(), this, "Change Symbol Color", QColorDialog::ShowAlphaChannel );
   if ( color.isValid() )
   {
     QList<QgsSymbolV2*>::iterator symbolIt = symbolList.begin();

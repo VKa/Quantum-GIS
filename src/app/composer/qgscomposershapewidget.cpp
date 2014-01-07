@@ -53,7 +53,7 @@ QgsComposerShapeWidget::~QgsComposerShapeWidget()
 void QgsComposerShapeWidget::blockAllSignals( bool block )
 {
   mShapeComboBox->blockSignals( block );
-  mRotationSpinBox->blockSignals( block );
+  mCornerRadiusSpinBox->blockSignals( block );
 }
 
 void QgsComposerShapeWidget::setGuiElementValues()
@@ -65,29 +65,32 @@ void QgsComposerShapeWidget::setGuiElementValues()
 
   blockAllSignals( true );
 
-  mRotationSpinBox->setValue( mComposerShape->rotation() );
+  mCornerRadiusSpinBox->setValue( mComposerShape->cornerRadius() );
   if ( mComposerShape->shapeType() == QgsComposerShape::Ellipse )
   {
     mShapeComboBox->setCurrentIndex( mShapeComboBox->findText( tr( "Ellipse" ) ) );
+    mCornerRadiusSpinBox->setEnabled( false );
   }
   else if ( mComposerShape->shapeType() == QgsComposerShape::Rectangle )
   {
     mShapeComboBox->setCurrentIndex( mShapeComboBox->findText( tr( "Rectangle" ) ) );
+    mCornerRadiusSpinBox->setEnabled( true );
   }
   else if ( mComposerShape->shapeType() == QgsComposerShape::Triangle )
   {
     mShapeComboBox->setCurrentIndex( mShapeComboBox->findText( tr( "Triangle" ) ) );
+    mCornerRadiusSpinBox->setEnabled( false );
   }
 
   blockAllSignals( false );
 }
 
-void QgsComposerShapeWidget::on_mRotationSpinBox_valueChanged( int val )
+void QgsComposerShapeWidget::on_mCornerRadiusSpinBox_valueChanged( double val )
 {
   if ( mComposerShape )
   {
-    mComposerShape->beginCommand( tr( "Shape rotation changed" ), QgsComposerMergeCommand::ShapeRotation );
-    mComposerShape->setRotation( val );
+    mComposerShape->beginCommand( tr( "Shape radius changed" ), QgsComposerMergeCommand::ShapeCornerRadius );
+    mComposerShape->setCornerRadius( val );
     mComposerShape->update();
     mComposerShape->endCommand();
   }
@@ -113,8 +116,21 @@ void QgsComposerShapeWidget::on_mShapeComboBox_currentIndexChanged( const QStrin
   {
     mComposerShape->setShapeType( QgsComposerShape::Triangle );
   }
+  toggleRadiusSpin( text );
   mComposerShape->update();
   mComposerShape->endCommand();
+}
+
+void QgsComposerShapeWidget::toggleRadiusSpin( const QString& shapeText )
+{
+  if ( shapeText == tr( "Rectangle" ) )
+  {
+    mCornerRadiusSpinBox->setEnabled( true );
+  }
+  else
+  {
+    mCornerRadiusSpinBox->setEnabled( false );
+  }
 }
 
 

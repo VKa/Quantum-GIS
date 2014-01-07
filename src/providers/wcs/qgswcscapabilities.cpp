@@ -38,10 +38,7 @@
 #include <QNetworkRequest>
 #include <QNetworkReply>
 #include <QNetworkProxy>
-
-#if QT_VERSION >= 0x40500
 #include <QNetworkDiskCache>
-#endif
 
 #include <QUrl>
 #include <QIcon>
@@ -77,8 +74,8 @@ QgsWcsCapabilities::QgsWcsCapabilities( QgsDataSourceURI const &theUri ):
   retrieveServerCapabilities();
 }
 
-QgsWcsCapabilities::QgsWcsCapabilities( ):
-    mCoverageCount( 0 )
+QgsWcsCapabilities::QgsWcsCapabilities() 
+    : mCoverageCount( 0 )
 {
 }
 
@@ -199,8 +196,7 @@ void QgsWcsCapabilities::clear()
   QgsDebugMsg( "Entered" );
   mCoverageCount = 0;
   mCoveragesSupported.clear();
-  QgsWcsCapabilitiesProperty c;
-  mCapabilities = c;
+  mCapabilities = QgsWcsCapabilitiesProperty();
 }
 
 QString QgsWcsCapabilities::getCapabilitiesUrl( const QString version ) const
@@ -473,7 +469,7 @@ bool QgsWcsCapabilities::parseCapabilitiesDom( QByteArray const &xml, QgsWcsCapa
   {
     mErrorTitle = tr( "Version not supported" );
     mErrorFormat = "text/plain";
-    mError = tr( "WCS server version %1 is not supported by Quantum GIS (supported versions: 1.0.0, 1.1.0, 1.1.2)" )
+    mError = tr( "WCS server version %1 is not supported by QGIS (supported versions: 1.0.0, 1.1.0, 1.1.2)" )
              .arg( mVersion );
 
     QgsLogger::debug( "WCS version: " + mError );

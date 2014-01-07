@@ -46,19 +46,25 @@ class QgsComposerMergeCommand : QgsComposerItemCommand
       //composer label
       ComposerLabelSetText,
       ComposerLabelSetId,
-      ComposerLabelRotation,
       //composer map
       ComposerMapRotation,
       ComposerMapAnnotationDistance,
       //composer legend
       ComposerLegendText,
+      LegendColumnCount,
+      LegendSplitLayer,
+      LegendEqualColumnWidth,
       LegendSymbolWidth,
       LegendSymbolHeight,
+      LegendWmsLegendWidth,
+      LegendWmsLegendHeight,
+      LegendTitleSpaceBottom,
       LegendGroupSpace,
       LegendLayerSpace,
       LegendSymbolSpace,
       LegendIconSymbolSpace,
       LegendBoxSpace,
+      LegendColumnSpace,
       //composer picture
       ComposerPictureRotation,
       // composer scalebar
@@ -76,14 +82,15 @@ class QgsComposerMergeCommand : QgsComposerItemCommand
       TableMargin,
       TableGridStrokeWidth,
       //composer shape
-      ShapeRotation,
+      ShapeCornerRadius,
       ShapeOutlineWidth,
       //composer arrow
       ArrowOutlineWidth,
       ArrowHeadWidth,
       //item
       ItemOutlineWidth,
-      ItemMove
+      ItemMove,
+      ItemRotation
     };
 
     QgsComposerMergeCommand( Context c, QgsComposerItem* item, const QString& text );

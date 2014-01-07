@@ -61,6 +61,9 @@ QgsComposerMapWidget::QgsComposerMapWidget( QgsComposerMap* composerMap ): QWidg
   mAnnotationFormatComboBox->insertItem( 1, tr( "DegreeMinute" ) );
   mAnnotationFormatComboBox->insertItem( 2, tr( "DegreeMinuteSecond" ) );
 
+  mAnnotationFontColorButton->setColorDialogTitle( tr( "Select font color" ) );
+  mAnnotationFontColorButton->setColorDialogOptions( QColorDialog::ShowAlphaChannel );
+
   insertAnnotationPositionEntries( mAnnotationPositionLeftComboBox );
   insertAnnotationPositionEntries( mAnnotationPositionRightComboBox );
   insertAnnotationPositionEntries( mAnnotationPositionTopComboBox );
@@ -73,6 +76,16 @@ QgsComposerMapWidget::QgsComposerMapWidget( QgsComposerMap* composerMap ): QWidg
 
   mFrameStyleComboBox->insertItem( 0, tr( "No frame" ) );
   mFrameStyleComboBox->insertItem( 1, tr( "Zebra" ) );
+
+  mGridFramePenColorButton->setColorDialogTitle( tr( "Select grid frame color" ) );
+  mGridFramePenColorButton->setColorDialogOptions( QColorDialog::ShowAlphaChannel );
+  mGridFrameFill1ColorButton->setColorDialogTitle( tr( "Select grid frame fill color" ) );
+  mGridFrameFill1ColorButton->setColorDialogOptions( QColorDialog::ShowAlphaChannel );
+  mGridFrameFill2ColorButton->setColorDialogTitle( tr( "Select grid frame fill color" ) );
+  mGridFrameFill2ColorButton->setColorDialogOptions( QColorDialog::ShowAlphaChannel );
+
+  //set initial state of frame style controls
+  toggleFrameControls( false );
 
   connect( mGridCheckBox, SIGNAL( toggled( bool ) ),
            mDrawAnnotationCheckableGroupBox, SLOT( setEnabled( bool ) ) );
@@ -148,7 +161,7 @@ void QgsComposerMapWidget::on_mScaleLineEdit_editingFinished()
   mComposerMap->endCommand();
 }
 
-void QgsComposerMapWidget::on_mRotationSpinBox_valueChanged( double value )
+void QgsComposerMapWidget::on_mMapRotationSpinBox_valueChanged( double value )
 {
   if ( !mComposerMap )
   {
@@ -173,21 +186,25 @@ void QgsComposerMapWidget::on_mSetToMapCanvasExtentButton_clicked()
 
       //Make sure the width/height ratio is the same as in current composer map extent.
       //This is to keep the map item frame and the page layout fixed
-      QgsRectangle currentMapExtent = mComposerMap->extent();
+      QgsRectangle currentMapExtent = *( mComposerMap->currentMapExtent() );
       double currentWidthHeightRatio = currentMapExtent.width() / currentMapExtent.height();
       double newWidthHeightRatio = newExtent.width() / newExtent.height();
 
       if ( currentWidthHeightRatio < newWidthHeightRatio )
       {
-        //enlarge height of new extent
+        //enlarge height of new extent, ensuring the map center stays the same
         double newHeight = newExtent.width() / currentWidthHeightRatio;
-        newExtent.setYMinimum( newExtent.yMaximum() - newHeight );
+        double deltaHeight = newHeight - newExtent.height();
+        newExtent.setYMinimum( newExtent.yMinimum() - deltaHeight / 2 );
+        newExtent.setYMaximum( newExtent.yMaximum() + deltaHeight / 2 );
       }
-      else if ( currentWidthHeightRatio > newWidthHeightRatio )
+      else
       {
-        //enlarge width of new extent
+        //enlarge width of new extent, ensuring the map center stays the same
         double newWidth = currentWidthHeightRatio * newExtent.height();
-        newExtent.setXMaximum( newExtent.xMinimum() + newWidth );
+        double deltaWidth = newWidth - newExtent.width();
+        newExtent.setXMinimum( newExtent.xMinimum() - deltaWidth / 2 );
+        newExtent.setXMaximum( newExtent.xMaximum() + deltaWidth / 2 );
       }
 
       //fill text into line edits
@@ -268,13 +285,13 @@ void QgsComposerMapWidget::updateGuiElements()
     }
 
     //composer map extent
-    QgsRectangle composerMapExtent = mComposerMap->extent();
+    QgsRectangle composerMapExtent = *( mComposerMap->currentMapExtent() );
     mXMinLineEdit->setText( QString::number( composerMapExtent.xMinimum(), 'f', 3 ) );
     mXMaxLineEdit->setText( QString::number( composerMapExtent.xMaximum(), 'f', 3 ) );
     mYMinLineEdit->setText( QString::number( composerMapExtent.yMinimum(), 'f', 3 ) );
     mYMaxLineEdit->setText( QString::number( composerMapExtent.yMaximum(), 'f', 3 ) );
 
-    mRotationSpinBox->setValue( mComposerMap->rotation() );
+    mMapRotationSpinBox->setValue( mComposerMap->mapRotation() );
 
     //keep layer list check box
     if ( mComposerMap->keepLayerSet() )
@@ -303,6 +320,8 @@ void QgsComposerMapWidget::updateGuiElements()
     mOverviewBlendModeComboBox->setBlendMode( mComposerMap->overviewBlendMode() );
     //overview inverted
     mOverviewInvertCheckbox->setChecked( mComposerMap->overviewInverted() );
+    //center overview
+    mOverviewCenterCheckbox->setChecked( mComposerMap->overviewCentered() );
 
     //grid
     if ( mComposerMap->gridEnabled() )
@@ -333,15 +352,24 @@ void QgsComposerMapWidget::updateGuiElements()
 
     //grid frame
     mFrameWidthSpinBox->setValue( mComposerMap->gridFrameWidth() );
+    mGridFramePenSizeSpinBox->setValue( mComposerMap->gridFramePenSize() );
+    mGridFramePenColorButton->setColor( mComposerMap->gridFramePenColor() );
+    mGridFrameFill1ColorButton->setColor( mComposerMap->gridFrameFillColor1() );
+    mGridFrameFill2ColorButton->setColor( mComposerMap->gridFrameFillColor2() );
     QgsComposerMap::GridFrameStyle gridFrameStyle = mComposerMap->gridFrameStyle();
     if ( gridFrameStyle == QgsComposerMap::Zebra )
     {
       mFrameStyleComboBox->setCurrentIndex( mFrameStyleComboBox->findText( tr( "Zebra" ) ) );
+      toggleFrameControls( true );
     }
     else //NoGridFrame
     {
       mFrameStyleComboBox->setCurrentIndex( mFrameStyleComboBox->findText( tr( "No frame" ) ) );
+      toggleFrameControls( false );
     }
+
+    //grid blend mode
+    mGridBlendComboBox->setBlendMode( mComposerMap->gridBlendMode() );
 
     //grid annotation format
     QgsComposerMap::GridAnnotationFormat gf = mComposerMap->gridAnnotationFormat();
@@ -358,6 +386,8 @@ void QgsComposerMapWidget::updateGuiElements()
     initAnnotationDirectionBox( mAnnotationDirectionComboBoxRight, mComposerMap->gridAnnotationDirection( QgsComposerMap::Right ) );
     initAnnotationDirectionBox( mAnnotationDirectionComboBoxTop, mComposerMap->gridAnnotationDirection( QgsComposerMap::Top ) );
     initAnnotationDirectionBox( mAnnotationDirectionComboBoxBottom, mComposerMap->gridAnnotationDirection( QgsComposerMap::Bottom ) );
+
+    mAnnotationFontColorButton->setColor( mComposerMap->annotationFontColor() );
 
     mDistanceToMapFrameSpinBox->setValue( mComposerMap->annotationFrameDistance() );
 
@@ -423,6 +453,7 @@ void QgsComposerMapWidget::blockAllSignals( bool b )
   mSetToMapCanvasExtentButton->blockSignals( b );
   mUpdatePreviewButton->blockSignals( b );
   mGridLineStyleButton->blockSignals( b );
+  mGridBlendComboBox->blockSignals( b );
   mDrawAnnotationCheckableGroupBox->blockSignals( b );
   mAnnotationFontButton->blockSignals( b );
   mAnnotationFormatComboBox->blockSignals( b );
@@ -436,13 +467,19 @@ void QgsComposerMapWidget::blockAllSignals( bool b )
   mAnnotationDirectionComboBoxTop->blockSignals( b );
   mAnnotationDirectionComboBoxBottom->blockSignals( b );
   mCoordinatePrecisionSpinBox->blockSignals( b );
+  mAnnotationFontColorButton->blockSignals( b );
   mDrawCanvasItemsCheckBox->blockSignals( b );
   mFrameStyleComboBox->blockSignals( b );
   mFrameWidthSpinBox->blockSignals( b );
+  mGridFramePenSizeSpinBox->blockSignals( b );
+  mGridFramePenColorButton->blockSignals( b );
+  mGridFrameFill1ColorButton->blockSignals( b );
+  mGridFrameFill2ColorButton->blockSignals( b );
   mOverviewFrameMapComboBox->blockSignals( b );
   mOverviewFrameStyleButton->blockSignals( b );
   mOverviewBlendModeComboBox->blockSignals( b );
   mOverviewInvertCheckbox->blockSignals( b );
+  mOverviewCenterCheckbox->blockSignals( b );
 }
 
 void QgsComposerMapWidget::on_mUpdatePreviewButton_clicked()
@@ -582,6 +619,18 @@ void QgsComposerMapWidget::on_mOverviewInvertCheckbox_toggled( bool state )
   }
 }
 
+void QgsComposerMapWidget::on_mOverviewCenterCheckbox_toggled( bool state )
+{
+  if ( mComposerMap )
+  {
+    mComposerMap->setOverviewCentered( state );
+  }
+  mComposerMap->beginCommand( tr( "Overview centering mode changed" ) );
+  mComposerMap->cache();
+  mComposerMap->update();
+  mComposerMap->endCommand();
+}
+
 void QgsComposerMapWidget::on_mGridCheckBox_toggled( bool state )
 {
   if ( !mComposerMap )
@@ -705,6 +754,16 @@ void QgsComposerMapWidget::on_mCrossWidthSpinBox_valueChanged( double d )
   mComposerMap->endCommand();
 }
 
+void QgsComposerMapWidget::on_mGridBlendComboBox_currentIndexChanged( int index )
+{
+  Q_UNUSED( index );
+  if ( mComposerMap )
+  {
+    mComposerMap->setGridBlendMode( mGridBlendComboBox->blendMode() );
+  }
+
+}
+
 void QgsComposerMapWidget::on_mAnnotationFontButton_clicked()
 {
   if ( !mComposerMap )
@@ -713,7 +772,7 @@ void QgsComposerMapWidget::on_mAnnotationFontButton_clicked()
   }
 
   bool ok;
-#if defined(Q_WS_MAC) && QT_VERSION >= 0x040500 && defined(QT_MAC_USE_COCOA)
+#if defined(Q_WS_MAC) && defined(QT_MAC_USE_COCOA)
   // Native Mac dialog works only for Qt Carbon
   QFont newFont = QFontDialog::getFont( &ok, mComposerMap->gridAnnotationFont(), 0, QString(), QFontDialog::DontUseNativeDialog );
 #else
@@ -727,6 +786,18 @@ void QgsComposerMapWidget::on_mAnnotationFontButton_clicked()
     mComposerMap->update();
     mComposerMap->endCommand();
   }
+}
+
+void QgsComposerMapWidget::on_mAnnotationFontColorButton_colorChanged( const QColor& newFontColor )
+{
+  if ( !mComposerMap )
+  {
+    return;
+  }
+  mComposerMap->beginCommand( tr( "Label font changed" ) );
+  mComposerMap->setAnnotationFontColor( newFontColor );
+  mComposerMap->update();
+  mComposerMap->endCommand();
 }
 
 void QgsComposerMapWidget::on_mDistanceToMapFrameSpinBox_valueChanged( double d )
@@ -830,8 +901,23 @@ void QgsComposerMapWidget::on_mCoordinatePrecisionSpinBox_valueChanged( int valu
   mComposerMap->endCommand();
 }
 
+void QgsComposerMapWidget::toggleFrameControls( bool frameEnabled )
+{
+  //set status of frame controls
+  mFrameWidthSpinBox->setEnabled( frameEnabled );
+  mGridFramePenSizeSpinBox->setEnabled( frameEnabled );
+  mGridFramePenColorButton->setEnabled( frameEnabled );
+  mGridFrameFill1ColorButton->setEnabled( frameEnabled );
+  mGridFrameFill2ColorButton->setEnabled( frameEnabled );
+  mFrameWidthLabel->setEnabled( frameEnabled );
+  mFramePenLabel->setEnabled( frameEnabled );
+  mFrameFillLabel->setEnabled( frameEnabled );
+}
+
 void QgsComposerMapWidget::on_mFrameStyleComboBox_currentIndexChanged( const QString& text )
 {
+  toggleFrameControls( text !=  tr( "No frame" ) );
+
   if ( !mComposerMap )
   {
     return;
@@ -861,6 +947,54 @@ void QgsComposerMapWidget::on_mFrameWidthSpinBox_valueChanged( double d )
     mComposerMap->update();
     mComposerMap->endCommand();
   }
+}
+
+void QgsComposerMapWidget::on_mGridFramePenSizeSpinBox_valueChanged( double d )
+{
+  if ( mComposerMap )
+  {
+    mComposerMap->beginCommand( tr( "Changed grid frame line thickness" ) );
+    mComposerMap->setGridFramePenSize( d );
+    mComposerMap->updateBoundingRect();
+    mComposerMap->update();
+    mComposerMap->endCommand();
+  }
+}
+
+void QgsComposerMapWidget::on_mGridFramePenColorButton_colorChanged( const QColor& newColor )
+{
+  if ( !mComposerMap )
+  {
+    return;
+  }
+  mComposerMap->beginCommand( tr( "Grid frame color changed" ) );
+  mComposerMap->setGridFramePenColor( newColor );
+  mComposerMap->update();
+  mComposerMap->endCommand();
+}
+
+void QgsComposerMapWidget::on_mGridFrameFill1ColorButton_colorChanged( const QColor& newColor )
+{
+  if ( !mComposerMap )
+  {
+    return;
+  }
+  mComposerMap->beginCommand( tr( "Grid frame first fill color changed" ) );
+  mComposerMap->setGridFrameFillColor1( newColor );
+  mComposerMap->update();
+  mComposerMap->endCommand();
+}
+
+void QgsComposerMapWidget::on_mGridFrameFill2ColorButton_colorChanged( const QColor& newColor )
+{
+  if ( !mComposerMap )
+  {
+    return;
+  }
+  mComposerMap->beginCommand( tr( "Grid frame second fill color changed" ) );
+  mComposerMap->setGridFrameFillColor2( newColor );
+  mComposerMap->update();
+  mComposerMap->endCommand();
 }
 
 void QgsComposerMapWidget::showEvent( QShowEvent * event )

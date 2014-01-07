@@ -25,6 +25,7 @@
 #include <qgsofflineediting.h>
 #include <qgsproject.h>
 #include <qgsvectordataprovider.h>
+#include <qgsvectorlayereditbuffer.h>
 
 #include <QDir>
 #include <QDomDocument>
@@ -72,7 +73,7 @@ bool QgsOfflineEditing::convertToOfflineProject( const QString& offlineDataPath,
   {
     spatialite_init( 0 );
     sqlite3* db;
-    int rc = sqlite3_open( dbPath.toStdString().c_str(), &db );
+    int rc = sqlite3_open( dbPath.toUtf8().constData(), &db );
     if ( rc != SQLITE_OK )
     {
       showWarning( tr( "Could not open the spatialite database" ) );
@@ -247,38 +248,46 @@ void QgsOfflineEditing::synchronize()
 
 void QgsOfflineEditing::initializeSpatialMetadata( sqlite3 *sqlite_handle )
 {
-// attempting to perform self-initialization for a newly created DB
-  int ret;
-  char sql[1024];
-  char *errMsg = NULL;
-  int count = 0;
-  int i;
-  char **results;
-  int rows;
-  int columns;
-
-  if ( sqlite_handle == NULL )
+  // attempting to perform self-initialization for a newly created DB
+  if ( !sqlite_handle )
     return;
   // checking if this DB is really empty
-  strcpy( sql, "SELECT Count(*) from sqlite_master" );
-  ret = sqlite3_get_table( sqlite_handle, sql, &results, &rows, &columns, NULL );
+  char **results;
+  int rows, columns;
+  int ret = sqlite3_get_table( sqlite_handle, "select count(*) from sqlite_master", &results, &rows, &columns, NULL );
   if ( ret != SQLITE_OK )
     return;
-  if ( rows < 1 )
-    ;
-  else
+  int count = 0;
+  if ( rows >= 1 )
   {
-    for ( i = 1; i <= rows; i++ )
+    for ( int i = 1; i <= rows; i++ )
       count = atoi( results[( i * columns ) + 0] );
   }
+
   sqlite3_free_table( results );
 
   if ( count > 0 )
     return;
 
+  bool above41 = false;
+  ret = sqlite3_get_table( sqlite_handle, "select spatialite_version()", &results, &rows, &columns, NULL );
+  if ( ret == SQLITE_OK && rows == 1 && columns == 1 )
+  {
+    QString version = QString::fromUtf8( results[1] );
+    QStringList parts = version.split( " ", QString::SkipEmptyParts );
+    if ( parts.size() >= 1 )
+    {
+      QStringList verparts = parts[0].split( ".", QString::SkipEmptyParts );
+      above41 = verparts.size() >= 2 && ( verparts[0].toInt() > 4 || ( verparts[0].toInt() == 4 && verparts[1].toInt() >= 1 ) );
+    }
+  }
+
+  sqlite3_free_table( results );
+
   // all right, it's empty: proceding to initialize
-  strcpy( sql, "SELECT InitSpatialMetadata()" );
-  ret = sqlite3_exec( sqlite_handle, sql, NULL, NULL, &errMsg );
+  char *errMsg = 0;
+  ret = sqlite3_exec( sqlite_handle, above41 ? "SELECT InitSpatialMetadata(1)" : "SELECT InitSpatialMetadata()", NULL, NULL, &errMsg );
+
   if ( ret != SQLITE_OK )
   {
     QString errCause = tr( "Unable to initialize SpatialMetadata:\n" );
@@ -522,8 +531,8 @@ void QgsOfflineEditing::copyVectorLayer( QgsVectorLayer* layer, sqlite3* db, con
         // NOTE: Spatialite provider ignores position of geometry column
         // fill gap in QgsAttributeMap if geometry column is not last (WORKAROUND)
         int column = 0;
-        QgsAttributes newAttrs;
         QgsAttributes attrs = f.attributes();
+        QgsAttributes newAttrs( attrs.count() );
         for ( int it = 0; it < attrs.count(); ++it )
         {
           newAttrs[column++] = attrs[it];
@@ -551,10 +560,10 @@ void QgsOfflineEditing::copyVectorLayer( QgsVectorLayer* layer, sqlite3* db, con
 
         // NOTE: insert fids in this loop, as the db is locked during newLayer->nextFeature()
         sqlExec( db, "BEGIN" );
-        for ( int i = 0; i < remoteFeatureIds.size(); i++ )
+        int remoteCount = remoteFeatureIds.size();
+        for ( int i = 0; i < remoteCount; i++ )
         {
-          addFidLookup( db, layerId, offlineFeatureIds.at( i ), remoteFeatureIds.at( i ) );
-
+          addFidLookup( db, layerId, offlineFeatureIds.at( i ), remoteFeatureIds.at( remoteCount - ( i + 1 ) ) );
           emit progressUpdated( featureCount++ );
         }
         sqlExec( db, "COMMIT" );
@@ -680,7 +689,7 @@ void QgsOfflineEditing::applyAttributeValueChanges( QgsVectorLayer* offlineLayer
   {
     QgsFeatureId fid = remoteFid( db, layerId, values.at( i ).fid );
 
-    remoteLayer->changeAttributeValue( fid, attrLookup[ values.at( i ).attr ], values.at( i ).value, false );
+    remoteLayer->changeAttributeValue( fid, attrLookup[ values.at( i ).attr ], values.at( i ).value );
 
     emit progressUpdated( i + 1 );
   }
@@ -793,7 +802,7 @@ sqlite3* QgsOfflineEditing::openLoggingDb()
   QString dbPath = QgsProject::instance()->readEntry( PROJECT_ENTRY_SCOPE_OFFLINE, PROJECT_ENTRY_KEY_OFFLINE_DB_PATH );
   if ( !dbPath.isEmpty() )
   {
-    int rc = sqlite3_open( dbPath.toStdString().c_str(), &db );
+    int rc = sqlite3_open( dbPath.toUtf8().constData(), &db );
     if ( rc != SQLITE_OK )
     {
       showWarning( tr( "Could not open the spatialite logging database" ) );
@@ -1024,25 +1033,6 @@ QgsOfflineEditing::GeometryChanges QgsOfflineEditing::sqlQueryGeometryChanges( s
   return values;
 }
 
-void QgsOfflineEditing::layerAdded( QgsMapLayer* layer )
-{
-  // detect offline layer
-  if ( layer->customProperty( CUSTOM_PROPERTY_IS_OFFLINE_EDITABLE, false ).toBool() )
-  {
-    // enable logging
-    connect( layer, SIGNAL( committedAttributesAdded( const QString&, const QList<QgsField>& ) ),
-             this, SLOT( committedAttributesAdded( const QString&, const QList<QgsField>& ) ) );
-    connect( layer, SIGNAL( committedFeaturesAdded( const QString&, const QgsFeatureList& ) ),
-             this, SLOT( committedFeaturesAdded( const QString&, const QgsFeatureList& ) ) );
-    connect( layer, SIGNAL( committedFeaturesRemoved( const QString&, const QgsFeatureIds& ) ),
-             this, SLOT( committedFeaturesRemoved( const QString&, const QgsFeatureIds& ) ) );
-    connect( layer, SIGNAL( committedAttributeValuesChanges( const QString&, const QgsChangedAttributesMap& ) ),
-             this, SLOT( committedAttributeValuesChanges( const QString&, const QgsChangedAttributesMap& ) ) );
-    connect( layer, SIGNAL( committedGeometriesChanges( const QString&, const QgsGeometryMap& ) ),
-             this, SLOT( committedGeometriesChanges( const QString&, const QgsGeometryMap& ) ) );
-  }
-}
-
 void QgsOfflineEditing::committedAttributesAdded( const QString& qgisLayerId, const QList<QgsField>& addedAttributes )
 {
   sqlite3* db = openLoggingDb();
@@ -1204,3 +1194,48 @@ void QgsOfflineEditing::committedGeometriesChanges( const QString& qgisLayerId, 
   increaseCommitNo( db );
   sqlite3_close( db );
 }
+
+void QgsOfflineEditing::startListenFeatureChanges()
+{
+  QgsVectorLayer* vLayer = qobject_cast<QgsVectorLayer *>( sender() );
+  // enable logging
+  connect( vLayer->editBuffer(), SIGNAL( committedAttributesAdded( const QString&, const QList<QgsField>& ) ),
+           this, SLOT( committedAttributesAdded( const QString&, const QList<QgsField>& ) ) );
+  connect( vLayer, SIGNAL( committedFeaturesAdded( const QString&, const QgsFeatureList& ) ),
+           this, SLOT( committedFeaturesAdded( const QString&, const QgsFeatureList& ) ) );
+  connect( vLayer, SIGNAL( committedFeaturesRemoved( const QString&, const QgsFeatureIds& ) ),
+           this, SLOT( committedFeaturesRemoved( const QString&, const QgsFeatureIds& ) ) );
+  connect( vLayer->editBuffer(), SIGNAL( committedAttributeValuesChanges( const QString&, const QgsChangedAttributesMap& ) ),
+           this, SLOT( committedAttributeValuesChanges( const QString&, const QgsChangedAttributesMap& ) ) );
+  connect( vLayer->editBuffer(), SIGNAL( committedGeometriesChanges( const QString&, const QgsGeometryMap& ) ),
+           this, SLOT( committedGeometriesChanges( const QString&, const QgsGeometryMap& ) ) );
+}
+
+void QgsOfflineEditing::stopListenFeatureChanges()
+{
+  QgsVectorLayer* vLayer = qobject_cast<QgsVectorLayer *>( sender() );
+  // disable logging
+  disconnect( vLayer->editBuffer(), SIGNAL( committedAttributesAdded( const QString&, const QList<QgsField>& ) ),
+              this, SLOT( committedAttributesAdded( const QString&, const QList<QgsField>& ) ) );
+  disconnect( vLayer, SIGNAL( committedFeaturesAdded( const QString&, const QgsFeatureList& ) ),
+              this, SLOT( committedFeaturesAdded( const QString&, const QgsFeatureList& ) ) );
+  disconnect( vLayer, SIGNAL( committedFeaturesRemoved( const QString&, const QgsFeatureIds& ) ),
+              this, SLOT( committedFeaturesRemoved( const QString&, const QgsFeatureIds& ) ) );
+  disconnect( vLayer->editBuffer(), SIGNAL( committedAttributeValuesChanges( const QString&, const QgsChangedAttributesMap& ) ),
+              this, SLOT( committedAttributeValuesChanges( const QString&, const QgsChangedAttributesMap& ) ) );
+  disconnect( vLayer->editBuffer(), SIGNAL( committedGeometriesChanges( const QString&, const QgsGeometryMap& ) ),
+              this, SLOT( committedGeometriesChanges( const QString&, const QgsGeometryMap& ) ) );
+}
+
+void QgsOfflineEditing::layerAdded( QgsMapLayer* layer )
+{
+  // detect offline layer
+  if ( layer->customProperty( CUSTOM_PROPERTY_IS_OFFLINE_EDITABLE, false ).toBool() )
+  {
+    QgsVectorLayer* vLayer = qobject_cast<QgsVectorLayer *>( layer );
+    connect( vLayer, SIGNAL( editingStarted() ), this, SLOT( startListenFeatureChanges() ) );
+    connect( vLayer, SIGNAL( editingStopped() ), this, SLOT( stopListenFeatureChanges() ) );
+  }
+}
+
+

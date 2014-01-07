@@ -8,7 +8,7 @@ the Free Software Foundation; either version 2 of the License, or
 """
 __author__ = 'Chris Crook'
 __date__ = '20/04/2013'
-__copyright__ = 'Copyright 2013, The Quantum GIS Project'
+__copyright__ = 'Copyright 2013, The QGIS Project'
 # This will get replaced with a git SHA1 when you do a git archive
 __revision__ = '$Format:%H$'
 
@@ -23,21 +23,22 @@ __revision__ = '$Format:%H$'
 #
 # To recreate all tests, set rebuildTests to true
 
-import os;
-import os.path;
+import os
+import os.path
 import re
 import tempfile
 import inspect
+import time
 import test_qgsdelimitedtextprovider_wanted as want
 
 rebuildTests = 'REBUILD_DELIMITED_TEXT_TESTS' in os.environ;
 
+import qgis
+
 from PyQt4.QtCore import (QVariant,
                           QCoreApplication,
                         QUrl,
-                        QObject,
-                        QString,
-                        pyqtSignal
+                        QObject
                         )
 
 from qgis.core import (QGis,
@@ -54,15 +55,19 @@ from qgis.core import (QGis,
 from utilities import (getQgisTestApp,
                        TestCase,
                        unitTestDataPath,
-                       unittest
+                       unittest,
+                       compareWkt,
                        #expectedFailure
                        )
+
+
 QGISAPP, CANVAS, IFACE, PARENT = getQgisTestApp()
 
-
+import sip
+sipversion=str(sip.getapi('QVariant'))
+sipwanted='2'
 geomkey = "#geometry"
 fidkey = "#fid"
-tolerance = 0.000001 # Tolerance for coordinate comparisons in checkWktEqual
 
 # Thought we could connect to messageReceived signal but doesn't seem to be available
 # in python :-(  Not sure why?
@@ -94,6 +99,7 @@ def layerData( layer, request={}, offset=0 ):
     first = True
     data = {}
     fields = []
+    fieldTypes = []
     fr = QgsFeatureRequest()
     if request:
         if 'exact' in request and request['exact']:
@@ -112,7 +118,8 @@ def layerData( layer, request={}, offset=0 ):
             first = False
             for field in f.fields():
                 fields.append(str(field.name()))
-        fielddata = dict ( (name, unicode(f[name].toString()) ) for name in fields )
+                fieldTypes.append(str(field.typeName()))
+        fielddata = dict ( (name, unicode(f[name]) ) for name in fields )
         g = f.geometry()
         if g:
             fielddata[geomkey] = str(g.exportToWkt());
@@ -129,7 +136,7 @@ def layerData( layer, request={}, offset=0 ):
     if 'description' not in fields: fields.insert(1,'description')
     fields.append(fidkey)
     fields.append(geomkey)
-    return fields, data
+    return fields, fieldTypes, data
 
 # Retrieve the data for a delimited text url
 
@@ -155,28 +162,37 @@ def delimitedTextData( testname, filename, requests, verbose, **params ):
         basename = os.path.basename(filepath)
         if not basename.startswith('test'):
             basename='file'
-        uri = uri.replace(filepath,basename)
+        uri = re.sub(r'^file\:\/\/[^\?]*','file://'+basename,uri)
         fields = []
+        fieldTypes = []
         data = {}
         if layer.isValid():
             for nr,r in enumerate(requests):
-                if verbose:
-                    print "Processing request",nr+1,repr(r)
+                if verbose: print "Processing request",nr+1,repr(r)
                 if callable(r):
                     r( layer )
+                    if verbose: print "Request function executed"
+                if callable(r):
                     continue
-                rfields,rdata = layerData(layer,r,nr*1000)
-                if len(rfields) > len(fields): fields = rfields
+                rfields,rtypes, rdata = layerData(layer,r,nr*1000)
+                if len(rfields) > len(fields):
+                    fields = rfields
+                    fieldTypes=rtypes
                 data.update(rdata)
                 if not rdata:
                     log.append("Request "+str(nr)+" did not return any data")
+                if verbose:
+                    print "Request returned",len(rdata.keys()),"features"
         for msg in logger.messages():
-            log.append(msg.replace(filepath,'file'))
-        return dict( fields=fields, data=data, log=log, uri=uri)
+            filelogname = 'temp_file' if 'tmp' in filename.lower() else filename
+            msg = re.sub(r'file\s+.*'+re.escape(filename),'file '+filelogname,msg)
+            msg = msg.replace(filepath,filelogname)
+            log.append(msg);
+        return dict( fields=fields, fieldTypes=fieldTypes, data=data, log=log, uri=uri)
 
 def printWanted( testname, result ):
     # Routine to export the result as a function definition
-    print 
+    print
     print "def {0}():".format(testname)
     data=result['data']
     log=result['log']
@@ -186,6 +202,7 @@ def printWanted( testname, result ):
     # Dump the data for a layer - used to construct unit tests
     print prefix+"wanted={}"
     print prefix+"wanted['uri']="+repr(result['uri'])
+    print prefix+"wanted['fieldTypes']="+repr(result['fieldTypes'])
     print prefix+"wanted['data']={"
     for k in sorted(data.keys()):
         row = data[k]
@@ -203,27 +220,6 @@ def printWanted( testname, result ):
     print
 
 
-def checkWktEqual( wkt1, wkt2 ):
-    # Compare to WKT exported generated by exportToWkt
-    # Slightly complex to allow for small numeric difference in
-    # coordinates...
-    if wkt1 == wkt2: return True
-    # Use regex split with capture group to split into text and numbers
-    numberre=re.compile(r'(\-?\d+(?:\.\d+)?)')
-    p1=numberre.split(wkt1)
-    p2=numberre.split(wkt2)
-    if len(p1) != len(p2): return False
-    for i in range(len(p1)):
-        if i%2 == 1:
-            # Numeric comparison
-            diff=abs(float(p1[i])-float(p2[i]))
-            if diff > tolerance: return False
-        else:
-            # Could be more fancy here in terms of text comparison if
-            # turn out to be necessary.
-            if p1 != p2: return False
-    return True
-
 def recordDifference( record1, record2 ):
     # Compare a record defined as a dictionary
     for k in record1.keys():
@@ -232,7 +228,7 @@ def recordDifference( record1, record2 ):
         r1k = record1[k]
         r2k = record2[k]
         if k == geomkey:
-            if not checkWktEqual(r1k,r2k):
+            if not compareWkt(r1k,r2k):
                 return "Geometry differs: {0:.50} versus {1:.50}".format(r1k,r2k)
         else:
             if record1[k] != record2[k]:
@@ -243,6 +239,9 @@ def recordDifference( record1, record2 ):
     return ''
 
 def runTest( file, requests, **params ):
+    # No point doing test if haven't got the right SIP vesion
+    if sipversion != sipwanted:
+        return
     testname=inspect.stack()[1][3];
     verbose = not rebuildTests
     if verbose:
@@ -264,6 +263,10 @@ def runTest( file, requests, **params ):
         msg = "Layer Uri ({0}) doesn't match expected ({1})".format(
             result['uri'],wanted['uri'])
         print '    '+msg
+        failures.append(msg)
+    if result['fieldTypes'] != wanted['fieldTypes']:
+        msg = "Layer field types ({0}) doesn't match expected ({1})".format(
+            result['fieldTypes'],wanted['fieldTypes'])
         failures.append(msg)
     wanted_data = wanted['data']
     for id in sorted(wanted_data.keys()):
@@ -310,6 +313,7 @@ class TestQgsDelimitedTextProvider(TestCase):
         registry=QgsProviderRegistry.instance()
         metadata = registry.providerMetadata('delimitedtext')
         assert metadata != None, "Delimited text provider is not installed"
+        assert sipversion==sipwanted,"SIP version "+sipversion+" -  require version "+sipwanted+" for delimited text tests"
 
     def test_002_load_csv_file(self):
         # CSV file parsing
@@ -470,8 +474,8 @@ class TestQgsDelimitedTextProvider(TestCase):
         filename='testextpt.txt'
         params={'yField': 'y', 'delimiter': '|', 'type': 'csv', 'xField': 'x'}
         requests=[
-            {'extents': [10, 30, 30, 50]}, 
-            {'extents': [10, 30, 30, 50], 'exact': 1}, 
+            {'extents': [10, 30, 30, 50]},
+            {'extents': [10, 30, 30, 50], 'exact': 1},
             {'extents': [110, 130, 130, 150]}]
         runTest(filename,requests,**params)
 
@@ -480,8 +484,8 @@ class TestQgsDelimitedTextProvider(TestCase):
         filename='testextw.txt'
         params={'delimiter': '|', 'type': 'csv', 'wktField': 'wkt'}
         requests=[
-            {'extents': [10, 30, 30, 50]}, 
-            {'extents': [10, 30, 30, 50], 'exact': 1}, 
+            {'extents': [10, 30, 30, 50]},
+            {'extents': [10, 30, 30, 50], 'exact': 1},
             {'extents': [110, 130, 130, 150]}]
         runTest(filename,requests,**params)
 
@@ -490,9 +494,9 @@ class TestQgsDelimitedTextProvider(TestCase):
         filename='test.csv'
         params={'geomType': 'none', 'type': 'csv'}
         requests=[
-            {'fid': 3}, 
-            {'fid': 9}, 
-            {'fid': 20}, 
+            {'fid': 3},
+            {'fid': 9},
+            {'fid': 20},
             {'fid': 3}]
         runTest(filename,requests,**params)
 
@@ -501,18 +505,18 @@ class TestQgsDelimitedTextProvider(TestCase):
         filename='test.csv'
         params={'geomType': 'none', 'type': 'csv'}
         requests=[
-            {'attributes': [1, 3]}, 
-            {'fid': 9}, 
-            {'attributes': [1, 3], 'fid': 9}, 
-            {'attributes': [3, 1], 'fid': 9}, 
-            {'attributes': [1, 3, 7], 'fid': 9}, 
+            {'attributes': [1, 3]},
+            {'fid': 9},
+            {'attributes': [1, 3], 'fid': 9},
+            {'attributes': [3, 1], 'fid': 9},
+            {'attributes': [1, 3, 7], 'fid': 9},
             {'attributes': [], 'fid': 9}]
         runTest(filename,requests,**params)
 
     def test_028_substring_test(self):
         # CSV file parsing
         filename='test.csv'
-        params={'geomType': 'none', 'subset': 'id % 2 = 1', 'type': 'csv'}
+        params={'geomType': 'none', 'subset': 'id % 2 = 1', 'type': 'csv' }
         requests=None
         runTest(filename,requests,**params)
 
@@ -521,34 +525,42 @@ class TestQgsDelimitedTextProvider(TestCase):
         (filehandle,filename) = tempfile.mkstemp()
         with os.fdopen(filehandle,"w") as f:
             f.write("id,name\n1,rabbit\n2,pooh\n")
-            QCoreApplication.instance().processEvents()
-        def updatefile1( layer ):
+        def appendfile( layer ):
             with file(filename,'a') as f:
                 f.write('3,tigger\n')
+            # print "Appended to file - sleeping"
+            time.sleep(1);
             QCoreApplication.instance().processEvents()
-        def updatefile2( layer ):
+        def rewritefile( layer ):
             with file(filename,'w') as f:
                 f.write("name,size,id\ntoad,small,5\nmole,medium,6\nbadger,big,7\n")
+            # print "Rewritten file - sleeping"
+            time.sleep(1);
             QCoreApplication.instance().processEvents()
         def deletefile( layer ):
             os.remove(filename)
-        params={'geomType': 'none', 'type': 'csv' }
+            # print "Deleted file - sleeping"
+            time.sleep(1);
+            QCoreApplication.instance().processEvents()
+        params={'geomType': 'none', 'type': 'csv', 'watchFile' : 'yes' }
         requests=[
-            {'fid': 3}, 
+            {'fid': 3},
             {},
-            {'fid': 7}, 
-            updatefile1,
-            {'fid': 3}, 
-            {'fid': 4}, 
+            {'fid': 7},
+            appendfile,
+            {'fid': 3},
+            {'fid': 4},
             {},
-            {'fid': 7}, 
-            updatefile2,
-            {'fid': 2}, 
+            {'fid': 7},
+            rewritefile,
+            {'fid': 2},
             {},
-            {'fid': 7}, 
+            {'fid': 7},
             deletefile,
-            {'fid': 2}, 
+            {'fid': 2},
             {},
+            rewritefile,
+            {'fid': 2},
             ]
         runTest(filename,requests,**params)
 
@@ -557,8 +569,8 @@ class TestQgsDelimitedTextProvider(TestCase):
         filename='testextpt.txt'
         params={'yField': 'y', 'delimiter': '|', 'type': 'csv', 'xField': 'x', 'spatialIndex': 'Y' }
         requests=[
-            {'extents': [10, 30, 30, 50]}, 
-            {'extents': [10, 30, 30, 50], 'exact': 1}, 
+            {'extents': [10, 30, 30, 50]},
+            {'extents': [10, 30, 30, 50], 'exact': 1},
             {'extents': [110, 130, 130, 150]},
             {},
             {'extents': [-1000, -1000, 1000, 1000]}
@@ -570,8 +582,8 @@ class TestQgsDelimitedTextProvider(TestCase):
         filename='testextw.txt'
         params={'delimiter': '|', 'type': 'csv', 'wktField': 'wkt', 'spatialIndex': 'Y' }
         requests=[
-            {'extents': [10, 30, 30, 50]}, 
-            {'extents': [10, 30, 30, 50], 'exact': 1}, 
+            {'extents': [10, 30, 30, 50]},
+            {'extents': [10, 30, 30, 50], 'exact': 1},
             {'extents': [110, 130, 130, 150]},
             {},
             {'extents': [-1000, -1000, 1000, 1000]}
@@ -583,11 +595,11 @@ class TestQgsDelimitedTextProvider(TestCase):
         filename='testextw.txt'
         params={'delimiter': '|', 'type': 'csv', 'wktField': 'wkt' }
         requests=[
-            {'extents': [10, 30, 30, 50]}, 
+            {'extents': [10, 30, 30, 50]},
             {},
             lambda layer: layer.dataProvider().createSpatialIndex(),
-            {'extents': [10, 30, 30, 50]}, 
-            {'extents': [10, 30, 30, 50], 'exact': 1}, 
+            {'extents': [10, 30, 30, 50]},
+            {'extents': [10, 30, 30, 50], 'exact': 1},
             {'extents': [110, 130, 130, 150]},
             {},
             {'extents': [-1000, -1000, 1000, 1000]}
@@ -612,6 +624,34 @@ class TestQgsDelimitedTextProvider(TestCase):
             lambda layer: layer.dataProvider().setSubsetString("id % 2 = 0",True),
             {},
         ]
+        runTest(filename,requests,**params)
+
+    def test_034_csvt_file(self):
+        # CSVT field types
+        filename='testcsvt.csv'
+        params={'geomType': 'none', 'type': 'csv'}
+        requests=None
+        runTest(filename,requests,**params)
+
+    def test_035_csvt_file2(self):
+        # CSV field types 2
+        filename='testcsvt2.txt'
+        params={'geomType': 'none', 'type': 'csv', 'delimiter': '|'}
+        requests=None
+        runTest(filename,requests,**params)
+
+    def test_036_csvt_file_invalid_types(self):
+        # CSV field types invalid string format
+        filename='testcsvt3.csv'
+        params={'geomType': 'none', 'type': 'csv'}
+        requests=None
+        runTest(filename,requests,**params)
+
+    def test_037_csvt_file_invalid_file(self):
+        # CSV field types invalid file
+        filename='testcsvt4.csv'
+        params={'geomType': 'none', 'type': 'csv'}
+        requests=None
         runTest(filename,requests,**params)
 
 

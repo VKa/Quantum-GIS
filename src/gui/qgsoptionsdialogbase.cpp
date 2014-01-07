@@ -49,17 +49,38 @@ void QgsOptionsDialogBase::initOptionsBase( bool restoreUi )
   // don't add to dialog margins
   // redefine now, or those in inherited .ui file will be added
   if ( layout() )
-    layout()->setContentsMargins( 12, 12, 12, 12 ); // Qt default spacing
+  {
+    layout()->setContentsMargins( 0, 0, 0, 0 ); // Qt default spacing
+  }
 
   // start with copy of qgsoptionsdialog_template.ui to ensure existence of these objects
   mOptListWidget = findChild<QListWidget*>( "mOptionsListWidget" );
+  QFrame* optionsFrame = findChild<QFrame*>("mOptionsFrame");
   mOptStackedWidget = findChild<QStackedWidget*>( "mOptionsStackedWidget" );
   mOptSplitter = findChild<QSplitter*>( "mOptionsSplitter" );
   mOptButtonBox = findChild<QDialogButtonBox*>( "buttonBox" );
+  QFrame* buttonBoxFrame = findChild<QFrame*>("mButtonBoxFrame");
 
-  if ( !mOptListWidget || !mOptStackedWidget || !mOptSplitter )
+  if ( !mOptListWidget || !mOptStackedWidget || !mOptSplitter || !optionsFrame )
   {
     return;
+  }
+
+  QSettings settings;
+  int size = settings.value( "/IconSize", 24 ).toInt();
+  mOptListWidget->setIconSize( QSize(size, size) );
+
+  optionsFrame->layout()->setContentsMargins(0,3,3,3);
+  QVBoxLayout* layout = static_cast<QVBoxLayout*>(optionsFrame->layout());
+
+  if ( buttonBoxFrame )
+  {
+      buttonBoxFrame->layout()->setContentsMargins(0,0,0,0);
+      layout->insertWidget(layout->count() + 1, buttonBoxFrame );
+  }
+  else
+  {
+      layout->insertWidget( layout->count() + 1, mOptButtonBox );
   }
 
   if ( mOptButtonBox )
@@ -74,10 +95,10 @@ void QgsOptionsDialogBase::initOptionsBase( bool restoreUi )
   connect( mOptStackedWidget, SIGNAL( currentChanged( int ) ), this, SLOT( optionsStackedWidget_CurrentChanged( int ) ) );
   connect( mOptStackedWidget, SIGNAL( widgetRemoved( int ) ), this, SLOT( optionsStackedWidget_WidgetRemoved( int ) ) );
 
+  mInit = true;
+
   if ( restoreUi )
     restoreOptionsBaseUi();
-
-  mInit = true;
 }
 
 void QgsOptionsDialogBase::restoreOptionsBaseUi()
@@ -96,9 +117,9 @@ void QgsOptionsDialogBase::restoreOptionsBaseUi()
   mOptSplitter->restoreState( settings.value( QString( "/Windows/%1/splitState" ).arg( mOptsKey ) ).toByteArray() );
   int curIndx = settings.value( QString( "/Windows/%1/tab" ).arg( mOptsKey ), 0 ).toInt();
 
-  // if the last used tab is not enabled, or is missing, display the first enabled one
-  if ( !mOptStackedWidget->widget( curIndx )->isEnabled()
-       || mOptStackedWidget->count() < ( curIndx + 1 ) )
+  // if the last used tab is out of range or not enabled display the first enabled one
+  if ( mOptStackedWidget->count() < ( curIndx + 1 )
+       || !mOptStackedWidget->widget( curIndx )->isEnabled() )
   {
     curIndx = 0;
     for ( int i = 0; i < mOptStackedWidget->count(); i++ )
@@ -109,11 +130,13 @@ void QgsOptionsDialogBase::restoreOptionsBaseUi()
         break;
       }
     }
-    curIndx = -1; // default fallback
   }
 
-  mOptStackedWidget->setCurrentIndex( curIndx );
-  mOptListWidget->setCurrentRow( curIndx );
+  if ( mOptStackedWidget->count() != 0 && mOptListWidget->count() != 0 )
+  {
+    mOptStackedWidget->setCurrentIndex( curIndx );
+    mOptListWidget->setCurrentRow( curIndx );
+  }
 
   // get rid of annoying outer focus rect on Mac
   mOptListWidget->setAttribute( Qt::WA_MacShowFocusRect, false );

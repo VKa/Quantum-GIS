@@ -43,9 +43,11 @@
 #include "qgsattributeaction.h"
 #include "qgsattributetabledialog.h"
 
+
 QgisAppInterface::QgisAppInterface( QgisApp * _qgis )
     : qgis( _qgis ),
-    legendIface( _qgis->legend() )
+    legendIface( _qgis->legend() ),
+    pluginManagerIface( _qgis->pluginManager() )
 {
   // connect signals
   connect( qgis->legend(), SIGNAL( currentLayerChanged( QgsMapLayer * ) ),
@@ -71,6 +73,11 @@ QgisAppInterface::~QgisAppInterface()
 QgsLegendInterface* QgisAppInterface::legendInterface()
 {
   return &legendIface;
+}
+
+QgsPluginManagerInterface* QgisAppInterface::pluginManagerInterface()
+{
+  return &pluginManagerIface;
 }
 
 void QgisAppInterface::zoomFull()
@@ -426,7 +433,8 @@ bool QgisAppInterface::unregisterMainWindowAction( QAction* action )
 }
 
 //! Menus
-QMenu *QgisAppInterface::fileMenu() { return qgis->fileMenu(); }
+Q_DECL_DEPRECATED QMenu *QgisAppInterface::fileMenu() { return qgis->projectMenu(); }
+QMenu *QgisAppInterface::projectMenu() { return qgis->projectMenu(); }
 QMenu *QgisAppInterface::editMenu() { return qgis->editMenu(); }
 QMenu *QgisAppInterface::viewMenu() { return qgis->viewMenu(); }
 QMenu *QgisAppInterface::layerMenu() { return qgis->layerMenu(); }
@@ -455,7 +463,7 @@ QToolBar *QgisAppInterface::vectorToolBar() { return qgis->vectorToolBar(); }
 QToolBar *QgisAppInterface::databaseToolBar() { return qgis->databaseToolBar(); }
 QToolBar *QgisAppInterface::webToolBar() { return qgis->webToolBar(); }
 
-//! File menu actions
+//! Project menu actions
 QAction *QgisAppInterface::actionNewProject() { return qgis->actionNewProject(); }
 QAction *QgisAppInterface::actionOpenProject() { return qgis->actionOpenProject(); }
 QAction *QgisAppInterface::actionSaveProject() { return qgis->actionSaveProject(); }
@@ -474,6 +482,7 @@ QAction *QgisAppInterface::actionAddFeature() { return qgis->actionAddFeature();
 QAction *QgisAppInterface::actionDeleteSelected() { return qgis->actionDeleteSelected(); }
 QAction *QgisAppInterface::actionMoveFeature() { return qgis->actionMoveFeature(); }
 QAction *QgisAppInterface::actionSplitFeatures() { return qgis->actionSplitFeatures(); }
+QAction *QgisAppInterface::actionSplitParts() { return qgis->actionSplitParts(); }
 QAction *QgisAppInterface::actionAddRing() { return qgis->actionAddRing(); }
 QAction *QgisAppInterface::actionAddPart() { return qgis->actionAddPart(); }
 QAction *QgisAppInterface::actionSimplifyFeature() { return qgis->actionSimplifyFeature(); }
@@ -516,6 +525,7 @@ QAction *QgisAppInterface::actionAddWmsLayer() { return qgis->actionAddWmsLayer(
 QAction *QgisAppInterface::actionCopyLayerStyle() { return qgis->actionCopyLayerStyle(); }
 QAction *QgisAppInterface::actionPasteLayerStyle() { return qgis->actionPasteLayerStyle(); }
 QAction *QgisAppInterface::actionOpenTable() { return qgis->actionOpenTable(); }
+QAction *QgisAppInterface::actionOpenFieldCalculator() { return qgis->actionOpenFieldCalculator(); }
 QAction *QgisAppInterface::actionToggleEditing() { return qgis->actionToggleEditing(); }
 QAction *QgisAppInterface::actionSaveActiveLayerEdits() { return qgis->actionSaveActiveLayerEdits(); }
 QAction *QgisAppInterface::actionAllEdits() { return qgis->actionAllEdits(); }
@@ -599,7 +609,7 @@ void QgisAppInterface::cacheloadForm( QString uifile )
   }
 }
 
-QDialog* QgisAppInterface::getFeatureForm( QgsVectorLayer *l, QgsFeature &f )
+QDialog* QgisAppInterface::getFeatureForm( QgsVectorLayer *l, QgsFeature &feature )
 {
   QgsDistanceArea myDa;
 
@@ -607,8 +617,13 @@ QDialog* QgisAppInterface::getFeatureForm( QgsVectorLayer *l, QgsFeature &f )
   myDa.setEllipsoidalMode( QgisApp::instance()->mapCanvas()->mapRenderer()->hasCrsTransformEnabled() );
   myDa.setEllipsoid( QgsProject::instance()->readEntry( "Measure", "/Ellipsoid", GEO_NONE ) );
 
-  QgsAttributeDialog *dialog = new QgsAttributeDialog( l, &f, false, myDa );
+  QgsAttributeDialog *dialog = new QgsAttributeDialog( l, &feature, false, NULL, true );
   return dialog->dialog();
+}
+
+QgsVectorLayerTools* QgisAppInterface::vectorLayerTools()
+{
+  return qgis->vectorLayerTools();
 }
 
 QList<QgsMapLayer *> QgisAppInterface::editableLayers( bool modified ) const

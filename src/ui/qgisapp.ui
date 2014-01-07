@@ -17,39 +17,10 @@
      <x>0</x>
      <y>0</y>
      <width>1050</width>
-     <height>21</height>
+     <height>25</height>
     </rect>
    </property>
-   <widget class="QMenu" name="mEditMenu">
-    <property name="title">
-     <string>&amp;Edit</string>
-    </property>
-    <addaction name="mActionUndo"/>
-    <addaction name="mActionRedo"/>
-    <addaction name="separator"/>
-    <addaction name="mActionCutFeatures"/>
-    <addaction name="mActionCopyFeatures"/>
-    <addaction name="mActionPasteFeatures"/>
-    <addaction name="separator"/>
-    <addaction name="mActionAddFeature"/>
-    <addaction name="mActionMoveFeature"/>
-    <addaction name="mActionDeleteSelected"/>
-    <addaction name="separator"/>
-    <addaction name="mActionRotateFeature"/>
-    <addaction name="mActionSimplifyFeature"/>
-    <addaction name="mActionAddRing"/>
-    <addaction name="mActionAddPart"/>
-    <addaction name="mActionDeleteRing"/>
-    <addaction name="mActionDeletePart"/>
-    <addaction name="mActionReshapeFeatures"/>
-    <addaction name="mActionOffsetCurve"/>
-    <addaction name="mActionSplitFeatures"/>
-    <addaction name="mActionMergeFeatures"/>
-    <addaction name="mActionMergeFeatureAttributes"/>
-    <addaction name="mActionNodeTool"/>
-    <addaction name="mActionRotatePointSymbols"/>
-   </widget>
-   <widget class="QMenu" name="mFileMenu">
+   <widget class="QMenu" name="mProjectMenu">
     <property name="title">
      <string>P&amp;roject</string>
     </property>
@@ -76,6 +47,7 @@
     <addaction name="mActionSaveProject"/>
     <addaction name="mActionSaveProjectAs"/>
     <addaction name="mActionSaveMapAsImage"/>
+    <addaction name="mActionDxfExport"/>
     <addaction name="separator"/>
     <addaction name="mActionNewPrintComposer"/>
     <addaction name="mActionShowComposerManager"/>
@@ -96,6 +68,7 @@
      <addaction name="mActionSelectPolygon"/>
      <addaction name="mActionSelectFreehand"/>
      <addaction name="mActionSelectRadius"/>
+     <addaction name="mActionSelectByExpression"/>
      <addaction name="mActionDeselectAll"/>
     </widget>
     <widget class="QMenu" name="menuMeasure">
@@ -146,7 +119,7 @@
       <string>New</string>
      </property>
      <addaction name="mActionNewVectorLayer"/>
-     <addaction name="mActionNewSpatialiteLayer"/>
+     <addaction name="mActionNewSpatiaLiteLayer"/>
     </widget>
     <addaction name="mNewLayerMenu"/>
     <addaction name="mActionEmbedLayers"/>
@@ -160,6 +133,7 @@
     <addaction name="mActionAddLayerSeparator"/>
     <addaction name="mActionAddWcsLayer"/>
     <addaction name="mActionAddWfsLayer"/>
+    <addaction name="mActionAddDelimitedText"/>
     <addaction name="separator"/>
     <addaction name="mActionCopyStyle"/>
     <addaction name="mActionPasteStyle"/>
@@ -240,7 +214,46 @@
     </widget>
     <addaction name="menuOpenStreetMap"/>
    </widget>
-   <addaction name="mFileMenu"/>
+   <widget class="QMenu" name="mEditMenu">
+    <property name="title">
+     <string>&amp;Edit</string>
+    </property>
+    <widget class="QMenu" name="mMenuPasteAs">
+     <property name="title">
+      <string>Paste Features as</string>
+     </property>
+     <addaction name="mActionPasteAsNewVector"/>
+     <addaction name="mActionPasteAsNewMemoryVector"/>
+    </widget>
+    <addaction name="mActionUndo"/>
+    <addaction name="mActionRedo"/>
+    <addaction name="separator"/>
+    <addaction name="mActionCutFeatures"/>
+    <addaction name="mActionCopyFeatures"/>
+    <addaction name="mActionPasteFeatures"/>
+    <addaction name="mMenuPasteAs"/>
+    <addaction name="separator"/>
+    <addaction name="mActionAddFeature"/>
+    <addaction name="mActionMoveFeature"/>
+    <addaction name="mActionDeleteSelected"/>
+    <addaction name="separator"/>
+    <addaction name="mActionRotateFeature"/>
+    <addaction name="mActionSimplifyFeature"/>
+    <addaction name="mActionAddRing"/>
+    <addaction name="mActionAddPart"/>
+    <addaction name="mActionFillRing"/>
+    <addaction name="mActionDeleteRing"/>
+    <addaction name="mActionDeletePart"/>
+    <addaction name="mActionReshapeFeatures"/>
+    <addaction name="mActionOffsetCurve"/>
+    <addaction name="mActionSplitFeatures"/>
+    <addaction name="mActionSplitParts"/>
+    <addaction name="mActionMergeFeatures"/>
+    <addaction name="mActionMergeFeatureAttributes"/>
+    <addaction name="mActionNodeTool"/>
+    <addaction name="mActionRotatePointSymbols"/>
+   </widget>
+   <addaction name="mProjectMenu"/>
    <addaction name="mEditMenu"/>
    <addaction name="mViewMenu"/>
    <addaction name="mLayerMenu"/>
@@ -287,7 +300,7 @@
    <addaction name="mActionAddWmsLayer"/>
    <addaction name="mActionAddWcsLayer"/>
    <addaction name="mActionAddWfsLayer"/>
-   <addaction name="mActionNewVectorLayer"/>
+   <addaction name="mActionAddDelimitedText"/>
    <addaction name="mActionRemoveLayer"/>
   </widget>
   <widget class="QToolBar" name="mDigitizeToolBar">
@@ -327,11 +340,13 @@
    <addaction name="mActionSimplifyFeature"/>
    <addaction name="mActionAddRing"/>
    <addaction name="mActionAddPart"/>
+   <addaction name="mActionFillRing"/>
    <addaction name="mActionDeleteRing"/>
    <addaction name="mActionDeletePart"/>
    <addaction name="mActionReshapeFeatures"/>
    <addaction name="mActionOffsetCurve"/>
    <addaction name="mActionSplitFeatures"/>
+   <addaction name="mActionSplitParts"/>
    <addaction name="mActionMergeFeatures"/>
    <addaction name="mActionMergeFeatureAttributes"/>
    <addaction name="mActionRotatePointSymbols"/>
@@ -373,6 +388,7 @@
    <addaction name="mActionDeselectAll"/>
    <addaction name="mActionSelectByExpression"/>
    <addaction name="mActionOpenTable"/>
+   <addaction name="mActionOpenFieldCalc"/>
    <addaction name="mActionMapTips"/>
    <addaction name="mActionNewBookmark"/>
    <addaction name="mActionShowBookmarks"/>
@@ -473,7 +489,7 @@
   <action name="mActionNewProject">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionFileNew.png</normaloff>:/images/themes/default/mActionFileNew.png</iconset>
+     <normaloff>:/images/themes/default/mActionFileNew.svg</normaloff>:/images/themes/default/mActionFileNew.svg</iconset>
    </property>
    <property name="text">
     <string>&amp;New</string>
@@ -485,7 +501,7 @@
   <action name="mActionOpenProject">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionFileOpen.png</normaloff>:/images/themes/default/mActionFileOpen.png</iconset>
+     <normaloff>:/images/themes/default/mActionFileOpen.svg</normaloff>:/images/themes/default/mActionFileOpen.svg</iconset>
    </property>
    <property name="text">
     <string>&amp;Open...</string>
@@ -497,7 +513,7 @@
   <action name="mActionSaveProject">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionFileSave.png</normaloff>:/images/themes/default/mActionFileSave.png</iconset>
+     <normaloff>:/images/themes/default/mActionFileSave.svg</normaloff>:/images/themes/default/mActionFileSave.svg</iconset>
    </property>
    <property name="text">
     <string>&amp;Save</string>
@@ -509,7 +525,7 @@
   <action name="mActionSaveProjectAs">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionFileSaveAs.png</normaloff>:/images/themes/default/mActionFileSaveAs.png</iconset>
+     <normaloff>:/images/themes/default/mActionFileSaveAs.svg</normaloff>:/images/themes/default/mActionFileSaveAs.svg</iconset>
    </property>
    <property name="text">
     <string>Save &amp;As...</string>
@@ -530,7 +546,7 @@
   <action name="mActionNewPrintComposer">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionNewComposer.png</normaloff>:/images/themes/default/mActionNewComposer.png</iconset>
+     <normaloff>:/images/themes/default/mActionNewComposer.svg</normaloff>:/images/themes/default/mActionNewComposer.svg</iconset>
    </property>
    <property name="text">
     <string>&amp;New Print Composer</string>
@@ -542,7 +558,7 @@
   <action name="mActionShowComposerManager">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionComposerManager.png</normaloff>:/images/themes/default/mActionComposerManager.png</iconset>
+     <normaloff>:/images/themes/default/mActionComposerManager.svg</normaloff>:/images/themes/default/mActionComposerManager.svg</iconset>
    </property>
    <property name="text">
     <string>Composer Manager...</string>
@@ -668,16 +684,28 @@
    </property>
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionSplitFeatures.png</normaloff>:/images/themes/default/mActionSplitFeatures.png</iconset>
+     <normaloff>:/images/themes/default/mActionSplitFeatures.svg</normaloff>:/images/themes/default/mActionSplitFeatures.svg</iconset>
    </property>
    <property name="text">
     <string>Split Features</string>
    </property>
   </action>
+  <action name="mActionSplitParts">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="../../images/images.qrc">
+     <normaloff>:/images/themes/default/mActionSplitFeatures.svg</normaloff>:/images/themes/default/mActionSplitFeatures.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Split Parts</string>
+   </property>
+  </action>
   <action name="mActionDeleteSelected">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionDeleteSelected.png</normaloff>:/images/themes/default/mActionDeleteSelected.png</iconset>
+     <normaloff>:/images/themes/default/mActionDeleteSelected.svg</normaloff>:/images/themes/default/mActionDeleteSelected.svg</iconset>
    </property>
    <property name="text">
     <string>Delete Selected</string>
@@ -796,7 +824,7 @@
    </property>
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionPan.png</normaloff>:/images/themes/default/mActionPan.png</iconset>
+     <normaloff>:/images/themes/default/mActionPan.svg</normaloff>:/images/themes/default/mActionPan.svg</iconset>
    </property>
    <property name="text">
     <string>Pan Map</string>
@@ -808,7 +836,7 @@
    </property>
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionZoomIn.png</normaloff>:/images/themes/default/mActionZoomIn.png</iconset>
+     <normaloff>:/images/themes/default/mActionZoomIn.svg</normaloff>:/images/themes/default/mActionZoomIn.svg</iconset>
    </property>
    <property name="text">
     <string>Zoom In</string>
@@ -823,7 +851,7 @@
    </property>
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionZoomOut.png</normaloff>:/images/themes/default/mActionZoomOut.png</iconset>
+     <normaloff>:/images/themes/default/mActionZoomOut.svg</normaloff>:/images/themes/default/mActionZoomOut.svg</iconset>
    </property>
    <property name="text">
     <string>Zoom Out</string>
@@ -838,7 +866,7 @@
    </property>
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionSelect.png</normaloff>:/images/themes/default/mActionSelect.png</iconset>
+     <normaloff>:/images/themes/default/mActionSelect.svg</normaloff>:/images/themes/default/mActionSelect.svg</iconset>
    </property>
    <property name="text">
     <string>Select Single Feature</string>
@@ -850,7 +878,7 @@
    </property>
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionSelectRectangle.png</normaloff>:/images/themes/default/mActionSelectRectangle.png</iconset>
+     <normaloff>:/images/themes/default/mActionSelectRectangle.svg</normaloff>:/images/themes/default/mActionSelectRectangle.svg</iconset>
    </property>
    <property name="text">
     <string>Select Features by Rectangle</string>
@@ -862,7 +890,7 @@
    </property>
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionSelectPolygon.png</normaloff>:/images/themes/default/mActionSelectPolygon.png</iconset>
+     <normaloff>:/images/themes/default/mActionSelectPolygon.svg</normaloff>:/images/themes/default/mActionSelectPolygon.svg</iconset>
    </property>
    <property name="text">
     <string>Select Features by Polygon</string>
@@ -874,7 +902,7 @@
    </property>
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionSelectFreehand.png</normaloff>:/images/themes/default/mActionSelectFreehand.png</iconset>
+     <normaloff>:/images/themes/default/mActionSelectFreehand.svg</normaloff>:/images/themes/default/mActionSelectFreehand.svg</iconset>
    </property>
    <property name="text">
     <string>Select Features by Freehand</string>
@@ -886,7 +914,7 @@
    </property>
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionSelectRadius.png</normaloff>:/images/themes/default/mActionSelectRadius.png</iconset>
+     <normaloff>:/images/themes/default/mActionSelectRadius.svg</normaloff>:/images/themes/default/mActionSelectRadius.svg</iconset>
    </property>
    <property name="text">
     <string>Select Features by Radius</string>
@@ -895,7 +923,7 @@
   <action name="mActionDeselectAll">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionDeselectAll.png</normaloff>:/images/themes/default/mActionDeselectAll.png</iconset>
+     <normaloff>:/images/themes/default/mActionDeselectAll.svg</normaloff>:/images/themes/default/mActionDeselectAll.svg</iconset>
    </property>
    <property name="text">
     <string>Deselect Features from All Layers</string>
@@ -907,7 +935,7 @@
    </property>
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionIdentify.png</normaloff>:/images/themes/default/mActionIdentify.png</iconset>
+     <normaloff>:/images/themes/default/mActionIdentify.svg</normaloff>:/images/themes/default/mActionIdentify.svg</iconset>
    </property>
    <property name="text">
     <string>Identify Features</string>
@@ -961,7 +989,7 @@
   <action name="mActionZoomFullExtent">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionZoomFullExtent.png</normaloff>:/images/themes/default/mActionZoomFullExtent.png</iconset>
+     <normaloff>:/images/themes/default/mActionZoomFullExtent.svg</normaloff>:/images/themes/default/mActionZoomFullExtent.svg</iconset>
    </property>
    <property name="text">
     <string>Zoom Full</string>
@@ -973,7 +1001,7 @@
   <action name="mActionZoomToLayer">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionZoomToLayer.png</normaloff>:/images/themes/default/mActionZoomToLayer.png</iconset>
+     <normaloff>:/images/themes/default/mActionZoomToLayer.svg</normaloff>:/images/themes/default/mActionZoomToLayer.svg</iconset>
    </property>
    <property name="text">
     <string>Zoom to Layer</string>
@@ -982,7 +1010,7 @@
   <action name="mActionZoomToSelected">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionZoomToSelected.png</normaloff>:/images/themes/default/mActionZoomToSelected.png</iconset>
+     <normaloff>:/images/themes/default/mActionZoomToSelected.svg</normaloff>:/images/themes/default/mActionZoomToSelected.svg</iconset>
    </property>
    <property name="text">
     <string>Zoom to Selection</string>
@@ -994,7 +1022,7 @@
   <action name="mActionZoomLast">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionZoomLast.png</normaloff>:/images/themes/default/mActionZoomLast.png</iconset>
+     <normaloff>:/images/themes/default/mActionZoomLast.svg</normaloff>:/images/themes/default/mActionZoomLast.svg</iconset>
    </property>
    <property name="text">
     <string>Zoom Last</string>
@@ -1003,7 +1031,7 @@
   <action name="mActionZoomNext">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionZoomNext.png</normaloff>:/images/themes/default/mActionZoomNext.png</iconset>
+     <normaloff>:/images/themes/default/mActionZoomNext.svg</normaloff>:/images/themes/default/mActionZoomNext.svg</iconset>
    </property>
    <property name="text">
     <string>Zoom Next</string>
@@ -1012,7 +1040,7 @@
   <action name="mActionZoomActualSize">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionZoomActual.png</normaloff>:/images/themes/default/mActionZoomActual.png</iconset>
+     <normaloff>:/images/themes/default/mActionZoomActual.svg</normaloff>:/images/themes/default/mActionZoomActual.svg</iconset>
    </property>
    <property name="text">
     <string>Zoom Actual Size</string>
@@ -1063,13 +1091,13 @@
   <action name="mActionDraw">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionDraw.png</normaloff>:/images/themes/default/mActionDraw.png</iconset>
+     <normaloff>:/images/themes/default/mActionDraw.svg</normaloff>:/images/themes/default/mActionDraw.svg</iconset>
    </property>
    <property name="text">
     <string>Refresh</string>
    </property>
    <property name="shortcut">
-    <string>Ctrl+R</string>
+    <string>F5</string>
    </property>
   </action>
   <action name="mActionTextAnnotation">
@@ -1123,7 +1151,7 @@
   <action name="mActionNewVectorLayer">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionNewVectorLayer.png</normaloff>:/images/themes/default/mActionNewVectorLayer.png</iconset>
+     <normaloff>:/images/themes/default/mActionNewVectorLayer.svg</normaloff>:/images/themes/default/mActionNewVectorLayer.svg</iconset>
    </property>
    <property name="text">
     <string>New Shapefile Layer...</string>
@@ -1132,10 +1160,10 @@
     <string>Ctrl+Shift+N</string>
    </property>
   </action>
-  <action name="mActionNewSpatialiteLayer">
+  <action name="mActionNewSpatiaLiteLayer">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionNewVectorLayer.png</normaloff>:/images/themes/default/mActionNewVectorLayer.png</iconset>
+     <normaloff>:/images/themes/default/mActionNewSpatiaLiteLayer.svg</normaloff>:/images/themes/default/mActionNewSpatiaLiteLayer.svg</iconset>
    </property>
    <property name="text">
     <string>New SpatiaLite Layer ...</string>
@@ -1156,7 +1184,7 @@
   <action name="mActionAddOgrLayer">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionAddOgrLayer.png</normaloff>:/images/themes/default/mActionAddOgrLayer.png</iconset>
+     <normaloff>:/images/themes/default/mActionAddOgrLayer.svg</normaloff>:/images/themes/default/mActionAddOgrLayer.svg</iconset>
    </property>
    <property name="text">
     <string>Add Vector Layer...</string>
@@ -1168,7 +1196,7 @@
   <action name="mActionAddRasterLayer">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionAddRasterLayer.png</normaloff>:/images/themes/default/mActionAddRasterLayer.png</iconset>
+     <normaloff>:/images/themes/default/mActionAddRasterLayer.svg</normaloff>:/images/themes/default/mActionAddRasterLayer.svg</iconset>
    </property>
    <property name="text">
     <string>Add Raster Layer...</string>
@@ -1180,7 +1208,7 @@
   <action name="mActionAddPgLayer">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionAddLayer.png</normaloff>:/images/themes/default/mActionAddLayer.png</iconset>
+     <normaloff>:/images/themes/default/mActionAddPostgisLayer.svg</normaloff>:/images/themes/default/mActionAddPostgisLayer.svg</iconset>
    </property>
    <property name="text">
     <string>Add PostGIS Layers...</string>
@@ -1192,7 +1220,7 @@
   <action name="mActionAddSpatiaLiteLayer">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionAddSpatiaLiteLayer.png</normaloff>:/images/themes/default/mActionAddSpatiaLiteLayer.png</iconset>
+     <normaloff>:/images/themes/default/mActionAddSpatiaLiteLayer.svg</normaloff>:/images/themes/default/mActionAddSpatiaLiteLayer.svg</iconset>
    </property>
    <property name="text">
     <string>Add SpatiaLite Layer...</string>
@@ -1204,7 +1232,7 @@
   <action name="mActionAddMssqlLayer">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionAddMssqlLayer.png</normaloff>:/images/themes/default/mActionAddMssqlLayer.png</iconset>
+     <normaloff>:/images/themes/default/mActionAddMssqlLayer.svg</normaloff>:/images/themes/default/mActionAddMssqlLayer.svg</iconset>
    </property>
    <property name="text">
     <string>Add MSSQL Spatial Layer...</string>
@@ -1216,7 +1244,7 @@
   <action name="mActionAddOracleLayer">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionAddOracleLayer.png</normaloff>:/images/themes/default/mActionAddOracleLayer.png</iconset>
+     <normaloff>:/images/themes/default/mActionAddOracleLayer.svg</normaloff>:/images/themes/default/mActionAddOracleLayer.svg</iconset>
    </property>
    <property name="text">
     <string>Add Oracle Spatial Layer...</string>
@@ -1228,10 +1256,10 @@
   <action name="mActionAddWmsLayer">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionAddWmsLayer.png</normaloff>:/images/themes/default/mActionAddWmsLayer.png</iconset>
+     <normaloff>:/images/themes/default/mActionAddWmsLayer.svg</normaloff>:/images/themes/default/mActionAddWmsLayer.svg</iconset>
    </property>
    <property name="text">
-    <string>Add WMS Layer...</string>
+    <string>Add WMS/WMTS Layer...</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+Shift+W</string>
@@ -1286,7 +1314,7 @@
   <action name="mActionRemoveLayer">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionRemoveLayer.png</normaloff>:/images/themes/default/mActionRemoveLayer.png</iconset>
+     <normaloff>:/images/themes/default/mActionRemoveLayer.svg</normaloff>:/images/themes/default/mActionRemoveLayer.svg</iconset>
    </property>
    <property name="text">
     <string>Remove Layer(s)</string>
@@ -1317,23 +1345,23 @@
    <property name="text">
     <string>Query...</string>
    </property>
+   <property name="shortcut">
+    <string>Ctrl+F</string>
+   </property>
   </action>
   <action name="mActionAddToOverview">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionInOverview.png</normaloff>:/images/themes/default/mActionInOverview.png</iconset>
+     <normaloff>:/images/themes/default/mActionInOverview.svg</normaloff>:/images/themes/default/mActionInOverview.svg</iconset>
    </property>
    <property name="text">
     <string>Add to Overview</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+Shift+O</string>
    </property>
   </action>
   <action name="mActionAddAllToOverview">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionAddAllToOverview.png</normaloff>:/images/themes/default/mActionAddAllToOverview.png</iconset>
+     <normaloff>:/images/themes/default/mActionAddAllToOverview.svg</normaloff>:/images/themes/default/mActionAddAllToOverview.svg</iconset>
    </property>
    <property name="text">
     <string>Add All to Overview</string>
@@ -1342,7 +1370,7 @@
   <action name="mActionRemoveAllFromOverview">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionRemoveAllFromOverview.png</normaloff>:/images/themes/default/mActionRemoveAllFromOverview.png</iconset>
+     <normaloff>:/images/themes/default/mActionRemoveAllFromOverview.svg</normaloff>:/images/themes/default/mActionRemoveAllFromOverview.svg</iconset>
    </property>
    <property name="text">
     <string>Remove All from Overview</string>
@@ -1375,10 +1403,10 @@
   <action name="mActionManagePlugins">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionShowPluginManager.png</normaloff>:/images/themes/default/mActionShowPluginManager.png</iconset>
+     <normaloff>:/images/themes/default/mActionShowPluginManager.svg</normaloff>:/images/themes/default/mActionShowPluginManager.svg</iconset>
    </property>
    <property name="text">
-    <string>Manage Plugins...</string>
+    <string>Manage and Install Plugins...</string>
    </property>
   </action>
   <action name="mActionToggleFullScreen">
@@ -1386,7 +1414,7 @@
     <string>Toggle Full Screen Mode</string>
    </property>
    <property name="shortcut">
-    <string>Ctrl+F</string>
+    <string>F11</string>
    </property>
   </action>
   <action name="mActionProjectProperties">
@@ -1404,7 +1432,7 @@
   <action name="mActionOptions">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionOptions.png</normaloff>:/images/themes/default/mActionOptions.png</iconset>
+     <normaloff>:/images/themes/default/mActionOptions.svg</normaloff>:/images/themes/default/mActionOptions.svg</iconset>
    </property>
    <property name="text">
     <string>Options...</string>
@@ -1416,7 +1444,7 @@
   <action name="mActionCustomProjection">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionCustomProjection.png</normaloff>:/images/themes/default/mActionCustomProjection.png</iconset>
+     <normaloff>:/images/themes/default/mActionCustomProjection.svg</normaloff>:/images/themes/default/mActionCustomProjection.svg</iconset>
    </property>
    <property name="text">
     <string>Custom CRS...</string>
@@ -1425,7 +1453,7 @@
   <action name="mActionConfigureShortcuts">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionOptions.png</normaloff>:/images/themes/default/mActionOptions.png</iconset>
+     <normaloff>:/images/themes/default/mActionOptions.svg</normaloff>:/images/themes/default/mActionOptions.svg</iconset>
    </property>
    <property name="text">
     <string>Configure shortcuts...</string>
@@ -1449,7 +1477,7 @@
   <action name="mActionHelpContents">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionHelpContents.png</normaloff>:/images/themes/default/mActionHelpContents.png</iconset>
+     <normaloff>:/images/themes/default/mActionHelpContents.svg</normaloff>:/images/themes/default/mActionHelpContents.svg</iconset>
    </property>
    <property name="text">
     <string>Help Contents</string>
@@ -1594,7 +1622,7 @@ Ctl (Cmd) increments by 15 deg.</string>
   <action name="mActionCustomization">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionOptions.png</normaloff>:/images/themes/default/mActionOptions.png</iconset>
+     <normaloff>:/images/themes/default/mActionOptions.svg</normaloff>:/images/themes/default/mActionOptions.svg</iconset>
    </property>
    <property name="text">
     <string>Customization...</string>
@@ -1602,7 +1630,7 @@ Ctl (Cmd) increments by 15 deg.</string>
   </action>
   <action name="actionActionCatchForCustomization">
    <property name="text">
-    <string>mActionCatchForCustomization</string>
+    <string notr="true">mActionCatchForCustomization</string>
    </property>
    <property name="toolTip">
     <string>This is here just to avoid shortcut conflicts, the shortcut is caught in QgsCustomization</string>
@@ -1622,7 +1650,7 @@ Ctl (Cmd) increments by 15 deg.</string>
   <action name="mActionDecorationCopyright">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/plugins/copyright_label.png</normaloff>:/images/themes/default/plugins/copyright_label.png</iconset>
+     <normaloff>:/images/themes/default/copyright_label.png</normaloff>:/images/themes/default/copyright_label.png</iconset>
    </property>
    <property name="text">
     <string>&amp;Copyright Label</string>
@@ -1634,7 +1662,7 @@ Ctl (Cmd) increments by 15 deg.</string>
   <action name="mActionDecorationNorthArrow">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/plugins/north_arrow.png</normaloff>:/images/themes/default/plugins/north_arrow.png</iconset>
+     <normaloff>:/images/themes/default/north_arrow.png</normaloff>:/images/themes/default/north_arrow.png</iconset>
    </property>
    <property name="text">
     <string>&amp;North Arrow</string>
@@ -1646,7 +1674,7 @@ Ctl (Cmd) increments by 15 deg.</string>
   <action name="mActionDecorationScaleBar">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/plugins/scale_bar.png</normaloff>:/images/themes/default/plugins/scale_bar.png</iconset>
+     <normaloff>:/images/themes/default/scale_bar.png</normaloff>:/images/themes/default/scale_bar.png</iconset>
    </property>
    <property name="text">
     <string>&amp;Scale Bar</string>
@@ -1658,7 +1686,7 @@ Ctl (Cmd) increments by 15 deg.</string>
   <action name="mActionAddWfsLayer">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionAddWfsLayer.png</normaloff>:/images/themes/default/mActionAddWfsLayer.png</iconset>
+     <normaloff>:/images/themes/default/mActionAddWfsLayer.svg</normaloff>:/images/themes/default/mActionAddWfsLayer.svg</iconset>
    </property>
    <property name="text">
     <string>Add WFS Layer...</string>
@@ -1673,7 +1701,7 @@ Ctl (Cmd) increments by 15 deg.</string>
    </property>
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mAction.png</normaloff>:/images/themes/default/mAction.png</iconset>
+     <normaloff>:/images/themes/default/mAction.svg</normaloff>:/images/themes/default/mAction.svg</iconset>
    </property>
    <property name="text">
     <string>Feature Action</string>
@@ -1685,7 +1713,7 @@ Ctl (Cmd) increments by 15 deg.</string>
   <action name="mActionPanToSelected">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionPanToSelected.png</normaloff>:/images/themes/default/mActionPanToSelected.png</iconset>
+     <normaloff>:/images/themes/default/mActionPanToSelected.svg</normaloff>:/images/themes/default/mActionPanToSelected.svg</iconset>
    </property>
    <property name="text">
     <string>Pan Map to Selection</string>
@@ -1699,7 +1727,7 @@ Ctl (Cmd) increments by 15 deg.</string>
     <bool>true</bool>
    </property>
    <property name="icon">
-    <iconset resource="../../images/images.qrc">
+    <iconset>
      <normaloff>:/images/themes/default/mActionTouch.png</normaloff>:/images/themes/default/mActionTouch.png</iconset>
    </property>
    <property name="text">
@@ -1742,7 +1770,7 @@ Ctl (Cmd) increments by 15 deg.</string>
   <action name="mActionAddWcsLayer">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionAddWcsLayer.png</normaloff>:/images/themes/default/mActionAddWcsLayer.png</iconset>
+     <normaloff>:/images/themes/default/mActionAddWcsLayer.svg</normaloff>:/images/themes/default/mActionAddWcsLayer.svg</iconset>
    </property>
    <property name="text">
     <string>Add WCS Layer...</string>
@@ -1799,7 +1827,7 @@ Acts on all editable layers</string>
   <action name="mActionNewBlankProject">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionFileNew.png</normaloff>:/images/themes/default/mActionFileNew.png</iconset>
+     <normaloff>:/images/themes/default/mActionFileNew.svg</normaloff>:/images/themes/default/mActionFileNew.svg</iconset>
    </property>
    <property name="text">
     <string>New Blank Project</string>
@@ -1868,7 +1896,7 @@ Acts on currently active editable layer</string>
   <action name="mActionDuplicateLayer">
    <property name="icon">
     <iconset resource="../../images/images.qrc">
-     <normaloff>:/images/themes/default/mActionAddMap.png</normaloff>:/images/themes/default/mActionAddMap.png</iconset>
+     <normaloff>:/images/themes/default/mActionDuplicateLayer.svg</normaloff>:/images/themes/default/mActionDuplicateLayer.svg</iconset>
    </property>
    <property name="text">
     <string>Duplicate Layer(s)</string>
@@ -2071,7 +2099,67 @@ Acts on currently active editable layer</string>
   </action>
   <action name="mActionNeedSupport">
    <property name="text">
-    <string>Need Support?</string>
+    <string>Need commercial support?</string>
+   </property>
+  </action>
+  <action name="mActionOpenFieldCalc">
+   <property name="icon">
+    <iconset resource="../../images/images.qrc">
+     <normaloff>:/images/themes/default/mActionCalculateField.png</normaloff>:/images/themes/default/mActionCalculateField.png</iconset>
+   </property>
+   <property name="text">
+    <string>Open Field Calculator</string>
+   </property>
+   <property name="toolTip">
+    <string>Open Field Calculator</string>
+   </property>
+  </action>
+  <action name="mActionAddDelimitedText">
+   <property name="icon">
+    <iconset resource="../../images/images.qrc">
+     <normaloff>:/images/themes/default/mActionAddDelimitedTextLayer.svg</normaloff>:/images/themes/default/mActionAddDelimitedTextLayer.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Add Delimited Text Layer...</string>
+   </property>
+   <property name="toolTip">
+    <string>Add Delimited Text Layer</string>
+   </property>
+  </action>
+  <action name="mActionPasteAsNewVector">
+   <property name="text">
+    <string>New Vector Layer</string>
+   </property>
+   <property name="toolTip">
+    <string>Paste features in clipboard into a new OGR vector layer.</string>
+   </property>
+  </action>
+  <action name="mActionPasteAsNewMemoryVector">
+   <property name="text">
+    <string>New Memory Vector Layer</string>
+   </property>
+   <property name="toolTip">
+    <string>Paste features in clipboard into a new memory vector layer.</string>
+   </property>
+  </action>
+  <action name="mActionDxfExport">
+   <property name="text">
+    <string>DXF Export...</string>
+   </property>
+  </action>
+  <action name="mActionFillRing">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="../../images/images.qrc">
+     <normaloff>:/images/themes/default/mActionFillRing.png</normaloff>:/images/themes/default/mActionFillRing.png</iconset>
+   </property>
+   <property name="text">
+    <string>Fill Ring</string>
+   </property>
+   <property name="toolTip">
+    <string>Fill Ring</string>
    </property>
   </action>
  </widget>

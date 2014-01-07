@@ -38,7 +38,7 @@ class QgsRasterHistogramWidget;
   *@author Tim Sutton
   */
 
-class QgsRasterLayerProperties : public QgsOptionsDialogBase, private Ui::QgsRasterLayerPropertiesBase
+class APP_EXPORT QgsRasterLayerProperties : public QgsOptionsDialogBase, private Ui::QgsRasterLayerPropertiesBase
 {
     Q_OBJECT
 
@@ -154,6 +154,8 @@ class QgsRasterLayerProperties : public QgsOptionsDialogBase, private Ui::QgsRas
     //bool mRasterLayerIsInternal;
 
     QgsRasterRendererWidget* mRendererWidget;
+
+    bool rasterIsMultiBandColor();
 
     void setupTransparencyTable( int nBands );
 

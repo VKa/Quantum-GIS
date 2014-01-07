@@ -1,5 +1,5 @@
 /***************************************************************************
-      qgsdelimitedtextprovider.h  -  Data provider for delimted text
+      qgsdelimitedtextprovider.h  -  Data provider for delimited text
                              -------------------
     begin                : 2004-02-27
     copyright            : (C) 2004 by Gary E.Sherman
@@ -201,6 +201,14 @@ class QgsDelimitedTextProvider : public QgsVectorDataProvider
     */
     bool boundsCheck( QgsGeometry *geom );
 
+    /**
+     * Try to read field types from CSVT (or equialent xxxT) file.
+     * @param filename The name of the file from which to read the field types
+     * @param message  Pointer to a string to receive a status message
+     * @return A list of field type strings, empty if not found or not valid
+     */
+    QStringList readCsvtFieldTypes( QString filename, QString *message = 0 );
+
   private slots:
 
     void onFileUpdated();
@@ -224,15 +232,18 @@ class QgsDelimitedTextProvider : public QgsVectorDataProvider
     QgsGeometry* loadGeometryXY( const QStringList& tokens,  QgsDelimitedTextFeatureIterator *iterator );
     void fetchAttribute( QgsFeature& feature, int fieldIdx, const QStringList& tokens );
     void setUriParameter( QString parameter, QString value );
-    bool setNextFeatureId( qint64 fid ) { return mFile->setNextRecordId( (long) fid ); }
+    bool setNextFeatureId( qint64 fid ) { return mFile->setNextRecordId(( long ) fid ); }
 
 
     QgsGeometry *geomFromWkt( QString &sWkt );
     bool pointFromXY( QString &sX, QString &sY, QgsPoint &point );
     double dmsStringToDouble( const QString &sX, bool *xOk );
 
-
-    QString mUri;
+    // mLayerValid defines whether the layer has been loaded as a valid layer
+    bool mLayerValid;
+    // mValid defines whether the layer is currently valid (may differ from
+    // mLayerValid if the file has been rewritten)
+    bool mValid;
 
     //! Text file
     QgsDelimitedTextFile *mFile;
@@ -263,8 +274,6 @@ class QgsDelimitedTextProvider : public QgsVectorDataProvider
     //! Layer extent
     QgsRectangle mExtent;
 
-    bool mValid;
-
     int mGeomType;
 
     long mNumberFeatures;
@@ -286,6 +295,9 @@ class QgsDelimitedTextProvider : public QgsVectorDataProvider
     QStringList mInvalidLines;
     //! Only want to show the invalid lines once to the user
     bool mShowInvalidLines;
+
+    //! Record file updates, flags rescan required
+    bool mRescanRequired;
 
     struct wkbPoint
     {
@@ -309,7 +321,7 @@ class QgsDelimitedTextProvider : public QgsVectorDataProvider
     QgsSpatialIndex *mSpatialIndex;
 
     friend class QgsDelimitedTextFeatureIterator;
-    QgsDelimitedTextFeatureIterator* mActiveIterator;
+    QSet< QgsDelimitedTextFeatureIterator* > mActiveIterators;
 };
 
 #endif

@@ -76,7 +76,7 @@ bool QgsGdalLayerItem::setCrs( QgsCoordinateReferenceSystem crs )
   return true;
 }
 
-QVector<QgsDataItem*> QgsGdalLayerItem::createChildren( )
+QVector<QgsDataItem*> QgsGdalLayerItem::createChildren()
 {
   QgsDebugMsg( "Entered, path=" + path() );
   QVector<QgsDataItem*> children;
@@ -240,7 +240,7 @@ QGISEXTERN QgsDataItem * dataItem( QString thePath, QgsDataItem* parentItem )
       // do not print errors, but write to debug
       CPLPushErrorHandler( CPLQuietErrorHandler );
       CPLErrorReset();
-      if ( ! GDALIdentifyDriver( thePath.toLocal8Bit().constData(), 0 ) )
+      if ( ! GDALIdentifyDriver( TO8F( thePath ), 0 ) )
       {
         QgsDebugMsgLevel( "Skipping VRT file because root is not a GDAL VRT", 2 );
         CPLPopErrorHandler();

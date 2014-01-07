@@ -18,6 +18,7 @@
 #ifndef QGSOPTIONS_H
 #define QGSOPTIONS_H
 
+#include "qgsoptionsdialogbase.h"
 #include "ui_qgsoptionsbase.h"
 #include "qgisgui.h"
 #include "qgisapp.h"
@@ -32,7 +33,7 @@
  * \class QgsOptions
  * \brief Set user options and preferences
  */
-class QgsOptions : public QDialog, private Ui::QgsOptionsBase
+class APP_EXPORT QgsOptions : public QgsOptionsDialogBase, private Ui::QgsOptionsBase
 {
     Q_OBJECT
   public:
@@ -50,6 +51,11 @@ class QgsOptions : public QDialog, private Ui::QgsOptionsBase
      * @return theme name (a directory name in the themes directory)
      */
     QString theme();
+
+    /** Sets the page with the specified widget name as the current page
+     * @note added in QGIS 2.1
+     */
+    void setCurrentPage( QString pageWidgetName );
 
   public slots:
     void on_cbxProjectDefaultNew_toggled( bool checked );
@@ -122,6 +128,11 @@ class QgsOptions : public QDialog, private Ui::QgsOptionsBase
      * @note added in QGIS 1.9
      */
     void on_mCustomGroupBoxChkBx_clicked( bool chkd );
+
+    /** Slot to set whether to use custom side bar style
+      * @note added in QGIS 2.2
+      */
+    void on_mCustomSideBarSide_clicked( bool chkd );
 
     /** Slot to set whether to bold group box titles
      * @note added in QGIS 1.9
@@ -216,11 +227,6 @@ class QgsOptions : public QDialog, private Ui::QgsOptionsBase
      */
     void on_mOptionsStackedWidget_currentChanged( int theIndx );
 
-    /** Slot to update widget of vertical tabs
-     * @note added in QGIS 1.9
-     */
-    void updateVerticalTabs();
-
     /* Load the list of drivers available in GDAL
      * @note added in 2.0
      */
@@ -230,6 +236,11 @@ class QgsOptions : public QDialog, private Ui::QgsOptionsBase
      * @note added in 2.0
      */
     void saveGdalDriverList();
+
+    void on_mRemoveDefaultTransformButton_clicked();
+    void on_mAddDefaultTransformButton_clicked();
+
+    void on_mSimplifyDrawingSlider_valueChanged( int value );
 
   private:
     QStringList i18nList();
@@ -244,10 +255,9 @@ class QgsOptions : public QDialog, private Ui::QgsOptionsBase
      */
     void addCustomEnvVarRow( QString varName, QString varVal, QString varApply = QString() );
 
-  protected:
-    void showEvent( QShowEvent * e );
-    void paintEvent( QPaintEvent * e );
+    void saveDefaultDatumTransformations();
 
+  protected:
     QgisAppStyleSheet* mStyleSheetBuilder;
     QMap<QString, QVariant> mStyleSheetNewOpts;
     QMap<QString, QVariant> mStyleSheetOldOpts;

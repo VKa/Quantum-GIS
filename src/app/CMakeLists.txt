@@ -1,5 +1,4 @@
 SET(QGIS_APP_SRCS
-  main.cpp
   qgisapp.cpp
   qgisappinterface.cpp
   qgisappstylesheet.cpp
@@ -28,6 +27,7 @@ SET(QGIS_APP_SRCS
   qgsdecorationscalebardialog.cpp
   qgsdecorationgrid.cpp
   qgsdecorationgriddialog.cpp
+  qgsdxfexportdialog.cpp
   qgsformannotationdialog.cpp
   qgshtmlannotationdialog.cpp
   qgsdelattrdialog.cpp
@@ -44,17 +44,17 @@ SET(QGIS_APP_SRCS
   qgslabelpreview.cpp
   qgsloadstylefromdbdialog.cpp
   qgssavestyletodbdialog.cpp
+  qgsguivectorlayertools.cpp
 
   qgsmaptooladdfeature.cpp
-  qgsmaptooladdvertex.cpp
   qgsmaptooladdpart.cpp
   qgsmaptooladdring.cpp
+  qgsmaptoolfillring.cpp
   qgsmaptoolannotation.cpp
   qgsmaptoolcapture.cpp
   qgsmaptoolchangelabelproperties.cpp
   qgsmaptooldeletering.cpp
   qgsmaptooldeletepart.cpp
-  qgsmaptooldeletevertex.cpp
   qgsmaptooledit.cpp
   qgsmaptoolfeatureaction.cpp
   qgsmaptoolformannotation.cpp
@@ -66,7 +66,6 @@ SET(QGIS_APP_SRCS
   qgsmaptoolmeasureangle.cpp
   qgsmaptoolmovefeature.cpp
   qgsmaptoolmovelabel.cpp
-  qgsmaptoolmovevertex.cpp
   qgsmaptooloffsetcurve.cpp
   qgsmaptoolreshape.cpp
   qgsmaptoolrotatefeature.cpp
@@ -80,9 +79,10 @@ SET(QGIS_APP_SRCS
   qgsmaptoolselectutils.cpp
   qgsmaptoolsimplify.cpp
   qgsmaptoolsplitfeatures.cpp
+  qgsmaptoolsplitparts.cpp
   qgsmaptoolsvgannotation.cpp
   qgsmaptooltextannotation.cpp
-  qgsmaptoolvertexedit.cpp  
+  qgsmaptoolvertexedit.cpp
 
   nodetool/qgsmaptoolnodetool.cpp
   nodetool/qgsselectedfeature.cpp
@@ -94,8 +94,6 @@ SET(QGIS_APP_SRCS
   qgsoptions.cpp
   #qgspastetransformations.cpp
   qgspointrotationitem.cpp
-  qgspluginitem.cpp
-  qgspluginmanager.cpp
   qgspluginmetadata.cpp
   qgspluginregistry.cpp
   qgsprojectlayergroupdialog.cpp
@@ -104,6 +102,7 @@ SET(QGIS_APP_SRCS
   qgsrasterlayerproperties.cpp
   qgstextannotationdialog.cpp
   qgsshortcutsmanager.cpp
+  qgsguivectorlayertools.h
   qgssnappingdialog.cpp
   qgssvgannotationdialog.cpp
   qgsundowidget.cpp
@@ -144,7 +143,6 @@ SET(QGIS_APP_SRCS
   ogr/qgsogrhelperfunctions.cpp
   ogr/qgsopenvectorlayerdialog.cpp
   ogr/qgsnewogrconnection.cpp
-  ogr/qgsogrsublayersdialog.cpp
   ogr/qgsvectorlayersaveasdialog.cpp
 
   gps/qgsgpsinformationwidget.cpp
@@ -153,6 +151,12 @@ SET(QGIS_APP_SRCS
   openstreetmap/qgsosmdownloaddialog.cpp
   openstreetmap/qgsosmimportdialog.cpp
   openstreetmap/qgsosmexportdialog.cpp
+
+  pluginmanager/qgspluginmanager.cpp
+  pluginmanager/qgspluginmanager_texts.cpp
+  pluginmanager/qgsapppluginmanagerinterface.cpp
+  pluginmanager/qgspluginsortfilterproxymodel.cpp
+  pluginmanager/qgspluginitemdelegate.cpp
 
   qgsnewspatialitelayerdialog.cpp
 )
@@ -172,6 +176,7 @@ SET (QGIS_APP_MOC_HDRS
   qgsattributetabledialog.h
   qgsbookmarks.h
   qgsbrowserdockwidget.h
+  qgsclipboard.h
   qgsconfigureshortcutsdialog.h
   qgscustomization.h
   qgscustomprojectiondialog.h
@@ -187,6 +192,7 @@ SET (QGIS_APP_MOC_HDRS
   qgsdelattrdialog.h
   qgsdiagramproperties.h
   qgsdisplayangle.h
+  qgsdxfexportdialog.h
   qgsfeatureaction.h
   qgsfieldcalculator.h
   qgsfieldsproperties.h
@@ -205,11 +211,10 @@ SET (QGIS_APP_MOC_HDRS
   qgsmaptoolcapture.h
   qgsmaptooladdpart.h
   qgsmaptooladdring.h
-  qgsmaptooladdvertex.h
+  qgsmaptoolfillring.h
   qgsmaptoolchangelabelproperties.h
   qgsmaptooldeletepart.h
   qgsmaptooldeletering.h
-  qgsmaptooldeletevertex.h
   qgsmaptoolfeatureaction.h
   qgsmaptoolpinlabels.h
   qgsmaptoolshowhidelabels.h
@@ -217,7 +222,6 @@ SET (QGIS_APP_MOC_HDRS
   qgsmaptoolmeasureangle.h
   qgsmaptoolmovefeature.h
   qgsmaptoolmovelabel.h
-  qgsmaptoolmovevertex.h
   qgsmaptooloffsetcurve.h
   qgsmaptoolreshape.h
   qgsmaptoolrotatefeature.h
@@ -230,6 +234,7 @@ SET (QGIS_APP_MOC_HDRS
   qgsmaptoolselectrectangle.h
   qgsmaptoolsimplify.h
   qgsmaptoolsplitfeatures.h
+  qgsmaptoolsplitparts.h
   qgsmaptoolvertexedit.h
 
   nodetool/qgsmaptoolnodetool.h
@@ -240,7 +245,6 @@ SET (QGIS_APP_MOC_HDRS
   qgsmergeattributesdialog.h
   qgsoptions.h
   #qgspastetransformations.h
-  qgspluginmanager.h
   qgsprojectlayergroupdialog.h
   qgsprojectproperties.h
   qgsrastercalcdialog.h
@@ -278,7 +282,6 @@ SET (QGIS_APP_MOC_HDRS
 
   ogr/qgsopenvectorlayerdialog.h
   ogr/qgsnewogrconnection.h
-  ogr/qgsogrsublayersdialog.h
   ogr/qgsvectorlayersaveasdialog.h
 
   gps/qgsgpsinformationwidget.h
@@ -286,6 +289,11 @@ SET (QGIS_APP_MOC_HDRS
   openstreetmap/qgsosmdownloaddialog.h
   openstreetmap/qgsosmimportdialog.h
   openstreetmap/qgsosmexportdialog.h
+
+  pluginmanager/qgspluginmanager.h
+  pluginmanager/qgsapppluginmanagerinterface.h
+  pluginmanager/qgspluginsortfilterproxymodel.h
+  pluginmanager/qgspluginitemdelegate.h
 
   qgsnewspatialitelayerdialog.h
   )
@@ -368,6 +376,13 @@ SET(IMAGE_RCCS ../../images/images.qrc)
 
 QT4_ADD_RESOURCES(IMAGE_RCC_SRCS ${IMAGE_RCCS})
 
+SET(TEST_RCC_SRCS)
+IF (ENABLE_TESTS)
+  # add test resources, e.g. standard test font
+  SET(TEST_RCCS ../../tests/testdata/testdata.qrc)
+  QT4_ADD_RESOURCES(TEST_RCC_SRCS ${TEST_RCCS})
+ENDIF (ENABLE_TESTS)
+
 QT4_WRAP_CPP(QGIS_APP_MOC_SRCS ${QGIS_APP_MOC_HDRS})
 
 IF (WIN32)
@@ -403,7 +418,7 @@ IF(PEDANTIC)
 ENDIF(PEDANTIC)
 
 INCLUDE_DIRECTORIES(
-  ${CMAKE_CURRENT_SOURCE_DIR} composer legend attributetable
+  ${CMAKE_CURRENT_SOURCE_DIR} composer legend pluginmanager
   ${CMAKE_CURRENT_BINARY_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}/../ui
   ${QWT_INCLUDE_DIR}
@@ -412,8 +427,8 @@ INCLUDE_DIRECTORIES(
   ../analysis/raster ../analysis/openstreetmap
   ../core
   ../core/gps
-  ../core/composer ../core/raster ../core/symbology-ng
-  ../gui ../gui/symbology-ng ../gui/attributetable ../gui/raster
+  ../core/composer ../core/dxf ../core/raster ../core/symbology-ng
+  ../gui ../gui/symbology-ng ../gui/attributetable ../gui/raster ../gui/editorwidgets ../gui/editorwidgets/core
   ../plugins
   ../python
   gps
@@ -446,10 +461,43 @@ ENDIF (POSTGRES_FOUND)
 
 #############
 IF (ANDROID)
-  ADD_LIBRARY(${QGIS_APP_NAME} SHARED ${QGIS_APP_SRCS} ${QGIS_APP_MOC_SRCS} ${QGIS_APP_HDRS} ${QGIS_APP_MOC_HDRS} ${IMAGE_RCC_SRCS})
+  ADD_LIBRARY(${QGIS_APP_NAME} SHARED main.cpp ${QGIS_APP_SRCS} ${QGIS_APP_MOC_SRCS} ${QGIS_APP_HDRS} ${QGIS_APP_MOC_HDRS} ${IMAGE_RCC_SRCS} ${TEST_RCC_SRCS})
 ELSE (ANDROID)
-  ADD_EXECUTABLE(${QGIS_APP_NAME} MACOSX_BUNDLE WIN32 ${QGIS_APP_SRCS} ${QGIS_APP_MOC_SRCS} ${IMAGE_RCC_SRCS})
+  ADD_EXECUTABLE(${QGIS_APP_NAME} MACOSX_BUNDLE WIN32 main.cpp ${QGIS_APP_SRCS} ${QGIS_APP_MOC_SRCS} ${IMAGE_RCC_SRCS} ${TEST_RCC_SRCS})
 ENDIF (ANDROID)
+
+IF (WIN32)
+  IF (MSVC)
+    ADD_DEFINITIONS("-DAPP_EXPORT=${DLLEXPORT}")
+  ELSE (MSVC)
+    ADD_DEFINITIONS("-UAPP_EXPORT \"-DAPP_EXPORT=${DLLEXPORT}\"")
+  ENDIF (MSVC)
+ENDIF (WIN32)
+
+# shared library used by tests - TODO: use it also for qgis executable?
+ADD_LIBRARY(qgis_app SHARED ${QGIS_APP_SRCS} ${QGIS_APP_MOC_SRCS} ${QGIS_APP_HDRS} ${QGIS_APP_MOC_HDRS} ${IMAGE_RCC_SRCS})
+
+TARGET_LINK_LIBRARIES(qgis_app
+  ${QWT_LIBRARY}
+  ${QT_QTSQL_LIBRARY}
+  ${QT_QTUITOOLS_LIBRARY}
+  ${QT_QTWEBKIT_LIBRARY}
+  #should only be needed for win
+  ${QT_QTMAIN_LIBRARY}
+  ${QWTPOLAR_LIBRARY}
+  ${GDAL_LIBRARY}
+  qgis_core
+  qgis_gui
+  qgis_analysis
+)
+
+IF (APPLE)
+  TARGET_LINK_LIBRARIES(qgis_app ${APP_SERVICES_LIBRARY})
+ENDIF(APPLE)
+
+if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+  SET_TARGET_PROPERTIES(qgis_app PROPERTIES STATIC_LIBRARY_FLAGS "/machine:x64")
+ENDIF(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
 
 TARGET_LINK_LIBRARIES(${QGIS_APP_NAME}
   ${QWT_LIBRARY}
@@ -472,6 +520,7 @@ ENDIF (ANDROID)
 IF(WIN32)
   ADD_DEFINITIONS(-DQWT_DLL)
   TARGET_LINK_LIBRARIES(${QGIS_APP_NAME} DbgHelp)
+  TARGET_LINK_LIBRARIES(qgis_app DbgHelp)
 ENDIF(WIN32)
 
 IF (APPLE)
@@ -482,6 +531,11 @@ IF (APPLE)
     INSTALL_RPATH_USE_LINK_PATH true
     MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/mac/app.info.plist.in")
 ENDIF(APPLE)
+
+IF (CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+  FIND_LIBRARY(EXECINFO_LIBRARY NAMES execinfo)
+  TARGET_LINK_LIBRARIES(${QGIS_APP_NAME} ${EXECINFO_LIBRARY})
+ENDIF (CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
 
 IF (POSTGRES_FOUND)
   TARGET_LINK_LIBRARIES (${QGIS_APP_NAME} ${POSTGRES_LIBRARY})

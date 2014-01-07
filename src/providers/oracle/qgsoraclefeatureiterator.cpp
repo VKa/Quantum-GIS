@@ -27,6 +27,8 @@ QgsOracleFeatureIterator::QgsOracleFeatureIterator( QgsOracleProvider *p, const 
     , P( p )
     , mRewind( false )
 {
+  P->mActiveIterators << this;
+
   mQry = QSqlQuery( *P->mConnection );
 
   if ( mRequest.flags() & QgsFeatureRequest::SubsetOfAttributes )
@@ -42,6 +44,9 @@ QgsOracleFeatureIterator::QgsOracleFeatureIterator( QgsOracleProvider *p, const 
 
   switch ( request.filterType() )
   {
+    case QgsFeatureRequest::FilterExpression:
+      break;
+
     case QgsFeatureRequest::FilterRect:
       if ( !P->mGeometryColumn.isNull() )
       {
@@ -51,10 +56,10 @@ QgsOracleFeatureIterator::QgsOracleFeatureIterator( QgsOracleProvider *p, const 
                                 "mdsys.sdo_ordinate_array(%2,%3,%4,%5)"
                                 ")" )
                        .arg( P->mSrid < 1 ? "NULL" : QString::number( P->mSrid ) )
-                       .arg( rect.xMinimum(), 0, 'f', 16 )
-                       .arg( rect.yMinimum(), 0, 'f', 16 )
-                       .arg( rect.xMaximum(), 0, 'f', 16 )
-                       .arg( rect.yMaximum(), 0, 'f', 16 );
+                       .arg( qgsDoubleToString( rect.xMinimum() ) )
+                       .arg( qgsDoubleToString( rect.yMinimum() ) )
+                       .arg( qgsDoubleToString( rect.xMaximum() ) )
+                       .arg( qgsDoubleToString( rect.yMaximum() ) );
 
         if ( !P->mSpatialIndex.isNull() )
         {
@@ -73,6 +78,10 @@ QgsOracleFeatureIterator::QgsOracleFeatureIterator( QgsOracleProvider *p, const 
 
     case QgsFeatureRequest::FilterFid:
       whereClause = P->whereClause( request.filterFid() );
+      break;
+
+    case QgsFeatureRequest::FilterFids:
+      whereClause = P->whereClause( request.filterFids() );
       break;
 
     case QgsFeatureRequest::FilterNone:
@@ -103,7 +112,7 @@ QgsOracleFeatureIterator::~QgsOracleFeatureIterator()
   close();
 }
 
-bool QgsOracleFeatureIterator::nextFeature( QgsFeature& feature )
+bool QgsOracleFeatureIterator::fetchFeature( QgsFeature& feature )
 {
   feature.setValid( false );
 
@@ -217,6 +226,8 @@ bool QgsOracleFeatureIterator::nextFeature( QgsFeature& feature )
     }
 
     feature.setValid( true );
+    feature.setFields( &P->mAttributeFields ); // allow name-based attribute lookups
+
     return true;
   }
 }
@@ -237,6 +248,8 @@ bool QgsOracleFeatureIterator::close()
     return false;
 
   mQry.finish();
+
+  P->mActiveIterators.remove( this );
 
   return true;
 }

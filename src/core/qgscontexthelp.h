@@ -18,14 +18,11 @@
  ***************************************************************************/
 #ifndef QGSCONTEXTHELP_H
 #define QGSCONTEXTHELP_H
+
 #include <QObject>
+#include <QHash>
+#include <QProcess>
 
-class QProcess;
-class QTcpSocket;
-
-#ifdef Q_OS_MACX
-#define QGSCONTEXTHELP_REUSE 1
-#endif
 /** \ingroup core
  * Provides a context based help browser for a dialog.
  *
@@ -34,11 +31,6 @@ class QTcpSocket;
  * viewer using QProcess and ensures that only one viewer is open.
  * The viewer will be terminated if open when the main application quits.
  *
- * If the compile-time flag QGSCONTEXTHELP_REUSE is defined, the help viewer
- * will be reused if it is still open. If this flag is not set, the viewer
- * process will be terminated if open and restarted; this makes it the top
- * window for window managers such as Linux/GNOME which will make a window
- * active but not bring it to the top if raised programatically.
  */
 class CORE_EXPORT QgsContextHelp : public QObject
 {
@@ -47,27 +39,24 @@ class CORE_EXPORT QgsContextHelp : public QObject
     static void run( QString context );
 
   private slots:
-    void readPort();
     void processExited();
+    void error( QProcess::ProcessError error );
 
   private:
     //! Constructor
-    QgsContextHelp( QString context );
+    QgsContextHelp();
     //! Destructor
     ~QgsContextHelp();
 
-    QProcess *start( QString context );
+    QProcess *start();
     void showContext( QString context );
 
     static QgsContextHelp *gContextHelp; // Singleton instance
     QProcess *mProcess;
-#ifdef QGSCONTEXTHELP_REUSE
-    // Communications socket when reusing existing process
-    QTcpSocket *mSocket;
-#else
-    // Replacement process when terminating and restarting
-    QProcess *mNextProcess;
-#endif
+
+    static QHash<QString, QString> gContextHelpTexts;
+
+    void init();
 };
 
 #endif //QGSCONTEXTHELP_H

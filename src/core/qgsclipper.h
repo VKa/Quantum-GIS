@@ -82,7 +82,7 @@ class CORE_EXPORT QgsClipper
       @param wkb pointer to the start of the line wkb
       @param clipExtent clipping bounds
       @param line out: clipped line coordinates*/
-    static unsigned char* clippedLineWKB( unsigned char* wkb, const QgsRectangle& clipExtent, QPolygonF& line );
+    static const unsigned char* clippedLineWKB( const unsigned char* wkb, const QgsRectangle& clipExtent, QPolygonF& line );
 
   private:
 
@@ -179,11 +179,11 @@ inline void QgsClipper::trimPolygon( QPolygonF& pts, const QgsRectangle& clipRec
   tmpPts.reserve( pts.size() );
 
   trimPolygonToBoundary( pts, tmpPts, clipRect, XMax, clipRect.xMaximum() );
-  pts.clear();
+  pts.resize( 0 );
   trimPolygonToBoundary( tmpPts, pts, clipRect, YMax, clipRect.yMaximum() );
-  tmpPts.clear();
+  tmpPts.resize( 0 );
   trimPolygonToBoundary( pts, tmpPts, clipRect, XMin, clipRect.xMinimum() );
-  pts.clear();
+  pts.resize( 0 );
   trimPolygonToBoundary( tmpPts, pts, clipRect, YMin, clipRect.yMinimum() );
 }
 

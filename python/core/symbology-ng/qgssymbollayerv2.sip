@@ -24,9 +24,7 @@ class QgsSymbolLayerV2
       break;
 
     case QgsSymbolV2::Line:
-      if (dynamic_cast<QgsLineDecorationSymbolLayerV2*>(sipCpp) != NULL)
-	sipClass = sipClass_QgsLineDecorationSymbolLayerV2;
-      else if (dynamic_cast<QgsMarkerLineSymbolLayerV2*>(sipCpp) != NULL)
+      if (dynamic_cast<QgsMarkerLineSymbolLayerV2*>(sipCpp) != NULL)
 	sipClass = sipClass_QgsMarkerLineSymbolLayerV2;
       else if (dynamic_cast<QgsSimpleLineSymbolLayerV2*>(sipCpp) != NULL)
 	sipClass = sipClass_QgsSimpleLineSymbolLayerV2;
@@ -76,6 +74,8 @@ class QgsSymbolLayerV2
     virtual QgsSymbolLayerV2* clone() const = 0 /Factory/;
 
     virtual void toSld( QDomDocument &doc, QDomElement &element, QgsStringMap props ) const;
+
+    virtual QString ogrFeatureStyle( double mmScaleFactor, double mapUnitScaleFactor ) const;
 
     virtual QgsStringMap properties() const = 0;
 
@@ -157,6 +157,8 @@ class QgsMarkerSymbolLayerV2 : QgsSymbolLayerV2
 
   protected:
     QgsMarkerSymbolLayerV2( bool locked = false );
+    void markerOffset( const QgsSymbolV2RenderContext& context, double& offsetX, double& offsetY ) const;
+    static QPointF _rotatedOffset( const QPointF& offset, double angle );
 };
 
 class QgsLineSymbolLayerV2 : QgsSymbolLayerV2
@@ -200,5 +202,5 @@ class QgsFillSymbolLayerV2 : QgsSymbolLayerV2
   protected:
     QgsFillSymbolLayerV2( bool locked = false );
     /**Default method to render polygon*/
-    void _renderPolygon( QPainter* p, const QPolygonF& points, const QList<QPolygonF>* rings );
+    void _renderPolygon( QPainter* p, const QPolygonF& points, const QList<QPolygonF>* rings, QgsSymbolV2RenderContext& context );
 };

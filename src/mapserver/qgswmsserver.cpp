@@ -39,6 +39,8 @@
 #include "qgslegendmodel.h"
 #include "qgscomposerlegenditem.h"
 #include "qgspaintenginehack.h"
+#include "qgsogcutils.h"
+#include "qgsfeature.h"
 
 #include <QImage>
 #include <QPainter>
@@ -171,13 +173,13 @@ QDomDocument QgsWMSServer::getCapabilities( QString version, bool fullProjectInf
 
   //wms:GetMap
   elem = doc.createElement( "GetMap"/*wms:GetMap*/ );
-  appendFormats( doc, elem, QStringList() << "image/jpeg" << "image/png" << "image/png; mode=8bit" << "image/png; mode=1bit" );
+  appendFormats( doc, elem, QStringList() << "image/jpeg" << "image/png" << "image/png; mode=16bit" << "image/png; mode=8bit" << "image/png; mode=1bit" );
   elem.appendChild( dcpTypeElement.cloneNode().toElement() ); //this is the same as for 'GetCapabilities'
   requestElement.appendChild( elem );
 
   //wms:GetFeatureInfo
   elem = doc.createElement( "GetFeatureInfo" );
-  appendFormats( doc, elem, QStringList() << "text/plain" << "text/html" << "text/xml" );
+  appendFormats( doc, elem, QStringList() << "text/plain" << "text/html" << "text/xml" << "application/vnd.ogc.gml" << "application/vnd.ogc.gml/3.1.1" );
   elem.appendChild( dcpTypeElement.cloneNode().toElement() ); //this is the same as for 'GetCapabilities'
   requestElement.appendChild( elem );
 
@@ -249,6 +251,40 @@ QDomDocument QgsWMSServer::getCapabilities( QString version, bool fullProjectInf
   return doc;
 }
 
+QDomDocument QgsWMSServer::getContext()
+{
+  QDomDocument doc;
+  addXMLDeclaration( doc );
+  QDomElement owsContextElem = doc.createElement( "OWSContext" );
+  owsContextElem.setAttribute( "xmlns", "http://www.opengis.net/ows-context" );
+  owsContextElem.setAttribute( "xmlns:ows-context", "http://www.opengis.net/ows-context" );
+  owsContextElem.setAttribute( "xmlns:context", "http://www.opengis.net/context" );
+  owsContextElem.setAttribute( "xmlns:ows", "http://www.opengis.net/ows" );
+  owsContextElem.setAttribute( "xmlns:sld", "http://www.opengis.net/sld" );
+  owsContextElem.setAttribute( "xmlns:ogc", "http://www.opengis.net/ogc" );
+  owsContextElem.setAttribute( "xmlns:gml", "http://www.opengis.net/gml" );
+  owsContextElem.setAttribute( "xmlns:kml", "http://www.opengis.net/kml/2.2" );
+  owsContextElem.setAttribute( "xmlns:xlink", "http://www.w3.org/1999/xlink" );
+  owsContextElem.setAttribute( "xmlns:ns9", "http://www.w3.org/2005/Atom" );
+  owsContextElem.setAttribute( "xmlns:xal", "urn:oasis:names:tc:ciq:xsdschema:xAL:2.0" );
+  owsContextElem.setAttribute( "xmlns:ins", "http://www.inspire.org" );
+  owsContextElem.setAttribute( "version", "0.3.1" );
+  doc.appendChild( owsContextElem );
+
+  if ( mConfigParser )
+  {
+    //Prepare url
+    QString hrefString = mConfigParser->serviceUrl();
+    if ( hrefString.isEmpty() )
+    {
+      hrefString = serviceUrl();
+    }
+    mConfigParser->owsGeneralAndResourceList( owsContextElem, doc, hrefString );
+  }
+
+  return doc;
+}
+
 QImage* QgsWMSServer::getLegendGraphics()
 {
   if ( !mConfigParser || !mMapRenderer )
@@ -297,9 +333,6 @@ QImage* QgsWMSServer::getLegendGraphics()
     return 0;
   }
 
-  QgsLegendModel legendModel;
-  legendModel.setLayerSet( layerIds );
-
   //create first image (to find out dpi)
   QImage* theImage = createImage( 10, 10 );
   if ( !theImage )
@@ -309,7 +342,6 @@ QImage* QgsWMSServer::getLegendGraphics()
   double mmToPixelFactor = theImage->dotsPerMeterX() / 1000.0;
   double maxTextWidth = 0;
   double maxSymbolWidth = 0;
-  double currentY = 0;
   double fontOversamplingFactor = 10.0;
 
   //get icon size, spaces between legend items and font from config parser
@@ -319,8 +351,108 @@ QImage* QgsWMSServer::getLegendGraphics()
   legendParameters( mmToPixelFactor, fontOversamplingFactor, boxSpace, layerSpace, layerTitleSpace, symbolSpace,
                     iconLabelSpace, symbolWidth, symbolHeight, layerFont, itemFont, layerFontColor, itemFontColor );
 
+  QString rule;
+  QMap<QString, QString>::const_iterator ruleIt = mParameterMap.find( "RULE" );
+  if ( ruleIt != mParameterMap.constEnd() )
+  {
+    rule = ruleIt.value();
+
+    QMap<QString, QString>::const_iterator widthIt = mParameterMap.find( "WIDTH" );
+    if ( widthIt != mParameterMap.constEnd() )
+    {
+      bool conversionSuccess;
+      double width = widthIt.value().toDouble( &conversionSuccess );
+      if ( conversionSuccess )
+      {
+        symbolWidth = width;
+      }
+    }
+
+    QMap<QString, QString>::const_iterator heightIt = mParameterMap.find( "HEIGHT" );
+    if ( heightIt != mParameterMap.constEnd() )
+    {
+      bool conversionSuccess;
+      double width = heightIt.value().toDouble( &conversionSuccess );
+      if ( conversionSuccess )
+      {
+        symbolHeight = width;
+      }
+    }
+  }
+
+  QgsLegendModel legendModel;
+  legendModel.setLayerSet( layerIds, scaleDenominator, rule );
+
   //first find out image dimensions without painting
   QStandardItem* rootItem = legendModel.invisibleRootItem();
+  if ( !rootItem )
+  {
+    return 0;
+  }
+
+  if ( !rule.isEmpty() )
+  {
+    //create second image with the right dimensions
+    QImage* paintImage = createImage( symbolWidth, symbolHeight );
+
+    //go through the items a second time for painting
+    QPainter p( paintImage );
+    p.setRenderHint( QPainter::Antialiasing, true );
+
+    QgsComposerLegendItem* currentComposerItem = dynamic_cast<QgsComposerLegendItem*>( rootItem->child( 0 )->child( 0 ) );
+    if ( currentComposerItem != NULL )
+    {
+      QgsComposerLegendItem::ItemType type = currentComposerItem->itemType();
+      switch ( type )
+      {
+        case QgsComposerLegendItem::SymbologyV2Item:
+          drawLegendSymbolV2( currentComposerItem, &p, 0., 0., symbolWidth, symbolHeight, 0. );
+          break;
+        case QgsComposerLegendItem::RasterSymbolItem:
+          drawRasterSymbol( currentComposerItem, &p, 0., 0., symbolWidth, symbolHeight, 0. );
+          break;
+        case QgsComposerLegendItem::GroupItem:
+          //QgsDebugMsg( "GroupItem not handled" );
+          break;
+        case QgsComposerLegendItem::LayerItem:
+          //QgsDebugMsg( "GroupItem not handled" );
+          break;
+        case QgsComposerLegendItem::StyleItem:
+          //QgsDebugMsg( "StyleItem not handled" );
+          break;
+      }
+    }
+
+    QgsMapLayerRegistry::instance()->removeAllMapLayers();
+    delete theImage;
+    return paintImage;
+  }
+
+  double currentY = drawLegendGraphics( 0, fontOversamplingFactor, rootItem, boxSpace, layerSpace, layerTitleSpace, symbolSpace,
+                                        iconLabelSpace, symbolWidth, symbolHeight, layerFont, itemFont, layerFontColor, itemFontColor, maxTextWidth,
+                                        maxSymbolWidth );
+
+  //create second image with the right dimensions
+  QImage* paintImage = createImage( maxTextWidth + maxSymbolWidth, ceil( currentY ) );
+
+  //go through the items a second time for painting
+  QPainter p( paintImage );
+  p.setRenderHint( QPainter::Antialiasing, true );
+
+  drawLegendGraphics( &p, fontOversamplingFactor, rootItem, boxSpace, layerSpace, layerTitleSpace, symbolSpace,
+                      iconLabelSpace, symbolWidth, symbolHeight, layerFont, itemFont, layerFontColor, itemFontColor, maxTextWidth,
+                      maxSymbolWidth );
+
+  QgsMapLayerRegistry::instance()->removeAllMapLayers();
+  delete theImage;
+  return paintImage;
+}
+
+double QgsWMSServer::drawLegendGraphics( QPainter* p, double fontOversamplingFactor, QStandardItem* rootItem, double boxSpace,
+    double layerSpace, double layerTitleSpace, double symbolSpace, double iconLabelSpace,
+    double symbolWidth, double symbolHeight, const QFont& layerFont, const QFont& itemFont,
+    const QColor& layerFontColor, const QColor& itemFontColor, double& maxTextWidth, double& maxSymbolWidth )
+{
   if ( !rootItem )
   {
     return 0;
@@ -332,7 +464,7 @@ QImage* QgsWMSServer::getLegendGraphics()
     return 0;
   }
 
-  currentY = boxSpace;
+  double currentY = boxSpace;
   for ( int i = 0; i < numLayerItems; ++i )
   {
     QgsComposerLayerItem* layerItem = dynamic_cast<QgsComposerLayerItem*>( rootItem->child( i ) );
@@ -342,40 +474,12 @@ QImage* QgsWMSServer::getLegendGraphics()
       {
         currentY += layerSpace;
       }
-      drawLegendLayerItem( layerItem, 0, maxTextWidth, maxSymbolWidth, currentY, layerFont, layerFontColor, itemFont, itemFontColor,
-                           boxSpace, layerSpace, layerTitleSpace, symbolSpace, iconLabelSpace, symbolWidth, symbolHeight, fontOversamplingFactor,
-                           theImage->dotsPerMeterX() * 0.0254 );
+      drawLegendLayerItem( layerItem, p, maxTextWidth, maxSymbolWidth, currentY, layerFont, layerFontColor, itemFont, itemFontColor,
+                           boxSpace, layerSpace, layerTitleSpace, symbolSpace, iconLabelSpace, symbolWidth, symbolHeight, fontOversamplingFactor );
     }
   }
   currentY += boxSpace;
-
-  //create second image with the right dimensions
-  QImage* paintImage = createImage( maxTextWidth + maxSymbolWidth, currentY );
-
-  //go through the items a second time for painting
-  QPainter p( paintImage );
-  p.setRenderHint( QPainter::Antialiasing, true );
-  currentY = boxSpace;
-
-  for ( int i = 0; i < numLayerItems; ++i )
-  {
-    QgsComposerLayerItem* layerItem = dynamic_cast<QgsComposerLayerItem*>( rootItem->child( i ) );
-    if ( layerItem )
-    {
-      if ( i > 0 )
-      {
-        currentY += layerSpace;
-      }
-      drawLegendLayerItem( layerItem, &p, maxTextWidth, maxSymbolWidth, currentY, layerFont, layerFontColor, itemFont, itemFontColor, boxSpace,
-                           layerSpace, layerTitleSpace, symbolSpace, iconLabelSpace, symbolWidth, symbolHeight, fontOversamplingFactor,
-                           theImage->dotsPerMeterX() * 0.0254 );
-    }
-    currentY += layerSpace;
-  }
-
-  QgsMapLayerRegistry::instance()->mapLayers().clear();
-  delete theImage;
-  return paintImage;
+  return currentY;
 }
 
 void QgsWMSServer::legendParameters( double mmToPixelFactor, double fontOversamplingFactor, double& boxSpace, double& layerSpace, double& layerTitleSpace,
@@ -599,6 +703,7 @@ QByteArray* QgsWMSServer::getPrint( const QString& formatString )
   return ba;
 }
 
+#if 0
 QImage* QgsWMSServer::printCompositionToImage( QgsComposition* c ) const
 {
   int width = ( int )( c->paperWidth() * c->printResolution() / 25.4 ); //width in pixel
@@ -614,6 +719,7 @@ QImage* QgsWMSServer::printCompositionToImage( QgsComposition* c ) const
   p.end();
   return image;
 }
+#endif
 
 QImage* QgsWMSServer::getMap()
 {
@@ -649,7 +755,7 @@ QImage* QgsWMSServer::getMap()
   clearFeatureSelections( selectedLayerIdList );
 
   QgsDebugMsg( "clearing filters" );
-  QgsMapLayerRegistry::instance()->mapLayers().clear();
+  QgsMapLayerRegistry::instance()->removeAllMapLayers();
 
 #ifdef QGISDEBUG
   theImage->save( QDir::tempPath() + QDir::separator() + "lastrender.png" );
@@ -729,19 +835,15 @@ int QgsWMSServer::getFeatureInfo( QDomDocument& result, QString version )
   }
 
   //read I,J resp. X,Y
-  QString iString, jString;
-  int i = -1;
-  int j = -1;
-
-  iString = mParameterMap.value( "I", mParameterMap.value( "X" ) );
-  i = iString.toInt( &conversionSuccess );
+  QString iString = mParameterMap.value( "I", mParameterMap.value( "X" ) );
+  int i = iString.toInt( &conversionSuccess );
   if ( !conversionSuccess )
   {
     i = -1;
   }
 
-  jString = mParameterMap.value( "J", mParameterMap.value( "Y" ) );
-  j = jString.toInt( &conversionSuccess );
+  QString jString = mParameterMap.value( "J", mParameterMap.value( "Y" ) );
+  int j = jString.toInt( &conversionSuccess );
   if ( !conversionSuccess )
   {
     j = -1;
@@ -772,25 +874,40 @@ int QgsWMSServer::getFeatureInfo( QDomDocument& result, QString version )
   QStringList layerIds = layerSet( layersList, stylesList, mMapRenderer->destinationCrs() );
   QMap<QString, QString> originalLayerFilters = applyRequestedLayerFilters( layersList );
 
-  QString featureInfoElemName = mConfigParser->featureInfoDocumentElement( "GetFeatureInfoResponse" );
-  QString featureInfoElemNS = mConfigParser->featureInfoDocumentElementNS();
   QDomElement getFeatureInfoElement;
-  if ( featureInfoElemNS.isEmpty() )
+  QString infoFormat = mParameterMap.value( "INFO_FORMAT" );
+  if ( infoFormat.startsWith( "application/vnd.ogc.gml" ) )
   {
-    getFeatureInfoElement = result.createElement( featureInfoElemName );
+    getFeatureInfoElement = result.createElement( "wfs:FeatureCollection" );
+    getFeatureInfoElement.setAttribute( "xmlns:wfs", "http://www.opengis.net/wfs" );
+    getFeatureInfoElement.setAttribute( "xmlns:ogc", "http://www.opengis.net/ogc" );
+    getFeatureInfoElement.setAttribute( "xmlns:gml", "http://www.opengis.net/gml" );
+    getFeatureInfoElement.setAttribute( "xmlns:ows", "http://www.opengis.net/ows" );
+    getFeatureInfoElement.setAttribute( "xmlns:xlink", "http://www.w3.org/1999/xlink" );
+    getFeatureInfoElement.setAttribute( "xmlns:qgs", "http://www.qgis.org/gml" );
+    getFeatureInfoElement.setAttribute( "xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance" );
+    getFeatureInfoElement.setAttribute( "xsi:schemaLocation", "http://www.opengis.net/wfs http://schemas.opengis.net/wfs/1.0.0/wfs.xsd http://www.qgis.org/gml" );
   }
   else
   {
-    getFeatureInfoElement = result.createElementNS( featureInfoElemNS, featureInfoElemName );
+    QString featureInfoElemName = mConfigParser->featureInfoDocumentElement( "GetFeatureInfoResponse" );
+    QString featureInfoElemNS = mConfigParser->featureInfoDocumentElementNS();
+    if ( featureInfoElemNS.isEmpty() )
+    {
+      getFeatureInfoElement = result.createElement( featureInfoElemName );
+    }
+    else
+    {
+      getFeatureInfoElement = result.createElementNS( featureInfoElemNS, featureInfoElemName );
+    }
+    //feature info schema
+    QString featureInfoSchema = mConfigParser->featureInfoSchema();
+    if ( !featureInfoSchema.isEmpty() )
+    {
+      getFeatureInfoElement.setAttribute( "xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance" );
+      getFeatureInfoElement.setAttribute( "xsi:schemaLocation", featureInfoSchema );
+    }
   }
-  //feature info schema
-  QString featureInfoSchema = mConfigParser->featureInfoSchema();
-  if ( !featureInfoSchema.isEmpty() )
-  {
-    getFeatureInfoElement.setAttribute( "xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance" );
-    getFeatureInfoElement.setAttribute( "xsi:schemaLocation", featureInfoSchema );
-  }
-
   result.appendChild( getFeatureInfoElement );
 
   QStringList nonIdentifiableLayers = mConfigParser->identifyDisabledLayers();
@@ -839,38 +956,70 @@ int QgsWMSServer::getFeatureInfo( QDomDocument& result, QString version )
         continue;
       }
 
-      QDomElement layerElement = result.createElement( "Layer" );
-      QString layerName = currentLayer->name();
-
-      //check if the layer is given a different name for GetFeatureInfo output
-      QHash<QString, QString>::const_iterator layerAliasIt = layerAliasMap.find( layerName );
-      if ( layerAliasIt != layerAliasMap.constEnd() )
-      {
-        layerName = layerAliasIt.value();
-      }
-      layerElement.setAttribute( "name", layerName );
-      getFeatureInfoElement.appendChild( layerElement );
-      if ( sia2045 ) //the name might not be unique after alias replacement
-      {
-        layerElement.setAttribute( "id", currentLayer->id() );
-      }
-
       //switch depending on vector or raster
       QgsVectorLayer* vectorLayer = dynamic_cast<QgsVectorLayer*>( currentLayer );
+
+      QDomElement layerElement;
+      if ( infoFormat.startsWith( "application/vnd.ogc.gml" ) )
+      {
+        layerElement = getFeatureInfoElement;
+      }
+      else
+      {
+        layerElement = result.createElement( "Layer" );
+        QString layerName = currentLayer->name();
+
+        //check if the layer is given a different name for GetFeatureInfo output
+        QHash<QString, QString>::const_iterator layerAliasIt = layerAliasMap.find( layerName );
+        if ( layerAliasIt != layerAliasMap.constEnd() )
+        {
+          layerName = layerAliasIt.value();
+        }
+        layerElement.setAttribute( "name", layerName );
+        getFeatureInfoElement.appendChild( layerElement );
+        if ( sia2045 ) //the name might not be unique after alias replacement
+        {
+          layerElement.setAttribute( "id", currentLayer->id() );
+        }
+      }
+
       if ( vectorLayer )
       {
+        if ( vectorLayer->vectorJoins().size() > 0 )
+        {
+          QList<QgsMapLayer *> joinLayers;
+          //JoinBuffer is based on qgsmaplayerregistry!!!!!
+          //insert existing join info
+          const QList< QgsVectorJoinInfo >& joins = vectorLayer->vectorJoins();
+          for ( int i = 0; i < joins.size(); ++i )
+          {
+            QgsMapLayer* joinLayer = mConfigParser->mapLayerFromLayerId( joins[i].joinLayerId );
+            if ( joinLayer )
+            {
+              joinLayers << joinLayer;
+            }
+            QgsMapLayerRegistry::instance()->addMapLayers( joinLayers, false, true );
+          }
+          vectorLayer->updateFields();
+        }
         if ( featureInfoFromVectorLayer( vectorLayer, infoPoint, featureCount, result, layerElement, mMapRenderer, renderContext,
-                                         version, featuresRect ) != 0 )
+                                         version, infoFormat, featuresRect ) != 0 )
         {
           continue;
         }
       }
       else //raster layer
       {
+        if ( infoFormat.startsWith( "application/vnd.ogc.gml" ) )
+        {
+          layerElement = result.createElement( "gml:featureMember"/*wfs:FeatureMember*/ );
+          getFeatureInfoElement.appendChild( layerElement );
+        }
+
         QgsRasterLayer* rasterLayer = dynamic_cast<QgsRasterLayer*>( currentLayer );
         if ( rasterLayer )
         {
-          if ( featureInfoFromRasterLayer( rasterLayer, infoPoint, result, layerElement, version ) != 0 )
+          if ( featureInfoFromRasterLayer( rasterLayer, infoPoint, result, layerElement, version, infoFormat ) != 0 )
           {
             continue;
           }
@@ -894,12 +1043,13 @@ int QgsWMSServer::getFeatureInfo( QDomDocument& result, QString version )
     getFeatureInfoElement.insertBefore( bBoxElem, QDomNode() ); //insert as first child
   }
 
-  if ( sia2045 && mParameterMap.value( "INFO_FORMAT" ).compare( "text/xml", Qt::CaseInsensitive ) == 0 )
+  if ( sia2045 && infoFormat.compare( "text/xml", Qt::CaseInsensitive ) == 0 )
   {
     convertFeatureInfoToSIA2045( result );
   }
 
   restoreLayerFilters( originalLayerFilters );
+  QgsMapLayerRegistry::instance()->removeAllMapLayers();
   delete featuresRect;
   delete infoPoint;
   return 0;
@@ -1028,16 +1178,18 @@ QImage* QgsWMSServer::createImage( int width, int height ) const
 
   //apply DPI parameter if present. This is an extension of QGIS mapserver compared to WMS 1.3.
   //Because of backwards compatibility, this parameter is optional
+  double OGC_PX_M = 0.00028; // OGC reference pixel size in meter, also used by qgis
+  int dpm = 1 / OGC_PX_M;
   if ( mParameterMap.contains( "DPI" ) )
   {
     int dpi = mParameterMap[ "DPI" ].toInt( &conversionSuccess );
     if ( conversionSuccess )
     {
-      int dpm = dpi / 0.0254;
-      theImage->setDotsPerMeterX( dpm );
-      theImage->setDotsPerMeterY( dpm );
+      dpm = dpi / 0.0254;
     }
   }
+  theImage->setDotsPerMeterX( dpm );
+  theImage->setDotsPerMeterY( dpm );
   return theImage;
 }
 
@@ -1048,6 +1200,7 @@ int QgsWMSServer::configureMapRender( const QPaintDevice* paintDevice ) const
     return 1; //paint device is needed for height, width, dpi
   }
 
+  mMapRenderer->clearLayerCoordinateTransforms();
   mMapRenderer->setOutputSize( QSize( paintDevice->width(), paintDevice->height() ), paintDevice->logicalDpiX() );
 
   //map extent
@@ -1105,6 +1258,18 @@ int QgsWMSServer::configureMapRender( const QPaintDevice* paintDevice ) const
     mMapRenderer->setDestinationCrs( outputCRS );
     mMapRenderer->setProjectionsEnabled( true );
     mapUnits = outputCRS.mapUnits();
+
+    //read layer coordinate transforms from project file (e.g. ct with special datum shift)
+    if ( mConfigParser )
+    {
+      QList< QPair< QString, QgsLayerCoordinateTransform > > lt = mConfigParser->layerCoordinateTransforms();
+      QList< QPair< QString, QgsLayerCoordinateTransform > >::const_iterator ltIt = lt.constBegin();
+      for ( ; ltIt != lt.constEnd(); ++ltIt )
+      {
+        QgsLayerCoordinateTransform t = ltIt->second;
+        mMapRenderer->addLayerCoordinateTransform( ltIt->first, t.srcAuthId, t.destAuthId, t.srcDatumTransform, t.destDatumTransform );
+      }
+    }
   }
   mMapRenderer->setMapUnits( mapUnits );
 
@@ -1138,10 +1303,10 @@ int QgsWMSServer::configureMapRender( const QPaintDevice* paintDevice ) const
 int QgsWMSServer::readLayersAndStyles( QStringList& layersList, QStringList& stylesList ) const
 {
   //get layer and style lists from the parameters trying LAYERS and LAYER as well as STYLE and STYLES for GetLegendGraphic compatibility
-  layersList = mParameterMap.value( "LAYER" ).split( "," );
-  layersList = layersList + mParameterMap.value( "LAYERS" ).split( "," );
-  stylesList = mParameterMap.value( "STYLE" ).split( "," );
-  stylesList = stylesList + mParameterMap.value( "STYLES" ).split( "," );
+  layersList = mParameterMap.value( "LAYER" ).split( ",", QString::SkipEmptyParts );
+  layersList = layersList + mParameterMap.value( "LAYERS" ).split( ",", QString::SkipEmptyParts );
+  stylesList = mParameterMap.value( "STYLE" ).split( ",", QString::SkipEmptyParts );
+  stylesList = stylesList + mParameterMap.value( "STYLES" ).split( ",", QString::SkipEmptyParts );
 
   return 0;
 }
@@ -1231,6 +1396,7 @@ int QgsWMSServer::featureInfoFromVectorLayer( QgsVectorLayer* layer,
     QgsMapRenderer* mapRender,
     QgsRenderContext& renderContext,
     QString version,
+    QString infoFormat,
     QgsRectangle* featureBBox ) const
 {
   if ( !layer || !mapRender )
@@ -1252,9 +1418,13 @@ int QgsWMSServer::featureInfoFromVectorLayer( QgsVectorLayer* layer,
     {
       searchRadius = layerRect.width() / 400;
     }
-    else
+    else if ( layer->geometryType() == QGis::Line )
     {
       searchRadius = layerRect.width() / 200;
+    }
+    else
+    {
+      searchRadius = layerRect.width() / 100;
     }
 
     searchRect.set( infoPoint->x() - searchRadius, infoPoint->y() - searchRadius,
@@ -1266,6 +1436,7 @@ int QgsWMSServer::featureInfoFromVectorLayer( QgsVectorLayer* layer,
   QgsFeature feature;
   QgsAttributes featureAttributes;
   int featureCounter = 0;
+  layer->updateFields();
   const QgsFields& fields = layer->pendingFields();
   bool addWktGeometry = mConfigParser && mConfigParser->featureInfoWithWktGeometry();
   const QSet<QString>& excludedAttributes = layer->excludeAttributesWMS();
@@ -1286,6 +1457,14 @@ int QgsWMSServer::featureInfoFromVectorLayer( QgsVectorLayer* layer,
       break;
     }
 
+    // Creates the gml:featureMember only if we have at least one element
+    if ( infoFormat.startsWith( "application/vnd.ogc.gml" ) && featureCounter == 1 )
+    {
+      QDomElement realLayerElement = infoDocument.createElement( "gml:featureMember"/*wfs:FeatureMember*/ );
+      layerElement.appendChild( realLayerElement );
+      layerElement = realLayerElement;
+    }
+
     QgsFeatureRendererV2* r2 = layer->rendererV2();
     if ( !r2 )
     {
@@ -1301,59 +1480,71 @@ int QgsWMSServer::featureInfoFromVectorLayer( QgsVectorLayer* layer,
       continue;
     }
 
-    QDomElement featureElement = infoDocument.createElement( "Feature" );
-    featureElement.setAttribute( "id", FID_TO_STRING( feature.id() ) );
-    layerElement.appendChild( featureElement );
-
-    //read all attribute values from the feature
-    featureAttributes = feature.attributes();
-    for ( int i = 0; i < featureAttributes.count(); ++i )
+    if ( infoFormat == "application/vnd.ogc.gml" )
     {
-      //skip attribute if it is explicitly excluded from WMS publication
-      if ( excludedAttributes.contains( fields[i].name() ) )
-      {
-        continue;
-      }
-
-      //replace attribute name if there is an attribute alias?
-      QString attributeName = layer->attributeDisplayName( i );
-
-      QDomElement attributeElement = infoDocument.createElement( "Attribute" );
-      attributeElement.setAttribute( "name", attributeName );
-      attributeElement.setAttribute( "value", featureAttributes[i].toString() );
-      featureElement.appendChild( attributeElement );
+      QgsCoordinateReferenceSystem layerCrs = layer->crs();
+      bool withGeom = layer->wkbType() != QGis::WKBNoGeometry;
+      int version = infoFormat.startsWith( "application/vnd.ogc.gml/3" ) ? 3 : 2;
+      QDomElement elem = createFeatureGML( &feature, infoDocument, layerCrs, layer->name(), withGeom, version );
+      layerElement.appendChild( elem );
+      continue;
     }
-
-    //also append the wkt geometry as an attribute
-    QgsGeometry* geom = feature.geometry();
-    if ( addWktGeometry && geom )
+    else
     {
-      QDomElement geometryElement = infoDocument.createElement( "Attribute" );
-      geometryElement.setAttribute( "name", "geometry" );
-      geometryElement.setAttribute( "value", geom->exportToWkt() );
-      geometryElement.setAttribute( "type", "derived" );
-      featureElement.appendChild( geometryElement );
-    }
-    if ( featureBBox && geom && mapRender ) //extend feature info bounding box if requested
-    {
-      QgsRectangle box = mapRender->layerExtentToOutputExtent( layer, geom->boundingBox() );
-      if ( featureBBox->isEmpty() )
+      QDomElement featureElement = infoDocument.createElement( "Feature" );
+      featureElement.setAttribute( "id", FID_TO_STRING( feature.id() ) );
+      layerElement.appendChild( featureElement );
+
+      //read all attribute values from the feature
+      featureAttributes = feature.attributes();
+      for ( int i = 0; i < featureAttributes.count(); ++i )
       {
-        *featureBBox = box;
-      }
-      else
-      {
-        featureBBox->combineExtentWith( &box );
+        //skip attribute if it is explicitly excluded from WMS publication
+        if ( excludedAttributes.contains( fields[i].name() ) )
+        {
+          continue;
+        }
+
+        //replace attribute name if there is an attribute alias?
+        QString attributeName = layer->attributeDisplayName( i );
+
+        QDomElement attributeElement = infoDocument.createElement( "Attribute" );
+        attributeElement.setAttribute( "name", attributeName );
+        attributeElement.setAttribute( "value", featureAttributes[i].toString() );
+        featureElement.appendChild( attributeElement );
       }
 
-      //append feature bounding box to feature info xml
-      QDomElement bBoxElem = infoDocument.createElement( "BoundingBox" );
-      bBoxElem.setAttribute( version == "1.1.1" ? "SRS" : "CRS", mapRender->destinationCrs().authid() );
-      bBoxElem.setAttribute( "minx", QString::number( box.xMinimum() ) );
-      bBoxElem.setAttribute( "maxx", QString::number( box.xMaximum() ) );
-      bBoxElem.setAttribute( "miny", QString::number( box.yMinimum() ) );
-      bBoxElem.setAttribute( "maxy", QString::number( box.yMaximum() ) );
-      featureElement.appendChild( bBoxElem );
+      //also append the wkt geometry as an attribute
+      QgsGeometry* geom = feature.geometry();
+      if ( addWktGeometry && geom )
+      {
+        QDomElement geometryElement = infoDocument.createElement( "Attribute" );
+        geometryElement.setAttribute( "name", "geometry" );
+        geometryElement.setAttribute( "value", geom->exportToWkt() );
+        geometryElement.setAttribute( "type", "derived" );
+        featureElement.appendChild( geometryElement );
+      }
+      if ( featureBBox && geom && mapRender ) //extend feature info bounding box if requested
+      {
+        QgsRectangle box = mapRender->layerExtentToOutputExtent( layer, geom->boundingBox() );
+        if ( featureBBox->isEmpty() )
+        {
+          *featureBBox = box;
+        }
+        else
+        {
+          featureBBox->combineExtentWith( &box );
+        }
+
+        //append feature bounding box to feature info xml
+        QDomElement bBoxElem = infoDocument.createElement( "BoundingBox" );
+        bBoxElem.setAttribute( version == "1.1.1" ? "SRS" : "CRS", mapRender->destinationCrs().authid() );
+        bBoxElem.setAttribute( "minx", QString::number( box.xMinimum() ) );
+        bBoxElem.setAttribute( "maxx", QString::number( box.xMaximum() ) );
+        bBoxElem.setAttribute( "miny", QString::number( box.yMinimum() ) );
+        bBoxElem.setAttribute( "maxy", QString::number( box.yMaximum() ) );
+        featureElement.appendChild( bBoxElem );
+      }
     }
   }
 
@@ -1364,7 +1555,8 @@ int QgsWMSServer::featureInfoFromRasterLayer( QgsRasterLayer* layer,
     const QgsPoint* infoPoint,
     QDomDocument& infoDocument,
     QDomElement& layerElement,
-    QString version ) const
+    QString version,
+    QString infoFormat ) const
 {
   Q_UNUSED( version );
 
@@ -1392,12 +1584,28 @@ int QgsWMSServer::featureInfoFromRasterLayer( QgsRasterLayer* layer,
     attributes = layer->dataProvider()->identify( *infoPoint, QgsRaster::IdentifyFormatValue, mMapRenderer->extent(), mMapRenderer->outputSize().width(), mMapRenderer->outputSize().height() ).results();
   }
 
-  for ( QMap<int, QVariant>::const_iterator it = attributes.constBegin(); it != attributes.constEnd(); ++it )
+  if ( infoFormat == "application/vnd.ogc.gml" )
   {
-    QDomElement attributeElement = infoDocument.createElement( "Attribute" );
-    attributeElement.setAttribute( "name", layer->bandName( it.key() ) );
-    attributeElement.setAttribute( "value", QString::number( it.value().toDouble() ) );
-    layerElement.appendChild( attributeElement );
+    QgsFeature feature;
+    for ( QMap<int, QVariant>::const_iterator it = attributes.constBegin(); it != attributes.constEnd(); ++it )
+    {
+      feature.setAttribute( layer->bandName( it.key() ), QString::number( it.value().toDouble() ) );
+    }
+
+    QgsCoordinateReferenceSystem layerCrs = layer->crs();
+    int version = infoFormat.startsWith( "application/vnd.ogc.gml/3" ) ? 3 : 2;
+    QDomElement elem = createFeatureGML( &feature, infoDocument, layerCrs, layer->name(), false, version );
+    layerElement.appendChild( elem );
+  }
+  else
+  {
+    for ( QMap<int, QVariant>::const_iterator it = attributes.constBegin(); it != attributes.constEnd(); ++it )
+    {
+      QDomElement attributeElement = infoDocument.createElement( "Attribute" );
+      attributeElement.setAttribute( "name", layer->bandName( it.key() ) );
+      attributeElement.setAttribute( "value", QString::number( it.value().toDouble() ) );
+      layerElement.appendChild( attributeElement );
+    }
   }
   return 0;
 }
@@ -1437,17 +1645,35 @@ QStringList QgsWMSServer::layerSet( const QStringList &layersList,
     for ( listIndex = layerList.size() - 1; listIndex >= 0; listIndex-- )
     {
       theMapLayer = layerList.at( listIndex );
-      QgsDebugMsg( QString( "Checking layer: %1" ).arg( theMapLayer->name() ) );
       if ( theMapLayer )
       {
+        QgsDebugMsg( QString( "Checking layer: %1" ).arg( theMapLayer->name() ) );
         //test if layer is visible in requested scale
         bool useScaleConstraint = ( scaleDenominator > 0 && theMapLayer->hasScaleBasedVisibility() );
         if ( !useScaleConstraint ||
              ( theMapLayer->minimumScale() <= scaleDenominator && theMapLayer->maximumScale() >= scaleDenominator ) )
         {
           layerKeys.push_front( theMapLayer->id() );
+          //joinVectorLayers
+          QgsVectorLayer* vectorLayer = dynamic_cast<QgsVectorLayer*>( theMapLayer );
+          if ( vectorLayer && vectorLayer->vectorJoins().size() > 0 )
+          {
+            QList<QgsMapLayer *> joinLayers;
+            //insert existing join info
+            const QList< QgsVectorJoinInfo >& joins = vectorLayer->vectorJoins();
+            for ( int i = 0; i < joins.size(); ++i )
+            {
+              QgsMapLayer* joinLayer = mConfigParser->mapLayerFromLayerId( joins[i].joinLayerId );
+              if ( joinLayer )
+              {
+                joinLayers << joinLayer;
+              }
+              QgsMapLayerRegistry::instance()->addMapLayers( joinLayers, false, true );
+            }
+            vectorLayer->updateFields();
+          }
           QgsMapLayerRegistry::instance()->addMapLayers(
-            QList<QgsMapLayer *>() << theMapLayer, false );
+            QList<QgsMapLayer *>() << theMapLayer, false, false );
         }
       }
       else
@@ -1467,8 +1693,7 @@ QStringList QgsWMSServer::layerSet( const QStringList &layersList,
 
 void QgsWMSServer::drawLegendLayerItem( QgsComposerLayerItem* item, QPainter* p, double& maxTextWidth, double& maxSymbolWidth, double& currentY, const QFont& layerFont,
                                         const QColor& layerFontColor, const QFont& itemFont, const QColor&  itemFontColor, double boxSpace, double layerSpace,
-                                        double layerTitleSpace, double symbolSpace, double iconLabelSpace, double symbolWidth, double symbolHeight, double fontOversamplingFactor,
-                                        double dpi ) const
+                                        double layerTitleSpace, double symbolSpace, double iconLabelSpace, double symbolWidth, double symbolHeight, double fontOversamplingFactor ) const
 {
   Q_UNUSED( layerSpace );
   if ( !item )
@@ -1529,7 +1754,7 @@ void QgsWMSServer::drawLegendLayerItem( QgsComposerLayerItem* item, QPainter* p,
     switch ( type )
     {
       case QgsComposerLegendItem::SymbologyV2Item:
-        drawLegendSymbolV2( currentComposerItem, p, boxSpace, currentY, currentSymbolWidth, currentSymbolHeight, dpi, symbolDownShift );
+        drawLegendSymbolV2( currentComposerItem, p, boxSpace, currentY, currentSymbolWidth, currentSymbolHeight, symbolDownShift );
         break;
       case QgsComposerLegendItem::RasterSymbolItem:
         drawRasterSymbol( currentComposerItem, p, boxSpace, currentY, currentSymbolWidth, currentSymbolHeight, symbolDownShift );
@@ -1582,7 +1807,7 @@ void QgsWMSServer::drawLegendLayerItem( QgsComposerLayerItem* item, QPainter* p,
 
 
 void QgsWMSServer::drawLegendSymbolV2( QgsComposerLegendItem* item, QPainter* p, double boxSpace, double currentY, double& symbolWidth,
-                                       double& symbolHeight, double dpi, double yDownShift ) const
+                                       double& symbolHeight, double yDownShift ) const
 {
   QgsComposerSymbolV2Item* symbolItem = dynamic_cast< QgsComposerSymbolV2Item* >( item );
   if ( !symbolItem )
@@ -1593,14 +1818,6 @@ void QgsWMSServer::drawLegendSymbolV2( QgsComposerLegendItem* item, QPainter* p,
   if ( !symbol )
   {
     return;
-  }
-
-  //markers might have a different size
-  QgsMarkerSymbolV2* markerSymbol = dynamic_cast< QgsMarkerSymbolV2* >( symbol );
-  if ( markerSymbol )
-  {
-    symbolWidth = markerSymbol->size() * dpi / 25.4;
-    symbolHeight = markerSymbol->size() * dpi / 25.4;
   }
 
   if ( p )
@@ -1926,7 +2143,7 @@ QStringList QgsWMSServer::applyFeatureSelections( const QStringList& layerList )
 
 void QgsWMSServer::clearFeatureSelections( const QStringList& layerIds ) const
 {
-  QMap<QString, QgsMapLayer*>& layerMap = QgsMapLayerRegistry::instance()->mapLayers();
+  const QMap<QString, QgsMapLayer*>& layerMap = QgsMapLayerRegistry::instance()->mapLayers();
 
   foreach ( QString id, layerIds )
   {
@@ -1957,7 +2174,7 @@ void QgsWMSServer::applyOpacities( const QStringList& layerList, QList< QPair< Q
   QList< QPair< QgsMapLayer*, int > > layerOpacityList;
   QStringList::const_iterator oIt = opacityList.constBegin();
   QStringList::const_iterator lIt = layerList.constBegin();
-  for ( ; oIt != opacityList.constEnd(); ++oIt, ++lIt )
+  for ( ; oIt != opacityList.constEnd() && lIt != layerList.constEnd(); ++oIt, ++lIt )
   {
     //get layer list for
     int opacity = oIt->toInt();
@@ -2264,4 +2481,75 @@ void QgsWMSServer::convertFeatureInfoToSIA2045( QDomDocument& doc )
     }
   }
   doc = SIAInfoDoc;
+}
+
+QDomElement QgsWMSServer::createFeatureGML(
+  QgsFeature* feat,
+  QDomDocument& doc,
+  QgsCoordinateReferenceSystem& crs,
+  QString typeName,
+  bool withGeom,
+  int version ) const
+{
+  //qgs:%TYPENAME%
+  QDomElement typeNameElement = doc.createElement( "qgs:" + typeName /*qgs:%TYPENAME%*/ );
+  typeNameElement.setAttribute( "fid", typeName + "." + QString::number( feat->id() ) );
+
+  if ( withGeom )
+  {
+    //add geometry column (as gml)
+    QgsGeometry* geom = feat->geometry();
+
+    QDomElement geomElem = doc.createElement( "qgs:geometry" );
+    QDomElement gmlElem;
+    if ( version < 3 )
+    {
+      gmlElem = QgsOgcUtils::geometryToGML( geom, doc );
+    }
+    else
+    {
+      gmlElem = QgsOgcUtils::geometryToGML( geom, doc, "GML3" );
+    }
+
+    if ( !gmlElem.isNull() )
+    {
+      QgsRectangle box = geom->boundingBox();
+      QDomElement bbElem = doc.createElement( "gml:boundedBy" );
+      QDomElement boxElem;
+      if ( version < 3 )
+      {
+        boxElem = QgsOgcUtils::rectangleToGMLBox( &box, doc );
+      }
+      else
+      {
+        boxElem = QgsOgcUtils::rectangleToGMLEnvelope( &box, doc );
+      }
+
+      if ( crs.isValid() )
+      {
+        boxElem.setAttribute( "srsName", crs.authid() );
+        gmlElem.setAttribute( "srsName", crs.authid() );
+      }
+
+      bbElem.appendChild( boxElem );
+      typeNameElement.appendChild( bbElem );
+
+      geomElem.appendChild( gmlElem );
+      typeNameElement.appendChild( geomElem );
+    }
+  }
+
+  //read all attribute values from the feature
+  QgsAttributes featureAttributes = feat->attributes();
+  const QgsFields* fields = feat->fields();
+  for ( int i = 0; i < fields->count(); ++i )
+  {
+    QString attributeName = fields->at( i ).name();
+    QDomElement fieldElem = doc.createElement( "qgs:" + attributeName.replace( QString( " " ), QString( "_" ) ) );
+    QDomText fieldText = doc.createTextNode( featureAttributes[i].toString() );
+    fieldElem.appendChild( fieldText );
+    typeNameElement.appendChild( fieldElem );
+  }
+
+  return typeNameElement;
 }

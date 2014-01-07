@@ -35,14 +35,6 @@ class QgsFeatureRendererV2;
 #include <QList>
 #include <QString>
 
-#ifdef DIAGRAMSERVER
-#include "qgsdiagramcategory.h"
-#include "qgsdiagramrenderer.h"
-class QgsVectorOverlay;
-class QgsVectorDataProvider;
-#endif //DIAGRAMSERVER
-
-
 /**A class that creates QGIS maplayers and layer specific capabilities output from Styled layer descriptor (SLD). A QgsSLDParser object may have a pointer to a fallback object to model the situation where a user defined SLD refers to layers in the administrator sld*/
 class QgsSLDParser: public QgsConfigParser
 {
@@ -56,17 +48,29 @@ class QgsSLDParser: public QgsConfigParser
     /**Adds layer and style specific capabilities elements to the parent node. This includes the individual layers and styles, their description, native CRS, bounding boxes, etc.*/
     void layersAndStylesCapabilities( QDomElement& parentElement, QDomDocument& doc, const QString& version, bool fullProjectSettings = false ) const;
 
-    void featureTypeList( QDomElement &, QDomDocument & ) const {}
+    void featureTypeList( QDomElement&, QDomDocument& ) const {}
+
+    void wcsContentMetadata( QDomElement&, QDomDocument& ) const {}
+
+    void owsGeneralAndResourceList( QDomElement&, QDomDocument& , const QString& ) const {}
 
     void describeFeatureType( const QString& , QDomElement& , QDomDocument& ) const {}
+
+    void describeCoverage( const QString& , QDomElement& , QDomDocument& ) const {}
     /**Returns one or possibly several maplayers for a given type name. If no layers/style are found, an empty list is returned*/
     QList<QgsMapLayer*> mapLayerFromTypeName( const QString&, bool ) const { QList<QgsMapLayer*> layerList; return layerList; }
+
+    /**Returns one or possibly several maplayers for a given type name. If no layers/style are found, an empty list is returned*/
+    QList<QgsMapLayer*> mapLayerFromCoverage( const QString&, bool ) const { QList<QgsMapLayer*> layerList; return layerList; }
 
     /**Returns number of layers in configuration*/
     int numberOfLayers() const;
 
     /**Returns one or possibly several maplayers for a given layer name and style. If no layers/style are found, an empty list is returned*/
     QList<QgsMapLayer*> mapLayerFromStyle( const QString& layerName, const QString& styleName, bool useCache = true ) const;
+
+    /**Returns maplayers for a layer Id.*/
+    QgsMapLayer* mapLayerFromLayerId( const QString& ) const { return 0;};
 
     /**Fills a layer and a style list. The two list have the same number of entries and the style and the layer at a position belong together (similar to the HTTP parameters 'Layers' and 'Styles'. Returns 0 in case of success*/
     int layersAndStyles( QStringList& layers, QStringList& styles ) const;
@@ -77,7 +81,7 @@ class QgsSLDParser: public QgsConfigParser
     virtual void setParameterMap( const QMap<QString, QString>& parameterMap ) { mParameterMap = parameterMap; }
 
     /**Creates a composition from the project file (delegated to the fallback parser)*/
-    QgsComposition* initComposition( const QString& composerTemplate, QgsMapRenderer* mapRenderer, QList< QgsComposerMap*>& mapList, QList< QgsComposerLabel* >& labelList ) const;
+    QgsComposition* initComposition( const QString& composerTemplate, QgsMapRenderer* mapRenderer, QList< QgsComposerMap*>& mapList, QList< QgsComposerLabel* >& labelList, QList<const QgsComposerHtml *>& htmlList ) const;
 
     /**Adds print capabilities to xml document. Delegated to fallback parser*/
     void printCapabilities( QDomElement& parentElement, QDomDocument& doc ) const;
@@ -119,7 +123,7 @@ class QgsSLDParser: public QgsConfigParser
        Delegates the work to specific methods for <SendedVDS>, <HostedVDS> or <RemoteOWS>*/
     QgsMapLayer* mapLayerFromUserLayer( const QDomElement& userLayerElem, const QString& layerName, bool allowCaching = true ) const;
     /**Writes a temporary file and creates a vector layer. The file is removed at destruction time*/
-    QgsVectorLayer* vectorLayerFromGML( const QDomElement gmlRootElement ) const;
+    QgsVectorLayer* vectorLayerFromGML( const QDomElement &gmlRootElement ) const;
     /**Creates a line layer (including renderer) from contour symboliser
      @return the layer or 0 if no layer could be created*/
     QgsVectorLayer* contourLayerFromRaster( const QDomElement& userStyleElem, QgsRasterLayer* rasterLayer ) const;
@@ -128,37 +132,12 @@ class QgsSLDParser: public QgsConfigParser
 #if 0
     /**Sets the opacity on layer level if the <Opacity> tag is present*/
     void setOpacityForLayer( const QDomElement& layerElem, QgsMapLayer* layer ) const;
-#endif
     /**Resets the former symbology of a raster layer. This is important for single band layers (e.g. dems)
      coming from the cash*/
-    void clearRasterSymbology( QgsRasterLayer* rl ) const;
+    void clearRasterSymbology( QgsRasterLayer *rl ) const;
+#endif
     /**Reads attributes "epsg" or "proj" from layer element and sets specified CRS if present*/
     void setCrsForLayer( const QDomElement& layerElem, QgsMapLayer* ml ) const;
-
-
-#ifdef DIAGRAMSERVER
-    /**Parses the user style and adds the vector overlays contained in it(most likely diagrams)
-       to the vector layer*/
-    int overlaysFromUserStyle( const QDomElement& userStyleElement, QgsVectorLayer* vec ) const;
-    /**Creates a diagram overlay from a diagram symbolizer element*/
-    QgsVectorOverlay* vectorOverlayFromDiagramSymbolizer( const QDomElement& symbolizerElem, QgsVectorLayer* vec ) const;
-    /**Returns a list of diagram items from the contents of a <Categorize> element
-       @param attribute name of the scaling attribute
-     @return 0 in case of success*/
-    int diagramItemsFromCategorize( const QDomElement& categorizeElement, QList<QgsDiagramItem>& items, QString& attribute ) const;
-    /**Returns a list of diagram items from the contents of a <Interpolate> element
-       @param attribute name of the scaling attribute
-    @return 0 in case of success*/
-    int diagramItemsFromInterpolate( const QDomElement& interpolateElement, QList<QgsDiagramItem>& items, QString& attribute ) const;
-    /**Returns diagram categories from <Category> tags
-       @param diagramElement <Diagram> xml element containing the categories
-       @param p provider for the vectorlayer (needed to convert attribute names to indices)
-       @param categories list that will contain the created elements
-       @return 0 in case of success*/
-    int symbologyFromCategoryTags( const QDomElement& diagramElement, const QgsVectorDataProvider* p, QList<QgsDiagramCategory>& categories ) const;
-    /**Returns the scale multiplication factor from the <Scale> Element*/
-    double scaleFactorFromScaleTag( const QDomElement& scaleElem ) const;
-#endif //DIAGRAMSERVER
 
     /**SLD as dom document*/
     QDomDocument* mXMLDoc;

@@ -27,7 +27,9 @@
 #define tr( sourceText ) QCoreApplication::translate ( "QgsRasterRenderer", sourceText )
 
 // Changing RGB components of NODATA_COLOR may break tests
-const QRgb QgsRasterRenderer::NODATA_COLOR = qRgba( 0, 0, 0, 0 );
+// (changed 2013-11-30 from 0,0,0,0 to 255,255,255,0)
+// kepp NODATA_COLOR white, see #9101
+const QRgb QgsRasterRenderer::NODATA_COLOR = qRgba( 255, 255, 255, 0 );
 
 QgsRasterRenderer::QgsRasterRenderer( QgsRasterInterface* input, const QString& type )
     : QgsRasterInterface( input )
@@ -191,45 +193,48 @@ QString QgsRasterRenderer::minMaxOriginLabel( int theOrigin )
     return tr( "User defined" );
   }
 
-  QString name;
+  QString label;
+  QString est_exact;
+  QString values;
+  QString extent;
+
   if ( theOrigin & MinMaxEstimated )
   {
-    name += tr( "Estimated" );
+    est_exact = tr( "Estimated" );
   }
   else if ( theOrigin & MinMaxExact )
   {
-    name += tr( "Exact" );
+    est_exact = tr( "Exact" );
   }
-
-  name += " ";
 
   if ( theOrigin & MinMaxMinMax )
   {
-    name += tr( "min / max" );
+    values = tr( "min / max" );
   }
   else if ( theOrigin & MinMaxCumulativeCut )
   {
-    name += "cumulative cut";
+    values = tr( "cumulative cut" );
   }
   else if ( theOrigin & MinMaxStdDev )
   {
-    name += "standard deviation";
+    values = tr( "standard deviation" );
   }
-
-  name += " " + tr( " of " ) + " ";
 
   if ( theOrigin & MinMaxFullExtent )
   {
-    name += "full extent";
+    extent = tr( "full extent" );
   }
   else if ( theOrigin & MinMaxSubExtent )
   {
-    name += "sub extent";
+    extent = tr( "sub extent" );
   }
 
-  name += ".";
-
-  return name;
+  label = QCoreApplication::translate( "QgsRasterRenderer", "%1 %2 of %3.",
+                                       "min/max origin label in raster properties, where %1 - estimated/exact, %2 - values (min/max, stddev, etc.), %3 - extent" )
+          .arg( est_exact )
+          .arg( values )
+          .arg( extent );
+  return label;
 }
 
 int QgsRasterRenderer::minMaxOriginFromName( QString theName )

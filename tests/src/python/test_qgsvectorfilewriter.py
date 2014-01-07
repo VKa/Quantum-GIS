@@ -8,13 +8,14 @@ the Free Software Foundation; either version 2 of the License, or
 """
 __author__ = 'Tim Sutton'
 __date__ = '20/08/2012'
-__copyright__ = 'Copyright 2012, The Quantum GIS Project'
+__copyright__ = 'Copyright 2012, The QGIS Project'
 # This will get replaced with a git SHA1 when you do a git archive
 __revision__ = '$Format:%H$'
 
 import os
+import qgis
 
-from PyQt4.QtCore import QVariant, QDir, QString, QStringList
+from PyQt4.QtCore import QDir
 
 from qgis.core import (QgsVectorLayer,
                        QgsFeature,
@@ -51,9 +52,7 @@ class TestQgsVectorLayer(TestCase):
 
         ft = QgsFeature()
         ft.setGeometry(QgsGeometry.fromPoint(QgsPoint(10,10)))
-        ft.setAttributes([ QVariant('Johny'),
-                           QVariant(20),
-                           QVariant(0.3)])
+        ft.setAttributes([ 'Johny', 20, 0.3 ])
         myResult, myFeatures = myProvider.addFeatures([ft])
         assert myResult == True
         assert len(myFeatures) > 0

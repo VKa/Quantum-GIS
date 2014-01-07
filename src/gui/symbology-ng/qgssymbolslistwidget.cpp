@@ -71,9 +71,9 @@ QgsSymbolsListWidget::QgsSymbolsListWidget( QgsSymbolV2* symbol, QgsStyleV2* sty
   }
   // Set the Style Menu under btnStyle
   QMenu *styleMenu = new QMenu( btnStyle );
-  QAction *styleMgrAction = new QAction( "Style Manager", styleMenu );
+  QAction *styleMgrAction = new QAction( tr( "Style Manager" ), styleMenu );
   styleMenu->addAction( styleMgrAction );
-  QAction *saveStyle = new QAction( "Save in symbol library...", styleMenu );
+  QAction *saveStyle = new QAction( tr( "Save in symbol library..." ), styleMenu );
   styleMenu->addAction( saveStyle );
   connect( styleMgrAction, SIGNAL( triggered() ), this, SLOT( openStyleManager() ) );
   connect( saveStyle, SIGNAL( triggered() ), this, SLOT( addSymbolToStyle() ) );
@@ -349,6 +349,6 @@ void QgsSymbolsListWidget::on_groupsCombo_currentIndexChanged( int index )
 
 void QgsSymbolsListWidget::on_groupsCombo_editTextChanged( const QString &text )
 {
-  QStringList symbols = mStyle->findSymbols( text );
+  QStringList symbols = mStyle->findSymbols( QgsStyleV2::SymbolEntity, text );
   populateSymbols( symbols );
 }

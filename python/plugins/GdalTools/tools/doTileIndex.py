@@ -52,8 +52,8 @@ class GdalToolsDialog( QWidget, Ui_Widget, BasePluginWidget ):
           #( self.recurseCheck, SIGNAL( "stateChanged( int )" ),
           ( self.outSelector, SIGNAL( "filenameChanged()" ) ),
           ( self.indexFieldEdit, SIGNAL( "textChanged( const QString & )" ), self.indexFieldCheck),
-          ( self.absolutePathCheck, SIGNAL( "stateChanged( int )" ), None, "1.5.0" ),
-          ( self.skipDifferentProjCheck, SIGNAL( "stateChanged( int )" ), None, "1.5.0" )
+          ( self.absolutePathCheck, SIGNAL( "stateChanged( int )" ), None, 1500 ),
+          ( self.skipDifferentProjCheck, SIGNAL( "stateChanged( int )" ), None, 1500 )
         ]
       )
 
@@ -62,14 +62,14 @@ class GdalToolsDialog( QWidget, Ui_Widget, BasePluginWidget ):
 
   def fillInputDirEdit( self ):
       inputDir = Utils.FileDialog.getExistingDirectory( self, self.tr( "Select the input directory with raster files" ))
-      if inputDir.isEmpty():
+      if not inputDir:
         return
       self.inSelector.setFilename( inputDir )
 
   def fillOutputFileEdit( self ):
       lastUsedFilter = Utils.FileFilter.lastUsedVectorFilter()
       outputFile, encoding = Utils.FileDialog.getSaveFileName( self, self.tr( "Select where to save the TileIndex output" ), Utils.FileFilter.allVectorsFilter(), lastUsedFilter, True )
-      if outputFile.isEmpty():
+      if not outputFile:
         return
       Utils.FileFilter.setLastUsedVectorFilter(lastUsedFilter)
 
@@ -78,16 +78,16 @@ class GdalToolsDialog( QWidget, Ui_Widget, BasePluginWidget ):
       self.lastEncoding = encoding
 
   def getArguments( self ):
-      arguments = QStringList()
-      if self.indexFieldCheck.isChecked() and not self.indexFieldEdit.text().isEmpty():
-        arguments << "-tileindex"
-        arguments << self.indexFieldEdit.text()
+      arguments = []
+      if self.indexFieldCheck.isChecked() and self.indexFieldEdit.text():
+        arguments.append("-tileindex")
+        arguments.append(self.indexFieldEdit.text())
       if self.absolutePathCheck.isChecked():
-        arguments << "-write_absolute_path"
+        arguments.append("-write_absolute_path")
       if self.skipDifferentProjCheck.isChecked():
-        arguments << "-skip_different_projection"
-      arguments << self.getOutputFileName()
-      arguments << Utils.getRasterFiles( self.getInputFileName(), self.recurseCheck.isChecked() )
+        arguments.append("-skip_different_projection")
+      arguments.append(self.getOutputFileName())
+      arguments.extend(Utils.getRasterFiles( self.getInputFileName(), self.recurseCheck.isChecked() ))
       return arguments
 
   def getOutputFileName( self ):

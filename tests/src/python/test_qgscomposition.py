@@ -8,13 +8,14 @@ the Free Software Foundation; either version 2 of the License, or
 """
 __author__ = '(C) 2012 by Tim Sutton'
 __date__ = '20/08/2012'
-__copyright__ = 'Copyright 2012, The Quantum GIS Project'
+__copyright__ = 'Copyright 2012, The QGIS Project'
 # This will get replaced with a git SHA1 when you do a git archive
 __revision__ = '$Format:%H$'
 
 import os
+import qgis
 
-from PyQt4.QtCore import QFileInfo, QDir, QStringList
+from PyQt4.QtCore import QFileInfo, QDir
 from PyQt4.QtXml import QDomDocument
 
 from qgis.core import (QgsComposition,
@@ -104,7 +105,7 @@ class TestQgsComposition(TestCase):
         QgsMapLayerRegistry.instance().addMapLayers([myRasterLayer])
 
         myMapRenderer = QgsMapRenderer()
-        myLayerStringList = QStringList()
+        myLayerStringList = []
         myLayerStringList.append(myRasterLayer.id())
         myMapRenderer.setLayerSet(myLayerStringList)
         myMapRenderer.setProjectionsEnabled(False)

@@ -17,6 +17,7 @@
 #define QGSVECTORCOLORRAMPV2_H
 
 #include <QColor>
+#include <QGradient>
 
 #include "qgssymbollayerv2.h" // for QgsStringMap
 #include "qgslogger.h"
@@ -91,6 +92,10 @@ class CORE_EXPORT QgsVectorGradientColorRampV2 : public QgsVectorColorRampV2
     QgsStringMap info() const { return mInfo; }
     void setInfo( const QgsStringMap& info ) { mInfo = info; }
 
+    /**copy color ramp stops to a QGradient
+    * @note added in 2.1 */
+    void addStopsToGradient( QGradient* gradient );
+
   protected:
     QColor mColor1, mColor2;
     bool mDiscrete;
@@ -101,10 +106,10 @@ class CORE_EXPORT QgsVectorGradientColorRampV2 : public QgsVectorColorRampV2
 #define DEFAULT_RANDOM_COUNT   10
 #define DEFAULT_RANDOM_HUE_MIN 0
 #define DEFAULT_RANDOM_HUE_MAX 359
-#define DEFAULT_RANDOM_VAL_MIN 0
-#define DEFAULT_RANDOM_VAL_MAX 255
-#define DEFAULT_RANDOM_SAT_MIN 0
-#define DEFAULT_RANDOM_SAT_MAX 255
+#define DEFAULT_RANDOM_VAL_MIN 200
+#define DEFAULT_RANDOM_VAL_MAX 240
+#define DEFAULT_RANDOM_SAT_MIN 100
+#define DEFAULT_RANDOM_SAT_MAX 240
 
 class CORE_EXPORT QgsVectorRandomColorRampV2 : public QgsVectorColorRampV2
 {
@@ -148,6 +153,25 @@ class CORE_EXPORT QgsVectorRandomColorRampV2 : public QgsVectorColorRampV2
     int mCount;
     int mHueMin, mHueMax, mSatMin, mSatMax, mValMin, mValMax;
     QList<QColor> mColors;
+};
+
+class CORE_EXPORT QgsRandomColorsV2: public QgsVectorColorRampV2
+{
+  public:
+    QgsRandomColorsV2();
+    ~QgsRandomColorsV2();
+
+    int count() const;
+
+    double value( int index ) const;
+
+    QColor color( double value ) const;
+
+    QString type() const;
+
+    QgsVectorColorRampV2* clone() const;
+
+    QgsStringMap properties() const;
 };
 
 

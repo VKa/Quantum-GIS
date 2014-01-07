@@ -18,12 +18,14 @@
 #include "qgscomposershape.h"
 #include <QPainter>
 
-QgsComposerShape::QgsComposerShape( QgsComposition* composition ): QgsComposerItem( composition ), mShape( Ellipse )
+QgsComposerShape::QgsComposerShape( QgsComposition* composition ): QgsComposerItem( composition ), mShape( Ellipse ), mCornerRadius( 0 )
 {
   setFrameEnabled( true );
 }
 
-QgsComposerShape::QgsComposerShape( qreal x, qreal y, qreal width, qreal height, QgsComposition* composition ): QgsComposerItem( x, y, width, height, composition ), mShape( Ellipse )
+QgsComposerShape::QgsComposerShape( qreal x, qreal y, qreal width, qreal height, QgsComposition* composition ): QgsComposerItem( x, y, width, height, composition ),
+    mShape( Ellipse ),
+    mCornerRadius( 0 )
 {
   setSceneRect( QRectF( x, y, width, height ) );
   setFrameEnabled( true );
@@ -58,17 +60,21 @@ void QgsComposerShape::drawShape( QPainter* p )
   p->save();
   p->setRenderHint( QPainter::Antialiasing );
 
-  p->translate( rect().width() / 2.0, rect().height() / 2.0 );
-  p->rotate( mRotation );
-  p->translate( -rect().width() / 2.0, -rect().height() / 2.0 );
-
   switch ( mShape )
   {
     case Ellipse:
       p->drawEllipse( QRectF( 0, 0 , rect().width(), rect().height() ) );
       break;
     case Rectangle:
-      p->drawRect( QRectF( 0, 0 , rect().width(), rect().height() ) );
+      //if corner radius set, then draw a rounded rectangle
+      if ( mCornerRadius > 0 )
+      {
+        p->drawRoundedRect( QRectF( 0, 0 , rect().width(), rect().height() ), mCornerRadius, mCornerRadius );
+      }
+      else
+      {
+        p->drawRect( QRectF( 0, 0 , rect().width(), rect().height() ) );
+      }
       break;
     case Triangle:
       QPolygonF triangle;
@@ -110,6 +116,7 @@ bool QgsComposerShape::writeXML( QDomElement& elem, QDomDocument & doc ) const
 {
   QDomElement composerShapeElem = doc.createElement( "ComposerShape" );
   composerShapeElem.setAttribute( "shapeType", mShape );
+  composerShapeElem.setAttribute( "cornerRadius", mCornerRadius );
   elem.appendChild( composerShapeElem );
   return _writeXML( composerShapeElem, doc );
 }
@@ -117,45 +124,28 @@ bool QgsComposerShape::writeXML( QDomElement& elem, QDomDocument & doc ) const
 bool QgsComposerShape::readXML( const QDomElement& itemElem, const QDomDocument& doc )
 {
   mShape = QgsComposerShape::Shape( itemElem.attribute( "shapeType", "0" ).toInt() );
+  mCornerRadius = itemElem.attribute( "cornerRadius", "0" ).toDouble();
 
   //restore general composer item properties
   QDomNodeList composerItemList = itemElem.elementsByTagName( "ComposerItem" );
   if ( composerItemList.size() > 0 )
   {
     QDomElement composerItemElem = composerItemList.at( 0 ).toElement();
+
+    //rotation
+    if ( composerItemElem.attribute( "rotation", "0" ).toDouble() != 0 )
+    {
+      //check for old (pre 2.1) rotation attribute
+      setItemRotation( composerItemElem.attribute( "rotation", "0" ).toDouble() );
+    }
+
     _readXML( composerItemElem, doc );
   }
   emit itemChanged();
   return true;
 }
 
-
-void QgsComposerShape::setRotation( double r )
+void QgsComposerShape::setCornerRadius( double radius )
 {
-  //adapt rectangle size
-  double width = rect().width();
-  double height = rect().height();
-  sizeChangedByRotation( width, height );
-
-  //adapt scene rect to have the same center and the new width / height
-  double x = transform().dx() + rect().width() / 2.0 - width / 2.0;
-  double y = transform().dy() + rect().height() / 2.0 - height / 2.0;
-  QgsComposerItem::setSceneRect( QRectF( x, y, width, height ) );
-
-  QgsComposerItem::setRotation( r );
-}
-
-void QgsComposerShape::setSceneRect( const QRectF& rectangle )
-{
-
-
-  //consider to change size of the shape if the rectangle changes width and/or height
-  if ( rectangle.width() != rect().width() || rectangle.height() != rect().height() )
-  {
-    double newShapeWidth = rectangle.width();
-    double newShapeHeight = rectangle.height();
-    imageSizeConsideringRotation( newShapeWidth, newShapeHeight );
-  }
-
-  QgsComposerItem::setSceneRect( rectangle );
+  mCornerRadius = radius;
 }

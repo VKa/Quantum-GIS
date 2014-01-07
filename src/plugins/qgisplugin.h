@@ -12,7 +12,7 @@
  *   (at your option) any later version.                                   *
  *                                                                         *
  ***************************************************************************/
-/*!  Quantum GIS - Plugin API
+/*!  QGIS - Plugin API
  *
  *  \section about  About QGis Plugins
  * Plugins provide additional functionality to QGis. Plugins must
@@ -66,7 +66,6 @@ class QgisPlugin
       UI = 1,                     /* user interface plug-in */
       MAPLAYER,                    /* map layer plug-in */
       RENDERER,                     /*a plugin for a new renderer class*/
-      VECTOR_OVERLAY                /*an overlay plugin. Added in version 1.1*/
     };
 
 
@@ -201,5 +200,7 @@ typedef QString version_t();
 //! Typedef for getting the plugin icon file name without instantiating the plugin
 typedef QString icon_t();
 
+//! Typedef for getting the experimental status without instantiating the plugin
+typedef QString experimental_t();
 
 #endif //qgisplugin_h

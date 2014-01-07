@@ -1,4 +1,4 @@
-Quantum GIS (QGIS)
+QGIS
 
 Developers guide for QGIS
 
@@ -456,14 +456,14 @@ export NO_PYTHON=
 To clone QGIS master:
 
 ```
-git://github.com/qgis/Quantum-GIS.git
+git://github.com/qgis/QGIS.git
 ```
 
 == Check out a branch ==
 
 To check out a branch, for example the release 1.7.0 branch do:
 ```
-  cd Quantum-GIS
+  cd QGIS
   git fetch
   git branch --track origin release-1_7_0
   git checkout release-1_7_0
@@ -473,7 +473,7 @@ To check out a branch, for example the release 1.7.0 branch do:
 To check out the master branch:
 
 ```
-  cd Quantum-GIS
+  cd QGIS
   git checkout master
 ```
 
@@ -487,14 +487,12 @@ development versions.
 
 == QGIS documentation sources ==
 
-If you're interested in checking out Quantum GIS documentation sources:
+If you're interested in checking out QGIS documentation sources:
 ```
-  svn co https://svn.osgeo.org/qgis/docs/trunk qgis_docs
+  git clone git@github.com:qgis/QGIS-Documentation.git
 ```
 
-/!\ **Note:** This url will change to a git URL in the near future.
-
-You can also take a look at DocumentationWritersCorner for more information.
+You can also take a look at the readme included with the documentation repo for more information.
  
 == GIT Documentation ==
 
@@ -507,6 +505,7 @@ http://gitready.com
 == Development in branches ==
 
 === Purpose ===
+
 The complexity of the QGIS source code has increased considerably during the
 last years. Therefore it is hard to anticipate the side effects that the
 addition of a feature will have. In the past, the QGIS project had very long
@@ -560,16 +559,49 @@ of the work on a wiki page.
 **Testing before merging back to master:** 
 When you are finished with the new feature and happy with the stability, make
 an announcement on the developer list.  Before merging back, the changes will
-be tested by developers and users. Binary packages (especially for OsX and
-Windows) will be generated to also involve non-developers. In trac, a new
-Component will be opened to file tickets against.  Once there are no remaining
-issues left, the technical advisor of the PSC merges the changes into master.
+be tested by developers and users.
 
 
-== Submitting Patches ==
+== Submitting Patches and Pull Requests ==
 
-There are a few guidelines that will help you to get your patches into QGIS
-easily, and help us deal with the patches that are sent to use easily.
+There are a few guidelines that will help you to get your patches and pull
+requests into QGIS easily, and help us deal with the patches that are sent to
+use easily. 
+
+
+=== Pull Requests ===
+
+In general it is easier for developers if you submit GitHub pull
+requests. We do not describe Pull Requests here, but rather refer you to the
+GitHub pull request documentation here:
+
+https://help.github.com/articles/using-pull-requests
+
+If you make a pull request we ask that you please merge master to your PR
+branch regularly so that your PR is always mergable to the upstream master
+branch.
+
+If you are a developer and wish to evaluate the pull request queue, there is a
+very nice tool that lets you do this from the command line described here:
+
+http://thechangelog.com/git-pulls-command-line-tool-for-github-pull-requests/
+
+Please see the section below on 'getting your patch noticed'. In general when
+you submit a PR you should take the responsibility to follow it through to
+completion - respond to queries posted by other developers, seek out a
+'champion' for your feature and give them a gentle reminder occasionally if you
+see that your PR is not being acted on. Please bear in mind that the QGIS
+project is driven by volunteer effort and people may not be able to attend to
+your PR instantaneously. If you feel the PR is not receiving the attention it
+deserves your options to accelerate it should be (in order of priority):
+
+* Send a message to the mailing list 'marketing' your PR and how wonderful it
+  will be to have it included in the code base.
+* Send a message to the person your PR has been assigned to in the PR queue.
+* Send a message to Marco Hugentobler (who manages the PR queue).
+* Send a message to the project steering committee asking them to help see your
+  PR incorporated into the code base.
+
 
 === Patch file naming ===
 
@@ -590,7 +622,7 @@ can include multiple changed files into your patch from the top level
 directory:
 
 ```
-cd Quantum-GIS
+cd QGIS
 git checkout master
 git pull origin master
 git checkout newfeature
@@ -1242,14 +1274,14 @@ After installing you should find it in your gnome menu.
 
 == Setting up your project ==
 
-I'm assuming you have already got a local Quantum-GIS clone containing the
+I'm assuming you have already got a local QGIS clone containing the
 source code, and have installed all needed build dependencies etc. There are
 detailed in instructions on doing that here:
 
-http://github.com/qgis/Quantum-GIS/blob/master/CODING
+http://github.com/qgis/QGIS/blob/master/CODING
 
 
-On my system I have checked out the code into $HOME/dev/cpp/Quantum-GIS and the
+On my system I have checked out the code into $HOME/dev/cpp/QGIS and the
 rest of the article is written assuming that, you should update these paths as
 appropriate for your local system.
 
@@ -1262,7 +1294,7 @@ File->Open File or Project
 Then use the resulting file selection dialog to browse to and open this file:
 
 ```
-$HOME/dev/cpp/Quantum-GIS/CMakeLists.txt
+$HOME/dev/cpp/QGIS/CMakeLists.txt
 ```
 
 [images/image01.jpeg]
@@ -1271,7 +1303,7 @@ Next you will be prompted for a build location. I create a specific build dir
 for QtCreator to work in under:
 
 ```
-$HOME/dev/cpp/Quantum-GIS/build-master-qtcreator
+$HOME/dev/cpp/QGIS/build-master-qtcreator
 ```
 
 Its probably a good idea to create separate build directories for different
@@ -1318,7 +1350,7 @@ Now we set the following details:
 ```
 Enable custom process step [yes]
 Command: make
-Working directory: $HOME/dev/cpp/Quantum-GIS/build-master-qtcreator
+Working directory: $HOME/dev/cpp/QGIS/build-master-qtcreator
 Command arguments: install
 ```
 

@@ -3,7 +3,7 @@
 """
 /***************************************************************************
 Name                 : DB Manager
-Description          : Database manager plugin for QuantumGIS
+Description          : Database manager plugin for QGIS
 Date                 : May 23, 2011
 copyright            : (C) 2011 by Giuseppe Sucameli
 email                : brush.tyler@gmail.com
@@ -26,13 +26,16 @@ from .connector import PostGisDBConnector
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 
-from ..plugin import ConnectionError, DBPlugin, Database, Schema, Table, VectorTable, RasterTable, TableField, TableConstraint, TableIndex, TableTrigger, TableRule
+from ..plugin import ConnectionError, InvalidDataException, DBPlugin, Database, Schema, Table, VectorTable, RasterTable, TableField, TableConstraint, TableIndex, TableTrigger, TableRule
+
 try:
 	from . import resources_rc
 except ImportError:
 	pass
 
 from ..html_elems import HtmlParagraph, HtmlList, HtmlTable
+
+from qgis.core import QgsCredentials
 
 
 def classFactory():
@@ -69,53 +72,44 @@ class PostGisDBPlugin(DBPlugin):
 		settings.beginGroup( u"/%s/%s" % (self.connectionSettingsKey(), conn_name) )
 
 		if not settings.contains( "database" ): # non-existent entry?
-			raise InvalidDataException( u'there is no defined database connection "%s".' % conn_name )
+			raise InvalidDataException( self.tr('There is no defined database connection "%s".') % conn_name )
 
 		from qgis.core import QgsDataSourceURI
 		uri = QgsDataSourceURI()
 
 		settingsList = ["service", "host", "port", "database", "username", "password"]
-		service, host, port, database, username, password = map(lambda x: settings.value(x).toString(), settingsList)
+		service, host, port, database, username, password = map(lambda x: settings.value(x, "", type=str), settingsList)
 
 		# qgis1.5 use 'savePassword' instead of 'save' setting
-		savedPassword = settings.value("save", False).toBool() or settings.value("savePassword", False).toBool()
+		savedPassword = settings.value("save", False, type=bool) or settings.value("savePassword", False, type=bool)
 
-		useEstimatedMetadata = settings.value("estimatedMetadata", False).toBool()
-		sslmode = settings.value("sslmode", QgsDataSourceURI.SSLprefer).toInt()[0]
+		useEstimatedMetadata = settings.value("estimatedMetadata", False, type=bool)
+		sslmode = settings.value("sslmode", QgsDataSourceURI.SSLprefer, type=int)
 
 		settings.endGroup()
 
-		if not service.isEmpty():
+		if service:
 			uri.setConnection(service, database, username, password, sslmode)
 		else:
 			uri.setConnection(host, port, database, username, password, sslmode)
 
 		uri.setUseEstimatedMetadata(useEstimatedMetadata)
 
-		err = QString()
+		err = u""
 		try:
 			return self.connectToUri(uri)
 		except ConnectionError, e:
-			err = QString( str(e) )
-
-		hasCredentialDlg = True
-		try:
-			from qgis.gui import QgsCredentials
-		except ImportError:	# no credential dialog
-			hasCredentialDlg = False
+			err = str(e)
 
 		# ask for valid credentials
 		max_attempts = 3
 		for i in range(max_attempts):
-			if hasCredentialDlg:
-				(ok, username, password) = QgsCredentials.instance().get(uri.connectionInfo(), username, password, err)
-			else:
-				(password, ok) = QInputDialog.getText(parent, u"Enter password", u'Enter password for connection "%s":' % conn_name, QLineEdit.Password)
+			(ok, username, password) = QgsCredentials.instance().get(uri.connectionInfo(), username, password, err)
 
 			if not ok:
 				return False
 
-			if not service.isEmpty():
+			if service != "":
 				uri.setConnection(service, database, username, password, sslmode)
 			else:
 				uri.setConnection(host, port, database, username, password, sslmode)
@@ -125,11 +119,11 @@ class PostGisDBPlugin(DBPlugin):
 			except ConnectionError, e:
 				if i == max_attempts-1:	# failed the last attempt
 					raise e
-				err = QString( str(e) )
+				err = str(e)
 				continue
 
-			if hasCredentialDlg:
-				QgsCredentials.instance().put(uri.connectionInfo(), username, password)
+			QgsCredentials.instance().put(uri.connectionInfo(), username, password)
+
 			return True
 
 		return False
@@ -165,16 +159,16 @@ class PGDatabase(Database):
 		# add a separator
 		separator = QAction(self);
 		separator.setSeparator(True)
-		mainWindow.registerAction( separator, "&Table" )
+		mainWindow.registerAction( separator, self.tr("&Table") )
 
-		action = QAction("Run &Vacuum Analyze", self)
-		mainWindow.registerAction( action, "&Table", self.runVacuumAnalyzeActionSlot )
+		action = QAction(self.tr("Run &Vacuum Analyze"), self)
+		mainWindow.registerAction( action, self.tr("&Table"), self.runVacuumAnalyzeActionSlot )
 
 	def runVacuumAnalyzeActionSlot(self, item, action, parent):
 		QApplication.restoreOverrideCursor()
 		try:
 			if not isinstance(item, Table) or item.isView:
-				QMessageBox.information(parent, "Sorry", "Select a TABLE for vacuum analyze.")
+				QMessageBox.information(parent, self.tr("Sorry"), self.tr("Select a TABLE for vacuum analyze."))
 				return
 		finally:
 			QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -214,9 +208,11 @@ class PGTable(Table):
 			rule_action = parts[2]
 
 			msg = u"Do you want to %s rule %s?" % (rule_action, rule_name)
+
 			QApplication.restoreOverrideCursor()
+
 			try:
-				if QMessageBox.question(None, "Table rule", msg, QMessageBox.Yes|QMessageBox.No) == QMessageBox.No:
+				if QMessageBox.question(None, self.tr("Table rule"), msg, QMessageBox.Yes|QMessageBox.No) == QMessageBox.No:
 					return False
 			finally:
 				QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -283,17 +279,17 @@ class PGRasterTable(PGTable, RasterTable):
 		uri = self.database().uri()
 		schema = ( u'schema=%s' % self.schemaName() ) if self.schemaName() else ''
 		gdalUri = u'PG: dbname=%s host=%s user=%s password=%s port=%s mode=2 %s table=%s' % (uri.database(), uri.host(), uri.username(), uri.password(), uri.port(), schema, self.name)
-		return QString( gdalUri )
+		return gdalUri
 
 	def mimeUri(self):
 		uri = u"raster:gdal:%s:%s" % (self.name, self.gdalUri())
-		return QString( uri )
+		return uri
 
 	def toMapLayer(self):
-		from qgis.core import QgsRasterLayer
+		from qgis.core import QgsRasterLayer, QgsContrastEnhancement
 		rl = QgsRasterLayer(self.gdalUri(), self.name)
 		if rl.isValid():
-			rl.setContrastEnhancementAlgorithm("StretchToMinimumMaximum")
+			rl.setContrastEnhancement(QgsContrastEnhancement.StretchToMinimumMaximum)
 		return rl
 
 class PGTableField(TableField):
@@ -303,11 +299,11 @@ class PGTableField(TableField):
 		self.primaryKey = False
 
 		# get modifier (e.g. "precision,scale") from formatted type string
-		trimmedTypeStr = QString(typeStr).trimmed()
+		trimmedTypeStr = typeStr.strip()
 		regex = QRegExp( "\((.+)\)$" )
 		startpos = regex.indexIn( trimmedTypeStr )
 		if startpos >= 0:
-			self.modifier = regex.cap(1).trimmed()
+			self.modifier = regex.cap(1).strip()
 		else:
 			self.modifier = None
 
@@ -321,9 +317,13 @@ class PGTableField(TableField):
 class PGTableConstraint(TableConstraint):
 	def __init__(self, row, table):
 		TableConstraint.__init__(self, table)
-		self.name, constr_type, self.isDefferable, self.isDeffered, columns = row[:5]
+		self.name, constr_type_str, self.isDefferable, self.isDeffered, columns = row[:5]
 		self.columns = map(int, columns.split(' '))
-		self.type = TableConstraint.types[constr_type]   # convert to enum
+
+		if constr_type_str in TableConstraint.types:
+			self.type = TableConstraint.types[constr_type_str]
+		else:
+			self.type = TableConstraint.TypeUnknown
 
 		if self.type == TableConstraint.TypeCheck:
 			self.checkSource = row[5]

@@ -6,20 +6,14 @@ SET (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${QGIS_OUTPUT_DIRECTORY}/${QGIS_LIBEXEC_SUBD
 
 SET (HELP_SRCS
      main.cpp
-     qgshelpserver.cpp
      qgshelpviewer.cpp
-     #../core/qgsapplication.cpp
-     #../core/qgslogger.cpp
 )
 
 SET (HELP_UIS qgshelpviewerbase.ui)
 
-SET (HELP_MOC_HDRS
-     qgshelpserver.h
-     qgshelpviewer.h
-)
+SET (HELP_MOC_HDRS qgshelpviewer.h)
 
-#SET (HELP_RCCS  qgsgps_plugin.qrc)
+SET (HELP_RCCS ../../images/images.qrc)
 
 IF (WIN32)
   IF (MSVC)
@@ -54,9 +48,9 @@ QT4_WRAP_UI (HELP_UIS_H  ${HELP_UIS})
 
 QT4_WRAP_CPP (HELP_MOC_SRCS  ${HELP_MOC_HDRS})
 
-#QT4_ADD_RESOURCES(HELP_RCC_SRCS ${HELP_RCCS})
+QT4_ADD_RESOURCES(HELP_RCC_SRCS ${HELP_RCCS})
 
-ADD_EXECUTABLE (qgis_help MACOSX_BUNDLE WIN32 ${HELP_SRCS} ${HELP_MOC_SRCS} ${HELP_UIS_H})
+ADD_EXECUTABLE (qgis_help MACOSX_BUNDLE WIN32 ${HELP_SRCS} ${HELP_MOC_SRCS} ${HELP_UIS_H} ${HELP_RCC_SRCS})
 
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/../core
@@ -102,4 +96,5 @@ INSTALL (TARGETS qgis_help
 )
 IF (APPLE)
   INSTALL (CODE "EXECUTE_PROCESS (COMMAND ln -sfh ../../../${QGIS_FW_SUBDIR} \"$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/${QGIS_BIN_DIR}/qgis_help.app/Contents/Frameworks\")")
+  INSTALL (CODE "EXECUTE_PROCESS (COMMAND ln -sfh ../../../../${QGIS_LIB_DIR} \"$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/${QGIS_BIN_DIR}/qgis_help.app/Contents/MacOS/lib\")")
 ENDIF (APPLE)

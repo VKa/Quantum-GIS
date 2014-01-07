@@ -22,6 +22,7 @@
 typedef QMap<QgsFeatureId, QgsFeature> QgsFeatureMap;
 
 class QgsVectorLayer;
+class QgsVectorLayerEditBuffer;
 struct QgsVectorJoinInfo;
 
 class CORE_EXPORT QgsVectorLayerFeatureIterator : public QgsAbstractFeatureIterator
@@ -31,9 +32,6 @@ class CORE_EXPORT QgsVectorLayerFeatureIterator : public QgsAbstractFeatureItera
 
     ~QgsVectorLayerFeatureIterator();
 
-    //! fetch next feature, return true on success
-    virtual bool nextFeature( QgsFeature& feature );
-
     //! reset the iterator to the starting position
     virtual bool rewind();
 
@@ -41,22 +39,33 @@ class CORE_EXPORT QgsVectorLayerFeatureIterator : public QgsAbstractFeatureItera
     virtual bool close();
 
   protected:
+    //! fetch next feature, return true on success
+    virtual bool fetchFeature( QgsFeature& feature );
+
+    //! Overrides default method as we only need to filter features in the edit buffer
+    //! while for others filtering is left to the provider implementation.
+    inline virtual bool nextFeatureFilterExpression( QgsFeature &f ) { return fetchFeature( f ); }
+
     QgsVectorLayer* L;
 
     QgsFeatureRequest mProviderRequest;
     QgsFeatureIterator mProviderIterator;
+    QgsFeatureRequest mChangedFeaturesRequest;
+    QgsFeatureIterator mChangedFeaturesIterator;
 
+#if 0
     // general stuff
-    //bool mFetching;
-    //QgsRectangle mFetchRect;
-    //QgsAttributeList mFetchAttributes;
-    //QgsAttributeList mFetchProvAttributes;
-    //bool mFetchGeometry;
+    bool mFetching;
+    QgsRectangle mFetchRect;
+    QgsAttributeList mFetchAttributes;
+    QgsAttributeList mFetchProvAttributes;
+    bool mFetchGeometry;
+#endif
 
     // only related to editing
     QSet<QgsFeatureId> mFetchConsidered;
-    QgsGeometryMap::iterator mFetchChangedGeomIt;
-    QgsFeatureMap::iterator mFetchAddedFeaturesIt;
+    QgsGeometryMap::ConstIterator mFetchChangedGeomIt;
+    QgsFeatureMap::ConstIterator mFetchAddedFeaturesIt;
 
     bool mFetchedFid; // when iterating by FID: indicator whether it has been fetched yet or not
 
@@ -64,10 +73,17 @@ class CORE_EXPORT QgsVectorLayerFeatureIterator : public QgsAbstractFeatureItera
     void prepareJoins();
     bool fetchNextAddedFeature( QgsFeature& f );
     bool fetchNextChangedGeomFeature( QgsFeature& f );
+    bool fetchNextChangedAttributeFeature( QgsFeature& f );
     void useAddedFeature( const QgsFeature& src, QgsFeature& f );
     void useChangedAttributeFeature( QgsFeatureId fid, const QgsGeometry& geom, QgsFeature& f );
     bool nextFeatureFid( QgsFeature& f );
     void addJoinedAttributes( QgsFeature &f );
+
+    /** Update feature with uncommited attribute updates */
+    void updateChangedAttributes( QgsFeature& f );
+
+    /** Update feature with uncommited geometry updates */
+    void updateFeatureGeometry( QgsFeature& f );
 
     /** Join information prepared for fast attribute id mapping in QgsVectorLayerJoinBuffer::updateFeatureAttributes().
       Created in the select() method of QgsVectorLayerJoinBuffer for the joins that contain fetched attributes
@@ -85,11 +101,57 @@ class CORE_EXPORT QgsVectorLayerFeatureIterator : public QgsAbstractFeatureItera
       void addJoinedAttributesDirect( QgsFeature& f, const QVariant& joinValue ) const;
     };
 
+    // A deep-copy is only performed, if the original maps change
+    // see here https://github.com/qgis/Quantum-GIS/pull/673
+    // for explanation
+    QgsFeatureMap mAddedFeatures;
+    QgsGeometryMap mChangedGeometries;
+    QgsFeatureIds mDeletedFeatureIds;
+    QList<QgsField> mAddedAttributes;
+    QgsChangedAttributesMap mChangedAttributeValues;
+    QgsAttributeList mDeletedAttributeIds;
 
     /** Informations about joins used in the current select() statement.
       Allows faster mapping of attribute ids compared to mVectorJoins */
     QMap<QgsVectorLayer*, FetchJoinInfo> mFetchJoinInfo;
-
 };
+
+/***************************************************************************
+    QgsSimplifiedVectorLayerFeatureIterator class
+    ----------------------
+    begin                : December 2013
+    copyright            : (C) 2013 by Alvaro Huarte
+    email                : http://wiki.osgeo.org/wiki/Alvaro_Huarte
+
+ ***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
+
+#include "qgsgeometrysimplifier.h"
+
+//! Provides a specialized VectorLayerFeatureIterator for enable simplification of the geometries fetched
+class CORE_EXPORT QgsSimplifiedVectorLayerFeatureIterator : public QgsVectorLayerFeatureIterator
+{
+  public:
+    QgsSimplifiedVectorLayerFeatureIterator( QgsVectorLayer* layer, const QgsFeatureRequest& request, QgsAbstractGeometrySimplifier* simplifier );
+    ~QgsSimplifiedVectorLayerFeatureIterator( );
+
+  protected:
+    //! fetch next feature, return true on success
+    virtual bool fetchFeature( QgsFeature& feature );
+
+  private:
+    //! Related geometry simplifier
+    QgsAbstractGeometrySimplifier* mSimplifier;
+    //! Indicates the related vector provider supports simplify the geometries before fecth the feature
+    bool  mSupportsPresimplify;
+};
+
+/***************************************************************************/
 
 #endif // QGSVECTORLAYERFEATUREITERATOR_H

@@ -577,7 +577,7 @@ class QgsLegend : public QTreeWidget
 
     } mPixmaps;
 
-    //! Widget that holds the indicator line //
+    //! Widget that holds the indicator line
     QWidget *mInsertionLine;
 
     QMap< QgsMapLayer::LayerType, QList< LegendLayerAction > > mLegendLayerActionMap;
@@ -587,6 +587,18 @@ class QgsLegend : public QTreeWidget
 #endif
 
     void updateGroupCheckStates( QTreeWidgetItem *item );
+
+    bool verifyDrawingOrder();
+
+    /*!
+     * Check if current LegendItem belongs to a WMS layer
+     * @param item LegendItem to check if belongs to a WMS layer
+     * @return QImage A valid Legend image if belongs to WMS otherwise QImage()
+     */
+    QImage getWmsLegendPixmap( QTreeWidgetItem *item );
+
+    //! popup QFrame containing WMS getLegendGraphic pixmap
+    QFrame *mGetLegendGraphicPopup;
 
   signals:
     void itemAdded( QModelIndex index );

@@ -20,12 +20,13 @@
 #include "ui_qgsattributetypeedit.h"
 
 #include "qgsvectorlayer.h"
+#include "qgseditorconfigwidget.h"
 
 class QDialog;
 class QLayout;
 class QgsField;
 
-class QgsAttributeTypeDialog: public QDialog, private Ui::QgsAttributeTypeDialog
+class APP_EXPORT QgsAttributeTypeDialog: public QDialog, private Ui::QgsAttributeTypeDialog
 {
     Q_OBJECT
 
@@ -57,6 +58,14 @@ class QgsAttributeTypeDialog: public QDialog, private Ui::QgsAttributeTypeDialog
      * @return selected edit type
      */
     QgsVectorLayer::EditType editType();
+
+    const QString editorWidgetV2Type();
+
+    const QString editorWidgetV2Text();
+
+    const QMap<QString, QVariant> editorWidgetV2Config();
+
+    void setWidgetV2Config( const QMap<QString, QVariant>& config );
 
     /**
      * Setter to value map variable to display actual value
@@ -101,6 +110,19 @@ class QgsAttributeTypeDialog: public QDialog, private Ui::QgsAttributeTypeDialog
     void setFieldEditable( bool editable );
 
     /**
+     * Sets the enabled state of the "editable" checkbox
+     *
+     * @param enabled sets the enabled state of the checkbox
+     */
+    void setFieldEditableEnabled( bool enabled );
+
+    /**
+     * Setter for checkbox to label on top
+     * @param bool onTop
+     */
+    void setLabelOnTop( bool onTop );
+
+    /**
      * Getter for checked state after editing
      * @return string representing the checked
      */
@@ -137,6 +159,11 @@ class QgsAttributeTypeDialog: public QDialog, private Ui::QgsAttributeTypeDialog
      * Getter for checkbox for editable state of field
      */
     bool fieldEditable();
+
+    /**
+     * Getter for checkbox for label on top of field
+     */
+    bool labelOnTop();
 
   private slots:
     /**
@@ -190,10 +217,12 @@ class QgsAttributeTypeDialog: public QDialog, private Ui::QgsAttributeTypeDialog
     /**
      * Function to update the value map
      * @param map new map
+     * @param insertNull Add a Null value on top
      */
-    void updateMap( const QMap<QString, QVariant> &map );
+    void updateMap( const QMap<QString, QVariant> &map, bool insertNull = false );
 
     bool mFieldEditable;
+    bool mLabelOnTop;
 
     QMap<QString, QVariant> mValueMap;
 
@@ -205,6 +234,10 @@ class QgsAttributeTypeDialog: public QDialog, private Ui::QgsAttributeTypeDialog
     QgsVectorLayer::EditType mEditType;
     QString mDateFormat;
     QSize mWidgetSize;
+
+    QMap<QString, QVariant> mWidgetV2Config;
+
+    QMap< QString, QgsEditorConfigWidget* > mEditorConfigWidgets;
 };
 
 #endif

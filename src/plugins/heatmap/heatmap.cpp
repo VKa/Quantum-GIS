@@ -47,6 +47,12 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+#if defined(GDAL_VERSION_NUM) && GDAL_VERSION_NUM >= 1800
+#define TO8F(x) (x).toUtf8().constData()
+#else
+#define TO8F(x) QFile::encodeName( x ).constData()
+#endif
+
 static const QString sName = QObject::tr( "Heatmap" );
 static const QString sDescription = QObject::tr( "Creates a Heatmap raster for the input point vector" );
 static const QString sCategory = QObject::tr( "Raster" );
@@ -59,9 +65,9 @@ static const QString sPluginIcon = ":/heatmap/heatmap.png";
  * an interface object that provides access to exposed functions in QGIS.
  * @param theQGisInterface - Pointer to the QGIS interface object
  */
-Heatmap::Heatmap( QgisInterface * theQgisInterface ):
-    QgisPlugin( sName, sDescription, sCategory, sPluginVersion, sPluginType ),
-    mQGisIface( theQgisInterface )
+Heatmap::Heatmap( QgisInterface * theQgisInterface )
+    : QgisPlugin( sName, sDescription, sCategory, sPluginVersion, sPluginType )
+    , mQGisIface( theQgisInterface )
 {
 }
 
@@ -76,7 +82,6 @@ Heatmap::~Heatmap()
  */
 void Heatmap::initGui()
 {
-
   // Create the action for tool
   mQActionPointer = new QAction( QIcon( ":/heatmap/heatmap.png" ), tr( "Heatmap" ), this );
   // Set the what's this text
@@ -100,7 +105,7 @@ void Heatmap::help()
 // not be enough
 void Heatmap::run()
 {
-  HeatmapGui d( mQGisIface->mainWindow(), QgisGui::ModalDialogFlags );
+  HeatmapGui d( mQGisIface->mainWindow(), QgisGui::ModalDialogFlags, &mSessionSettings );
 
   if ( d.exec() == QDialog::Accepted )
   {
@@ -157,7 +162,7 @@ void Heatmap::run()
 
     // open the raster in GA_Update mode
     GDALDataset *heatmapDS;
-    heatmapDS = ( GDALDataset * ) GDALOpen( d.outputFilename().toUtf8(), GA_Update );
+    heatmapDS = ( GDALDataset * ) GDALOpen( TO8F( d.outputFilename() ), GA_Update );
     if ( !heatmapDS )
     {
       QMessageBox::information( 0, tr( "Raster update error" ), tr( "Could not open the created raster for updating. The heatmap was not generated." ) );

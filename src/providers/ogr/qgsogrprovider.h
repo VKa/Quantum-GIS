@@ -15,6 +15,8 @@ email                : sherman at mrcc.com
  *                                                                         *
  ***************************************************************************/
 
+#include "QTextCodec"
+
 #include "qgsrectangle.h"
 #include "qgsvectordataprovider.h"
 #include "qgsvectorfilewriter.h"
@@ -247,6 +249,19 @@ class QgsOgrProvider : public QgsVectorDataProvider
     /** return OGR geometry type */
     static int getOgrGeomType( OGRLayerH ogrLayer );
 
+    /** Get single flatten geometry type */
+    static OGRwkbGeometryType ogrWkbSingleFlatten( OGRwkbGeometryType type );
+
+    QString layerName() { return mLayerName; }
+
+    QString filePath() { return mFilePath; }
+
+    int layerIndex() { return mLayerIndex; }
+
+    QTextCodec* textEncoding() { return mEncoding; }
+
+    QByteArray quotedIdentifier( QByteArray field );
+
   protected:
     /** loads fields from input file to member attributeFields */
     void loadFields();
@@ -255,13 +270,18 @@ class QgsOgrProvider : public QgsVectorDataProvider
     void recalculateFeatureCount();
 
     /** tell OGR, which fields to fetch in nextFeature/featureAtId (ie. which not to ignore) */
-    void setRelevantFields( bool fetchGeometry, const QgsAttributeList& fetchAttributes );
+    void setRelevantFields( OGRLayerH ogrLayer, bool fetchGeometry, const QgsAttributeList& fetchAttributes );
 
     /** convert a QgsField to work with OGR */
     static bool convertField( QgsField &field, const QTextCodec &encoding );
 
+    /** Clean shapefile from features which are marked as deleted */
+    void repack();
+
   private:
     unsigned char *getGeometryPointer( OGRFeatureH fet );
+    QString ogrWkbGeometryTypeName( OGRwkbGeometryType type ) const;
+    OGRwkbGeometryType ogrWkbGeometryTypeFromName( QString typeName ) const;
     QgsFields mAttributeFields;
     OGRDataSourceH ogrDataSource;
     void *extent_;
@@ -281,6 +301,11 @@ class QgsOgrProvider : public QgsVectorDataProvider
     //! layer index
     int mLayerIndex;
 
+    /** Optional geometry type for layers with multiple geometries,
+     *  otherwise wkbUnknown. This type is always flatten (2D) and single, it means
+     *  that 2D, 25D, single and multi types are mixed in one sublayer */
+    OGRwkbGeometryType mOgrGeometryTypeFilter;
+
     //! current spatial filter
     QgsRectangle mFetchRect;
 
@@ -299,6 +324,9 @@ class QgsOgrProvider : public QgsVectorDataProvider
     int geomType;
     long featuresCounted;
 
+    //! There are deleted feature - REPACK before creating a spatialindex
+    bool mDeletedFeatures;
+
     mutable QStringList mSubLayerList;
 
     /** Flag whether OGR will return fields required by nextFeature() calls.
@@ -313,11 +341,11 @@ class QgsOgrProvider : public QgsVectorDataProvider
     /**Deletes one feature*/
     bool deleteFeature( QgsFeatureId id );
 
-    QString quotedIdentifier( QString field );
-
     /**Calls OGR_L_SyncToDisk and recreates the spatial index if present*/
     bool syncToDisc();
 
+    OGRLayerH setSubsetString( OGRLayerH layer, OGRDataSourceH ds );
+
     friend class QgsOgrFeatureIterator;
-    QgsOgrFeatureIterator* mActiveIterator; //!< pointer to currently active iterator (0 if none)
+    QSet< QgsOgrFeatureIterator* > mActiveIterators;
 };

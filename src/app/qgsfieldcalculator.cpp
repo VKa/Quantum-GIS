@@ -47,6 +47,11 @@ QgsFieldCalculator::QgsFieldCalculator( QgsVectorLayer* vl )
   mOutputFieldWidthSpinBox->setValue( 10 );
   mOutputFieldPrecisionSpinBox->setValue( 3 );
 
+  if ( vl->providerType() == "ogr" && vl->storageType() == "ESRI Shapefile" )
+  {
+    mOutputFieldNameLineEdit->setMaxLength( 10 );
+  }
+
   mUpdateExistingGroupBox->setEnabled( vl->dataProvider()->capabilities() & QgsVectorDataProvider::ChangeAttributeValues );
   mNewFieldGroupBox->setEnabled( vl->dataProvider()->capabilities() & QgsVectorDataProvider::AddAttributes );
 
@@ -183,10 +188,7 @@ void QgsFieldCalculator::accept()
     }
     else
     {
-      // FIXME workaround while QgsVectorLayer::changeAttributeValue's emitSignal is ignored (see #7071)
-      mVectorLayer->blockSignals( true );
-      mVectorLayer->changeAttributeValue( feature.id(), mAttributeId, value, false );
-      mVectorLayer->blockSignals( false );
+      mVectorLayer->changeAttributeValue( feature.id(), mAttributeId, value );
     }
 
     rownum++;

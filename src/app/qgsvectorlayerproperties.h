@@ -37,12 +37,11 @@ class QgsAttributeActionDialog;
 class QgsApplyDialog;
 class QgsLabelDialog;
 class QgsVectorLayer;
-class QgsVectorOverlayPlugin;
 class QgsLabelingGui;
 class QgsDiagramProperties;
 class QgsFieldsProperties;
 
-class QgsVectorLayerProperties : public QgsOptionsDialogBase, private Ui::QgsVectorLayerPropertiesBase
+class APP_EXPORT QgsVectorLayerProperties : public QgsOptionsDialogBase, private Ui::QgsVectorLayerPropertiesBase
 {
     Q_OBJECT
 
@@ -81,7 +80,7 @@ class QgsVectorLayerProperties : public QgsOptionsDialogBase, private Ui::QgsVec
     void insertExpression();
 
     /** Reset to original (vector layer) values */
-    void reset();
+    void syncToLayer();
 
     /** Get metadata about the layer in nice formatted html */
     QString metadata();
@@ -119,6 +118,8 @@ class QgsVectorLayerProperties : public QgsOptionsDialogBase, private Ui::QgsVec
 
     void on_mMinimumScaleSetCurrentPushButton_clicked();
     void on_mMaximumScaleSetCurrentPushButton_clicked();
+
+    void on_mSimplifyDrawingSlider_valueChanged( int value );
 
   signals:
 
@@ -168,13 +169,7 @@ class QgsVectorLayerProperties : public QgsOptionsDialogBase, private Ui::QgsVec
     /**Fields dialog. If apply is pressed, options are applied to vector's diagrams*/
     QgsFieldsProperties* mFieldsPropertiesDialog;
 
-
-    QList<QgsApplyDialog*> mOverlayDialogs;
-
     void initDiagramTab();
-
-    /**Requests all overlay plugis from the plugin registry. Useful for inserting their dialogs as new tabs*/
-    QList<QgsVectorOverlayPlugin*> overlayPlugins() const;
 
     /**Buffer pixmap which takes the picture of renderers before they are assigned to the vector layer*/
     //QPixmap bufferPixmap;

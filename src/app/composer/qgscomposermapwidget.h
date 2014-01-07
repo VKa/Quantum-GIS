@@ -37,7 +37,7 @@ class QgsComposerMapWidget: public QWidget, private Ui::QgsComposerMapWidgetBase
   public slots:
     void on_mPreviewModeComboBox_activated( int i );
     void on_mScaleLineEdit_editingFinished();
-    void on_mRotationSpinBox_valueChanged( double value );
+    void on_mMapRotationSpinBox_valueChanged( double value );
     void on_mSetToMapCanvasExtentButton_clicked();
     void on_mUpdatePreviewButton_clicked();
     void on_mKeepLayerListCheckBox_stateChanged( int state );
@@ -46,6 +46,7 @@ class QgsComposerMapWidget: public QWidget, private Ui::QgsComposerMapWidgetBase
     void on_mOverviewFrameStyleButton_clicked();
     void on_mOverviewBlendModeComboBox_currentIndexChanged( int index );
     void on_mOverviewInvertCheckbox_toggled( bool state );
+    void on_mOverviewCenterCheckbox_toggled( bool state );
 
     void on_mXMinLineEdit_editingFinished();
     void on_mXMaxLineEdit_editingFinished();
@@ -60,7 +61,9 @@ class QgsComposerMapWidget: public QWidget, private Ui::QgsComposerMapWidgetBase
     void on_mGridLineStyleButton_clicked();
     void on_mGridTypeComboBox_currentIndexChanged( const QString& text );
     void on_mCrossWidthSpinBox_valueChanged( double d );
+    void on_mGridBlendComboBox_currentIndexChanged( int index );
     void on_mAnnotationFontButton_clicked();
+    void on_mAnnotationFontColorButton_colorChanged( const QColor& newFontColor );
     void on_mDistanceToMapFrameSpinBox_valueChanged( double d );
 
     void on_mAnnotationFormatComboBox_currentIndexChanged( int index );
@@ -82,6 +85,10 @@ class QgsComposerMapWidget: public QWidget, private Ui::QgsComposerMapWidgetBase
 
     void on_mFrameStyleComboBox_currentIndexChanged( const QString& text );
     void on_mFrameWidthSpinBox_valueChanged( double d );
+    void on_mGridFramePenSizeSpinBox_valueChanged( double d );
+    void on_mGridFramePenColorButton_colorChanged( const QColor& newColor );
+    void on_mGridFrameFill1ColorButton_colorChanged( const QColor& newColor );
+    void on_mGridFrameFill2ColorButton_colorChanged( const QColor& newColor );
 
   protected:
     void showEvent( QShowEvent * event );
@@ -119,6 +126,9 @@ class QgsComposerMapWidget: public QWidget, private Ui::QgsComposerMapWidgetBase
 
     /**Updates the map combo box with the current composer map ids*/
     void refreshMapComboBox();
+
+    /**Enables/disables grid frame related controls*/
+    void toggleFrameControls( bool frameEnabled );
 };
 
 #endif

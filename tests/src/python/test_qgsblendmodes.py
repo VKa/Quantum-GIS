@@ -24,6 +24,7 @@ __copyright__ = '(C) 2013, Nyall Dawson, Massimo Endrighi'
 __revision__ = '$Format:%H$'
 
 import os
+import qgis
 
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
@@ -65,7 +66,14 @@ class TestQgsBlendModes(TestCase):
         # create polygon layer
         myShpFile = os.path.join(TEST_DATA_DIR, 'polys.shp')
         self.mPolygonLayer = QgsVectorLayer(myShpFile, 'Polygons', 'ogr')
+        self.mPolygonLayer.setSimplifyDrawingHints(QgsVectorLayer.NoSimplification)
         self.mMapRegistry.addMapLayer(self.mPolygonLayer)
+
+        # create line layer
+        myShpFile = os.path.join(TEST_DATA_DIR, 'lines.shp')
+        self.mLineLayer = QgsVectorLayer(myShpFile, 'Lines', 'ogr')
+        self.mLineLayer.setSimplifyDrawingHints(QgsVectorLayer.NoSimplification)
+        self.mMapRegistry.addMapLayer(self.mLineLayer)
 
         # create two raster layers
         myRasterFile = os.path.join(TEST_DATA_DIR, 'landsat.tif')
@@ -90,15 +98,15 @@ class TestQgsBlendModes(TestCase):
         """Test that blend modes work for vector layers."""
 
         #Add vector layers to map
-        myLayers = QStringList()
-        myLayers.append(self.mPointLayer.id())
+        myLayers = []
+        myLayers.append(self.mLineLayer.id())
         myLayers.append(self.mPolygonLayer.id())
         self.mMapRenderer.setLayerSet(myLayers)
         self.mMapRenderer.setExtent(self.mPointLayer.extent())
 
         #Set blending modes for both layers
-        self.mPointLayer.setBlendMode(QPainter.CompositionMode_Overlay)
-        self.mPolygonLayer.setBlendMode(QPainter.CompositionMode_Multiply)
+        self.mLineLayer.setBlendMode(QPainter.CompositionMode_Difference)
+        self.mPolygonLayer.setBlendMode(QPainter.CompositionMode_Difference)
 
         checker = QgsRenderChecker()
         checker.setControlName("expected_vector_blendmodes")
@@ -108,10 +116,59 @@ class TestQgsBlendModes(TestCase):
         myMessage = ('vector blending failed')
         assert myResult, myMessage
 
+        #Reset layers
+        self.mLineLayer.setBlendMode(QPainter.CompositionMode_SourceOver)
+        self.mPolygonLayer.setBlendMode(QPainter.CompositionMode_SourceOver)
+
+    def testVectorFeatureBlending(self):
+        """Test that feature blend modes work for vector layers."""
+
+        #Add vector layers to map
+        myLayers = []
+        myLayers.append(self.mLineLayer.id())
+        myLayers.append(self.mPolygonLayer.id())
+        self.mMapRenderer.setLayerSet(myLayers)
+        self.mMapRenderer.setExtent(self.mPointLayer.extent())
+
+        #Set feature blending for line layer
+        self.mLineLayer.setFeatureBlendMode(QPainter.CompositionMode_Plus)
+
+        checker = QgsRenderChecker()
+        checker.setControlName("expected_vector_featureblendmodes")
+        checker.setMapRenderer(self.mMapRenderer)
+
+        myResult = checker.runTest("vector_featureblendmodes");
+        myMessage = ('vector feature blending failed')
+        assert myResult, myMessage
+
+        #Reset layers
+        self.mLineLayer.setFeatureBlendMode(QPainter.CompositionMode_SourceOver)
+
+    def testVectorLayerTransparency(self):
+        """Test that layer transparency works for vector layers."""
+
+        #Add vector layers to map
+        myLayers = []
+        myLayers.append(self.mLineLayer.id())
+        myLayers.append(self.mPolygonLayer.id())
+        self.mMapRenderer.setLayerSet(myLayers)
+        self.mMapRenderer.setExtent(self.mPointLayer.extent())
+
+        #Set feature blending for line layer
+        self.mLineLayer.setLayerTransparency( 50 )
+
+        checker = QgsRenderChecker()
+        checker.setControlName("expected_vector_layertransparency")
+        checker.setMapRenderer(self.mMapRenderer)
+
+        myResult = checker.runTest("vector_layertransparency");
+        myMessage = ('vector layer transparency failed')
+        assert myResult, myMessage
+
     def testRasterBlending(self):
         """Test that blend modes work for raster layers."""
         #Add raster layers to map
-        myLayers = QStringList()
+        myLayers = []
         myLayers.append(self.mRasterLayer1.id())
         myLayers.append(self.mRasterLayer2.id())
         self.mMapRenderer.setLayerSet(myLayers)

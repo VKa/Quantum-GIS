@@ -71,9 +71,9 @@ checkDock::checkDock( QgisInterface* qIface, QWidget* parent )
   mRBFeature2 = new QgsRubberBand( canvas );
   mRBConflict = new QgsRubberBand( canvas );
 
-  mRBFeature1->setColor( "blue" );
-  mRBFeature2->setColor( "green" );
-  mRBConflict->setColor( "red" );
+  mRBFeature1->setColor( QColor( 0, 0, 255, 65 ) );
+  mRBFeature2->setColor( QColor( 0, 255, 0, 65 ) );
+  mRBConflict->setColor( QColor( 255, 0, 0, 65 ) );
 
   mRBFeature1->setWidth( 5 );
   mRBFeature2->setWidth( 5 );
@@ -87,7 +87,7 @@ checkDock::checkDock( QgisInterface* qIface, QWidget* parent )
   connect( mValidateAllButton, SIGNAL( clicked() ), this, SLOT( validateAll() ) );
   //connect( mValidateSelectedButton, SIGNAL( clicked() ), this, SLOT( validateSelected() ) );
   connect( mValidateExtentButton, SIGNAL( clicked() ), this, SLOT( validateExtent() ) );
-  connect( mToggleRubberbands, SIGNAL( clicked() ), this, SLOT( toggleErrorMarkers() ) );
+  connect( mToggleRubberband, SIGNAL( clicked() ), this, SLOT( toggleErrorMarker() ) );
 
   connect( mFixButton, SIGNAL( clicked() ), this, SLOT( fix() ) );
   connect( mErrorTableView, SIGNAL( clicked( const QModelIndex & ) ), this, SLOT( errorListClicked( const QModelIndex & ) ) );
@@ -149,6 +149,9 @@ void checkDock::deleteErrors()
 
   mErrorList.clear();
   mErrorListModel->resetModel();
+
+  qDeleteAll( mRbErrorMarkers );
+  mRbErrorMarkers.clear();
 }
 
 void checkDock::parseErrorListByLayer( QString layerId )
@@ -380,6 +383,7 @@ void checkDock::runTests( ValidateType type )
     mErrorList << errors;
   }
   mMarkersVisible = true;
+  mToggleRubberband->setChecked( true );
   mErrorListModel->resetModel();
 }
 
@@ -387,14 +391,7 @@ void checkDock::validate( ValidateType type )
 {
   mErrorList.clear();
 
-  QList<QgsRubberBand*>::const_iterator it;
-  for ( it = mRbErrorMarkers.begin(); it != mRbErrorMarkers.end(); ++it )
-  {
-    QgsRubberBand* rb = *it;
-    rb->reset();
-    delete rb;
-  }
-
+  qDeleteAll( mRbErrorMarkers );
   mRbErrorMarkers.clear();
 
   runTests( type );
@@ -406,6 +403,7 @@ void checkDock::validate( ValidateType type )
   clearVertexMarkers();
 
   mErrorTableView->resizeColumnsToContents();
+  mToggleRubberband->setChecked( true );
 }
 
 void checkDock::validateExtent()
@@ -423,21 +421,19 @@ void checkDock::validateSelected()
   validate( ValidateSelected );
 }
 
-void checkDock::toggleErrorMarkers()
+void checkDock::toggleErrorMarker()
 {
   QList<QgsRubberBand*>::const_iterator it;
   for ( it = mRbErrorMarkers.begin(); it != mRbErrorMarkers.end(); ++it )
   {
     QgsRubberBand* rb = *it;
-    if ( mMarkersVisible == true )
-    {
-      rb->hide();
-    }
-    else
+    if ( mToggleRubberband->isChecked() )
     {
       rb->show();
     }
+    else
+    {
+      rb->hide();
+    }
   }
-  mMarkersVisible = !mMarkersVisible;
-
 }

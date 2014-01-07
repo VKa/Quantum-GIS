@@ -24,7 +24,7 @@
 
 class QgsVectorLayer;
 
-class QgsAddAttrDialog: public QDialog, private Ui::QgsAddAttrDialogBase
+class APP_EXPORT QgsAddAttrDialog: public QDialog, private Ui::QgsAddAttrDialogBase
 {
     Q_OBJECT
   public:
@@ -41,7 +41,7 @@ class QgsAddAttrDialog: public QDialog, private Ui::QgsAddAttrDialogBase
     void accept();
 
   private:
-    QString mLayerType;
+    bool mIsShapeFile;
 
     void setPrecisionMinMax();
 };

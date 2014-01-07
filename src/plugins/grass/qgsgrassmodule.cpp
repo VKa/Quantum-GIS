@@ -562,7 +562,6 @@ QgsGrassModuleStandardOptions::QgsGrassModuleStandardOptions(
             mModule, key, e, gDocElem, gnode, mDirect, mParent );
 
           layout->addWidget( so );
-          created = true;
           mItems.push_back( so );
         }
       }
@@ -2710,8 +2709,7 @@ QgsGrassModuleInput::QgsGrassModuleInput( QgsGrassModule *module,
 
   connect( QgsMapLayerRegistry::instance(), SIGNAL( layersAdded( QList<QgsMapLayer *> ) ),
            this, SLOT( updateQgisLayers() ) );
-  // layersWillBeRemoved is emitted AFTER the layer was removed from registry
-  connect( QgsMapLayerRegistry::instance(), SIGNAL( layersWillBeRemoved( QStringList ) ),
+  connect( QgsMapLayerRegistry::instance(), SIGNAL( layersRemoved( QStringList ) ),
            this, SLOT( updateQgisLayers() ) );
 
   connect( mLayerComboBox, SIGNAL( activated( int ) ), this, SLOT( changed( int ) ) );
@@ -3348,8 +3346,7 @@ QgsGrassModuleGdalInput::QgsGrassModuleGdalInput(
 
   connect( QgsMapLayerRegistry::instance(), SIGNAL( layersAdded( QList<QgsMapLayer *> ) ),
            this, SLOT( updateQgisLayers() ) );
-  // layersWillBeRemoved is emitted after the layer was removed from registry
-  connect( QgsMapLayerRegistry::instance(), SIGNAL( layersWillBeRemoved( QStringList ) ),
+  connect( QgsMapLayerRegistry::instance(), SIGNAL( layersRemoved( QStringList ) ),
            this, SLOT( updateQgisLayers() ) );
 
   // Fill in QGIS layers
@@ -3375,12 +3372,9 @@ void QgsGrassModuleGdalInput::updateQgisLayers()
     mLayerComboBox->addItem( tr( "Select a layer" ), QVariant() );
   }
 
-  QgsMapCanvas *canvas = mModule->qgisIface()->mapCanvas();
-
-  int nlayers = canvas->layerCount();
-  for ( int i = 0; i < nlayers; i++ )
+  foreach ( QgsMapLayer *layer, QgsMapLayerRegistry::instance()->mapLayers().values() )
   {
-    QgsMapLayer *layer = canvas->layer( i );
+    if ( !layer ) continue;
 
     if ( mType == Ogr && layer->type() == QgsMapLayer::VectorLayer )
     {
@@ -3401,9 +3395,11 @@ void QgsGrassModuleGdalInput::updateQgisLayers()
         QgsDataSourceURI dsUri( provider->dataSourceUri() );
         uri = "PG:" + dsUri.connectionInfo();
 
-        if ( dsUri.schema() != "" )
+        // Starting with GDAL 1.7.0, it is possible to restrict the schemas
+        // layer names are then listed without schema if only one schema is specified
+        if ( !dsUri.schema().isEmpty() )
         {
-          ogrLayer = dsUri.schema() + ".";
+          uri += " schemas=" + dsUri.schema();
         }
 
         ogrLayer += dsUri.table();

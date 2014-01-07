@@ -1799,7 +1799,7 @@ ControlNodeBin::draw( const ControlContext& context, bool newContext, int bin )
 
     if ( _sortingEnabled && _sortByDistance )
     {
-        for( ControlNodeCollection::iterator i = _controlNodes.begin(); i != _controlNodes.end(); i++) 
+        for( ControlNodeCollection::iterator i = _controlNodes.begin(); i != _controlNodes.end(); ++i )
         {
             ControlNode* node = i->second.get();
             if ( node->getNumParents() == 0 )
@@ -1854,7 +1854,7 @@ ControlNodeBin::draw( const ControlContext& context, bool newContext, int bin )
               const osg::Vec2f& size = control->renderSize();
 
               // calculate the rendering offset based on alignment:
-              float x, y;
+              float x = 0.0, y = 0.0;
 
               if ( node->anchorPoint().isSet() )
               {

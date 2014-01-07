@@ -6,7 +6,7 @@ class QgsLabelPosition
 #include <qgsmaprenderer.h>
 %End
   public:
-    QgsLabelPosition( int id, double r, const QVector< QgsPoint >& corners, const QgsRectangle& rect, double w, double h, const QString& layer, const QString& labeltext, bool upside_down, bool diagram = false, bool pinned = false );
+    QgsLabelPosition( int id, double r, const QVector< QgsPoint >& corners, const QgsRectangle& rect, double w, double h, const QString& layer, const QString& labeltext, const QFont& labelfont, bool upside_down, bool diagram = false, bool pinned = false );
     QgsLabelPosition();
     int featureId;
     double rotation;
@@ -16,6 +16,7 @@ class QgsLabelPosition
     double height;
     QString layerID;
     QString labelText;
+    QFont labelFont;
     bool upsideDown;
     bool isDiagram;
     bool isPinned;
@@ -38,6 +39,12 @@ class QgsLabelingEngineInterface
     virtual void init( QgsMapRenderer* mp ) = 0;
     //! called to find out whether the layer is used for labeling
     virtual bool willUseLayer( QgsVectorLayer* layer ) = 0;
+    //! clears all PAL layer settings for registered layers
+    //! @note: this method was added in version 1.9
+    virtual void clearActiveLayers() = 0;
+    //! clears data defined objects from PAL layer settings for a registered layer
+    //! @note: this method was added in version 1.9
+    virtual void clearActiveLayer( QgsVectorLayer* layer ) = 0;
     //! called when starting rendering of a layer
     //! @note: this method was added in version 1.6
     virtual int prepareLayer( QgsVectorLayer* layer, QSet<int>& attrIndices, QgsRenderContext& ctx ) = 0;
@@ -65,7 +72,13 @@ class QgsLabelingEngineInterface
     virtual QgsLabelingEngineInterface* clone() = 0 /Factory/;
 };
 
-
+struct QgsLayerCoordinateTransform
+{
+  QString srcAuthId;
+  QString destAuthId;
+  int srcDatumTransform; //-1 if unknown or not specified
+  int destDatumTransform;
+};
 
 /** \ingroup core
  * A non GUI class for rendering a map layer set onto a QPainter.
@@ -125,6 +138,7 @@ class QgsMapRenderer : QObject
 
     const QgsMapToPixel* coordinateTransform();
 
+    //! Scale denominator
     double scale() const;
     /**Sets scale for scale based visibility. Normally, the scale is calculated automatically. This
      function is only used to force a preview scale (e.g. for print composer)*/
@@ -152,7 +166,7 @@ class QgsMapRenderer : QObject
     QSize outputSize();
     QSizeF outputSizeF();
 
-     /**
+    /**
      * @brief transform bounding box from layer's CRS to output CRS
      * @see layerToMapCoordinates( QgsMapLayer* theLayer, QgsRectangle rect ) if you want to transform a rectangle
      * @return a bounding box (aligned rectangle) containing the transformed extent
@@ -199,7 +213,7 @@ class QgsMapRenderer : QObject
     bool hasCrsTransformEnabled() const;
 
     //! sets destination coordinate reference system
-    void setDestinationCrs( const QgsCoordinateReferenceSystem& crs );
+    void setDestinationCrs( const QgsCoordinateReferenceSystem& crs, bool refreshCoordinateTransformInfo = true );
 
     //! returns CRS of destination coordinate reference system
     const QgsCoordinateReferenceSystem& destinationCrs() const;
@@ -238,6 +252,18 @@ class QgsMapRenderer : QObject
     //! Added in QGIS v1.4
     void setLabelingEngine( QgsLabelingEngineInterface* iface /Transfer/ );
 
+    //! Returns a QPainter::CompositionMode corresponding to a BlendMode
+    //! Added in 1.9
+    static QPainter::CompositionMode getCompositionMode( const QgsMapRenderer::BlendMode blendMode );
+    //! Returns a BlendMode corresponding to a QPainter::CompositionMode
+    //! Added in 1.9
+    static QgsMapRenderer::BlendMode getBlendModeEnum( const QPainter::CompositionMode blendMode );
+
+    void addLayerCoordinateTransform( const QString& layerId, const QString& srcAuthId, const QString& destAuthId, int srcDatumTransform = -1, int destDatumTransform = -1 );
+    void clearLayerCoordinateTransforms();
+
+    const QgsCoordinateTransform* transformation( const QgsMapLayer *layer ) const;
+
   signals:
 
     void drawingProgress( int current, int total );
@@ -252,6 +278,9 @@ class QgsMapRenderer : QObject
 
     //! emitted when layer's draw() returned false
     void drawError( QgsMapLayer* );
+
+    //! Notifies higher level components to show the datum transform dialog and add a QgsLayerCoordinateTransformInfo for that layer
+    void datumTransformInfoRequested( const QgsMapLayer* ml, const QString& srcAuthId, const QString& destAuthId ) const;
 
   public slots:
 
@@ -270,8 +299,4 @@ class QgsMapRenderer : QObject
      * also sets the contents of the r2 parameter
      */
     bool splitLayersExtent( QgsMapLayer* layer, QgsRectangle& extent, QgsRectangle& r2 );
-
-    /**Creates an overlay object position manager subclass according to the current settings
-    @note this method was added in version 1.1*/
-    QgsOverlayObjectPositionManager* overlayManagerFromSettings() /Factory/;
 };

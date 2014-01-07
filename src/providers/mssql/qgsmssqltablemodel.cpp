@@ -40,7 +40,7 @@ QgsMssqlTableModel::~QgsMssqlTableModel()
 {
 }
 
-void QgsMssqlTableModel::addTableEntry( QgsMssqlLayerProperty layerProperty )
+void QgsMssqlTableModel::addTableEntry( const QgsMssqlLayerProperty &layerProperty )
 {
   QgsDebugMsg( QString( "%1.%2.%3 type=%4 srid=%5 pk=%6 sql=%7" )
                .arg( layerProperty.schemaName )
@@ -296,17 +296,17 @@ QIcon QgsMssqlTableModel::iconForWkbType( QGis::WkbType type )
     case QGis::WKBPoint25D:
     case QGis::WKBMultiPoint:
     case QGis::WKBMultiPoint25D:
-      return QgsApplication::getThemeIcon( "/mIconPointLayer.png" );
+      return QgsApplication::getThemeIcon( "/mIconPointLayer.svg" );
     case QGis::WKBLineString:
     case QGis::WKBLineString25D:
     case QGis::WKBMultiLineString:
     case QGis::WKBMultiLineString25D:
-      return QgsApplication::getThemeIcon( "/mIconLineLayer.png" );
+      return QgsApplication::getThemeIcon( "/mIconLineLayer.svg" );
     case QGis::WKBPolygon:
     case QGis::WKBPolygon25D:
     case QGis::WKBMultiPolygon:
     case QGis::WKBMultiPolygon25D:
-      return QgsApplication::getThemeIcon( "/mIconPolygonLayer.png" );
+      return QgsApplication::getThemeIcon( "/mIconPolygonLayer.svg" );
     case QGis::WKBNoGeometry:
       return QgsApplication::getThemeIcon( "/mIconTableLayer.png" );
     case QGis::WKBUnknown:
@@ -346,7 +346,7 @@ bool QgsMssqlTableModel::setData( const QModelIndex &idx, const QVariant &value,
   return true;
 }
 
-QString QgsMssqlTableModel::layerURI( const QModelIndex &index, QString connInfo, bool useEstimatedMetadata )
+QString QgsMssqlTableModel::layerURI( const QModelIndex &index, const QString &connInfo, bool useEstimatedMetadata )
 {
   if ( !index.isValid() )
     return QString::null;

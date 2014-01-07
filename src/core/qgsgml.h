@@ -34,8 +34,11 @@
 class QgsRectangle;
 class QgsCoordinateReferenceSystem;
 
-/**This class reads data from a WFS server or alternatively from a GML file. It uses the expat XML parser and an event based model to keep performance high. The parsing starts when the first data arrives, it does not wait until the request is finished*/
-class CORE_EXPORT QgsGml: public QObject
+/**This class reads data from a WFS server or alternatively from a GML file. It
+ * uses the expat XML parser and an event based model to keep performance high.
+ * The parsing starts when the first data arrives, it does not wait until the
+ * request is finished */
+class CORE_EXPORT QgsGml : public QObject
 {
     Q_OBJECT
   public:
@@ -47,6 +50,7 @@ class CORE_EXPORT QgsGml: public QObject
     ~QgsGml();
 
     /** Does the Http GET request to the wfs server
+     *  Supports only UTF-8, UTF-16, ISO-8859-1, ISO-8859-1 XML encodings.
      *  @param uri GML URL
      *  @param wkbType wkbType to retrieve
      *  @param extent retrieved extents
@@ -54,7 +58,9 @@ class CORE_EXPORT QgsGml: public QObject
      */
     int getFeatures( const QString& uri, QGis::WkbType* wkbType, QgsRectangle* extent = 0 );
 
-    /** Read from GML data. Constructor uri param is ignored */
+    /** Read from GML data. Constructor uri param is ignored
+     *  Supports only UTF-8, UTF-16, ISO-8859-1, ISO-8859-1 XML encodings.
+     */
     int getFeatures( const QByteArray &data, QGis::WkbType* wkbType, QgsRectangle* extent = 0 );
 
     /** Get parsed features for given type name */
@@ -82,14 +88,10 @@ class CORE_EXPORT QgsGml: public QObject
     {
       none,
       boundingBox,
-      //featureMember, // gml:featureMember
-      feature,  // feature element containint attrs and geo (inside gml:featureMember)
+      feature,  // feature element containing attrs and geo (inside gml:featureMember)
       attribute,
       geometry,
       coordinate,
-      point,
-      line,
-      polygon,
       multiPoint,
       multiLine,
       multiPolygon
@@ -117,12 +119,14 @@ class CORE_EXPORT QgsGml: public QObject
     /**Reads attribute srsName="EpsgCrsId:..."
        @param epsgNr result
        @param attr attribute strings
-       @return 0 in case of success*/
+       @return 0 in case of success
+      */
     int readEpsgFromAttribute( int& epsgNr, const XML_Char** attr ) const;
     /**Reads attribute as string
        @param attributeName
        @param attr
-       @return attribute value or an empty string if no such attribute*/
+       @return attribute value or an empty string if no such attribute
+      */
     QString readAttribute( const QString& attributeName, const XML_Char** attr ) const;
     /**Creates a rectangle from a coordinate string.
      @return 0 in case of success*/
@@ -130,13 +134,18 @@ class CORE_EXPORT QgsGml: public QObject
     /**Creates a set of points from a coordinate string.
        @param points list that will contain the created points
        @param coordString the text containing the coordinates
-       @return 0 in case of success*/
+       @return 0 in case of success
+      */
     int pointsFromCoordinateString( QList<QgsPoint>& points, const QString& coordString ) const;
 
     int getPointWKB( unsigned char** wkb, int* size, const QgsPoint& ) const;
     int getLineWKB( unsigned char** wkb, int* size, const QList<QgsPoint>& lineCoordinates ) const;
     int getRingWKB( unsigned char** wkb, int* size, const QList<QgsPoint>& ringCoordinates ) const;
-    /**Creates a multiline from the information in mCurrentWKBFragments and mCurrentWKBFragmentSizes. Assign the result. The multiline is in mCurrentWKB and mCurrentWKBSize. The function deletes the memory in mCurrentWKBFragments. Returns 0 in case of success.*/
+    /**Creates a multiline from the information in mCurrentWKBFragments and
+     * mCurrentWKBFragmentSizes. Assign the result. The multiline is in
+     * mCurrentWKB and mCurrentWKBSize. The function deletes the memory in
+     * mCurrentWKBFragments. Returns 0 in case of success.
+     */
     int createMultiLineFromFragments();
     int createMultiPointFromFragments();
     int createPolygonFromFragments();
@@ -146,9 +155,11 @@ class CORE_EXPORT QgsGml: public QObject
 
     /**Returns pointer to main window or 0 if it does not exist*/
     QWidget* findMainWindow() const;
-    /**This function evaluates the layer bounding box from the features and sets it to mExtent.
-    Less efficient compared to reading the bbox from the provider, so it is only done if the wfs server
-    does not provider extent information.*/
+    /**This function evaluates the layer bounding box from the features and
+     * sets it to mExtent.  Less efficient compared to reading the bbox from
+     * the provider, so it is only done if the wfs server does not provider
+     * extent information.
+     */
     void calculateExtentFromFeatures();
 
     /** Get safely (if empty) top from mode stack */
@@ -191,7 +202,10 @@ class CORE_EXPORT QgsGml: public QObject
     /**The total WKB size for a feature*/
     int mCurrentWKBSize;
     QgsRectangle mCurrentExtent;
-    /**WKB intermediate storage during parsing. For points and lines, no intermediate WKB is stored at all. For multipoins and multilines and polygons, only one nested list is used. For multipolygons, both nested lists are used*/
+    /**WKB intermediate storage during parsing. For points and lines, no
+     * intermediate WKB is stored at all. For multipoints and multilines and
+     * polygons, only one nested list is used. For multipolygons, both nested lists
+     * are used*/
     QList< QList<unsigned char*> > mCurrentWKBFragments;
     /**Similar to mCurrentWKB, but only the size*/
     QList< QList<int> > mCurrentWKBFragmentSizes;

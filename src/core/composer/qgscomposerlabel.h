@@ -45,8 +45,8 @@ class CORE_EXPORT QgsComposerLabel: public QgsComposerItem
     QString text() { return mText; }
     void setText( const QString& text );
 
-    int htmlSate() { return mHtmlState; }
-    void setHtmlSate( int state ) {mHtmlState = state;}
+    int htmlState() { return mHtmlState; }
+    void setHtmlState( int state ) {mHtmlState = state;}
 
     /**Returns the text as it appears on screen (with replaced data field)
       @note this function was added in version 1.2*/
@@ -87,8 +87,6 @@ class CORE_EXPORT QgsComposerLabel: public QgsComposerItem
         @note: this function was added in version 1.4*/
     QColor fontColor() const {return mFontColor;}
 
-    void setSceneRect( const QRectF& rectangle );
-
     /** stores state in Dom element
        * @param elem is Dom element corresponding to 'Composer' tag
        * @param doc document
@@ -100,9 +98,6 @@ class CORE_EXPORT QgsComposerLabel: public QgsComposerItem
        * @param doc document
        */
     bool readXML( const QDomElement& itemElem, const QDomDocument& doc );
-
-  public slots:
-    virtual void setRotation( double r );
 
   private slots:
     void loadingHtmlFinished( bool );
@@ -137,11 +132,6 @@ class CORE_EXPORT QgsComposerLabel: public QgsComposerItem
 
     /**Replaces replace '$CURRENT_DATE<(FORMAT)>' with the current date (e.g. $CURRENT_DATE(d 'June' yyyy)*/
     void replaceDateText( QString& text ) const;
-
-    /**Width of the text box. This is different to rectangle().width() in case there is rotation*/
-    double mTextBoxWidth;
-    /**Height of the text box. This is different to rectangle().height() in case there is rotation*/
-    double mTextBoxHeight;
 
     QgsFeature* mExpressionFeature;
     QgsVectorLayer* mExpressionLayer;

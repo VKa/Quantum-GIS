@@ -219,6 +219,20 @@ void QgsVectorGradientColorRampV2::convertToDiscrete( bool discrete )
   mDiscrete = discrete;
 }
 
+void QgsVectorGradientColorRampV2::addStopsToGradient( QGradient* gradient )
+{
+  //copy color ramp stops to a QGradient
+  gradient->setColorAt( 0, mColor1 );
+  gradient->setColorAt( 1, mColor2 );
+
+  for ( QgsGradientStopsList::const_iterator it = mStops.begin();
+        it != mStops.end(); ++it )
+  {
+    gradient->setColorAt( it->offset , it->color );
+  }
+}
+
+
 //////////////
 
 
@@ -288,15 +302,71 @@ void QgsVectorRandomColorRampV2::updateColors()
   int h, s, v;
 
   mColors.clear();
+  //start hue at random angle
+  double currentHueAngle = 360.0 * ( double )rand() / RAND_MAX;
+
   for ( int i = 0; i < mCount; i++ )
   {
-    h = ( rand() % ( mHueMax - mHueMin + 1 ) ) + mHueMin;
+    //increment hue by golden ratio (approx 137.507 degrees)
+    //as this minimises hue nearness as count increases
+    //see http://basecase.org/env/on-rainbows for more details
+    currentHueAngle += 137.50776;
+    //scale hue to between mHueMax and mHueMin
+    h = ( fmod( currentHueAngle, 360.0 ) / 360.0 ) * ( mHueMax - mHueMin ) + mHueMin;
     s = ( rand() % ( mSatMax - mSatMin + 1 ) ) + mSatMin;
     v = ( rand() % ( mValMax - mValMin + 1 ) ) + mValMin;
     mColors.append( QColor::fromHsv( h, s, v ) );
   }
 }
 
+/////////////
+
+QgsRandomColorsV2::QgsRandomColorsV2()
+{
+  srand( QTime::currentTime().msec() );
+}
+
+QgsRandomColorsV2::~QgsRandomColorsV2()
+{
+
+}
+
+int QgsRandomColorsV2::count() const
+{
+  return INT_MAX;
+}
+
+double QgsRandomColorsV2::value( int index ) const
+{
+  Q_UNUSED( index );
+  return 0.0;
+}
+
+QColor QgsRandomColorsV2::color( double value ) const
+{
+  Q_UNUSED( value );
+  int minVal = 130;
+  int maxVal = 255;
+  int h = 1 + ( int )( 360.0 * rand() / ( RAND_MAX + 1.0 ) );
+  int s = ( rand() % ( DEFAULT_RANDOM_SAT_MAX - DEFAULT_RANDOM_SAT_MIN + 1 ) ) + DEFAULT_RANDOM_SAT_MIN;
+  int v = ( rand() % ( maxVal - minVal + 1 ) ) + minVal;
+  return QColor::fromHsv( h, s, v );
+}
+
+QString QgsRandomColorsV2::type() const
+{
+  return "randomcolors";
+}
+
+QgsVectorColorRampV2* QgsRandomColorsV2::clone() const
+{
+  return new QgsRandomColorsV2();
+}
+
+QgsStringMap QgsRandomColorsV2::properties() const
+{
+  return QgsStringMap();
+}
 
 ////////////
 

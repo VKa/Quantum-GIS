@@ -47,14 +47,9 @@ QgsPostgresFeatureIterator::QgsPostgresFeatureIterator( QgsPostgresProvider* p, 
     : QgsAbstractFeatureIterator( request ), P( p )
     , mFeatureQueueSize( sFeatureQueueSize )
 {
-  // make sure that only one iterator is active
-  if ( P->mActiveIterator )
-  {
-    QgsMessageLog::logMessage( QObject::tr( "Already active iterator on this provider was closed." ), QObject::tr( "PostgreSQL" ) );
-    P->mActiveIterator->close();
-  }
+  mCursorName = QString( "qgisf%1_%2" ).arg( P->mProviderId ).arg( P->mIteratorCounter++ );
 
-  mCursorName = QString( "qgisf%1" ).arg( P->mProviderId );
+  P->mActiveIterators << this;
 
   QString whereClause;
 
@@ -65,6 +60,10 @@ QgsPostgresFeatureIterator::QgsPostgresFeatureIterator( QgsPostgresProvider* p, 
   else if ( request.filterType() == QgsFeatureRequest::FilterFid )
   {
     whereClause = P->whereClause( request.filterFid() );
+  }
+  else if ( request.filterType() == QgsFeatureRequest::FilterFids )
+  {
+    whereClause = P->whereClause( request.filterFids() );
   }
 
   if ( !P->mSqlWhereClause.isEmpty() )
@@ -81,8 +80,6 @@ QgsPostgresFeatureIterator::QgsPostgresFeatureIterator( QgsPostgresProvider* p, 
     return;
   }
 
-  P->mActiveIterator = this;
-
   mFetched = 0;
 }
 
@@ -93,38 +90,12 @@ QgsPostgresFeatureIterator::~QgsPostgresFeatureIterator()
 }
 
 
-bool QgsPostgresFeatureIterator::nextFeature( QgsFeature& feature )
+bool QgsPostgresFeatureIterator::fetchFeature( QgsFeature& feature )
 {
   feature.setValid( false );
 
   if ( mClosed )
     return false;
-
-#if 0
-  // featureAtId used to have some special checks - necessary?
-  if ( !mUseQueue )
-  {
-    QgsPostgresResult queryResult = P->mConnectionRO->PQexec( QString( "FETCH FORWARD 1 FROM %1" ).arg( mCursorName ) );
-
-    int rows = queryResult.PQntuples();
-    if ( rows == 0 )
-    {
-      QgsMessageLog::logMessage( tr( "feature %1 not found" ).arg( featureId ), tr( "PostGIS" ) );
-      P->mConnectionRO->closeCursor( cursorName );
-      return false;
-    }
-    else if ( rows != 1 )
-    {
-      QgsMessageLog::logMessage( tr( "found %1 features instead of just one." ).arg( rows ), tr( "PostGIS" ) );
-    }
-
-    bool gotit = getFeature( queryResult, 0, feature );
-
-    feature.setValid( gotit );
-    feature.setFields( &P->mAttributeFields ); // allow name-based attribute lookups
-    return gotit;
-  }
-#endif
 
   if ( mFeatureQueue.empty() )
   {
@@ -165,7 +136,11 @@ bool QgsPostgresFeatureIterator::nextFeature( QgsFeature& feature )
     QgsDebugMsg( QString( "Finished after %1 features" ).arg( mFetched ) );
     close();
 
-    if ( P->mFeaturesCounted < mFetched )
+    /* only updates the feature count if it was already once.
+     * Otherwise, this would lead to false feature count if
+     * an existing project is open at a restrictive extent.
+     */
+    if ( P->mFeaturesCounted > 0 && P->mFeaturesCounted < mFetched )
     {
       QgsDebugMsg( QString( "feature count adjusted from %1 to %2" ).arg( P->mFeaturesCounted ).arg( mFetched ) );
       P->mFeaturesCounted = mFetched;
@@ -174,7 +149,7 @@ bool QgsPostgresFeatureIterator::nextFeature( QgsFeature& feature )
   }
 
   // Now return the next feature from the queue
-  if ( mRequest.flags() & QgsFeatureRequest::NoGeometry )
+  if ( !mFetchGeometry )
   {
     feature.setGeometryAndOwnership( 0, 0 );
   }
@@ -191,6 +166,7 @@ bool QgsPostgresFeatureIterator::nextFeature( QgsFeature& feature )
 
   feature.setValid( true );
   feature.setFields( &P->mAttributeFields ); // allow name-based attribute lookups
+
   return true;
 }
 
@@ -202,7 +178,7 @@ bool QgsPostgresFeatureIterator::rewind()
 
   // move cursor to first record
   P->mConnectionRO->PQexecNR( QString( "move absolute 0 in %1" ).arg( mCursorName ) );
-  mFeatureQueue.empty();
+  mFeatureQueue.clear();
   mFetched = 0;
 
   return true;
@@ -220,8 +196,7 @@ bool QgsPostgresFeatureIterator::close()
     mFeatureQueue.dequeue();
   }
 
-  // tell provider that this iterator is not active anymore
-  P->mActiveIterator = 0;
+  P->mActiveIterators.remove( this );
 
   mClosed = true;
   return true;
@@ -232,47 +207,47 @@ bool QgsPostgresFeatureIterator::close()
 QString QgsPostgresFeatureIterator::whereClauseRect()
 {
   QgsRectangle rect = mRequest.filterRect();
-  QString whereClause;
   if ( P->mSpatialColType == sctGeography )
   {
     rect = QgsRectangle( -180.0, -90.0, 180.0, 90.0 ).intersect( &rect );
-    if ( !rect.isFinite() )
-      whereClause = "false";
   }
 
-  if ( whereClause.isEmpty() )
+  if ( !rect.isFinite() )
   {
-    QString qBox;
-    if ( P->mConnectionRO->majorVersion() < 2 )
-    {
-      qBox = QString( "setsrid('BOX3D(%1)'::box3d,%2)" )
-             .arg( rect.asWktCoordinates() )
-             .arg( P->mRequestedSrid.isEmpty() ? P->mDetectedSrid : P->mRequestedSrid );
-    }
-    else
-    {
-      qBox = QString( "st_makeenvelope(%1,%2,%3,%4,%5)" )
-             .arg( rect.xMinimum(), 0, 'f', 16 )
-             .arg( rect.yMinimum(), 0, 'f', 16 )
-             .arg( rect.xMaximum(), 0, 'f', 16 )
-             .arg( rect.yMaximum(), 0, 'f', 16 )
-             .arg( P->mRequestedSrid.isEmpty() ? P->mDetectedSrid : P->mRequestedSrid );
-    }
-
-    whereClause = QString( "%1 && %2" )
-                  .arg( P->quotedIdentifier( P->mGeometryColumn ) )
-                  .arg( qBox );
-    if ( mRequest.flags() & QgsFeatureRequest::ExactIntersect )
-    {
-      whereClause += QString( " AND %1(%2%3,%4)" )
-                     .arg( P->mConnectionRO->majorVersion() < 2 ? "intersects" : "st_intersects" )
-                     .arg( P->quotedIdentifier( P->mGeometryColumn ) )
-                     .arg( P->mSpatialColType == sctGeography ? "::geometry" : "" )
-                     .arg( qBox );
-    }
+    QgsMessageLog::logMessage( QObject::tr( "Infinite filter rectangle specified" ), QObject::tr( "PostGIS" ) );
+    return "false";
   }
 
-  if ( !P->mRequestedSrid.isEmpty() && P->mRequestedSrid != P->mDetectedSrid )
+  QString qBox;
+  if ( P->mConnectionRO->majorVersion() < 2 )
+  {
+    qBox = QString( "setsrid('BOX3D(%1)'::box3d,%2)" )
+           .arg( rect.asWktCoordinates() )
+           .arg( P->mRequestedSrid.isEmpty() ? P->mDetectedSrid : P->mRequestedSrid );
+  }
+  else
+  {
+    qBox = QString( "st_makeenvelope(%1,%2,%3,%4,%5)" )
+           .arg( qgsDoubleToString( rect.xMinimum() ) )
+           .arg( qgsDoubleToString( rect.yMinimum() ) )
+           .arg( qgsDoubleToString( rect.xMaximum() ) )
+           .arg( qgsDoubleToString( rect.yMaximum() ) )
+           .arg( P->mRequestedSrid.isEmpty() ? P->mDetectedSrid : P->mRequestedSrid );
+  }
+
+  QString whereClause = QString( "%1 && %2" )
+                        .arg( P->quotedIdentifier( P->mGeometryColumn ) )
+                        .arg( qBox );
+  if ( mRequest.flags() & QgsFeatureRequest::ExactIntersect )
+  {
+    whereClause += QString( " AND %1(%2%3,%4)" )
+                   .arg( P->mConnectionRO->majorVersion() < 2 ? "intersects" : "st_intersects" )
+                   .arg( P->quotedIdentifier( P->mGeometryColumn ) )
+                   .arg( P->mSpatialColType == sctGeography ? "::geometry" : "" )
+                   .arg( qBox );
+  }
+
+  if ( !P->mRequestedSrid.isEmpty() && ( P->mRequestedSrid != P->mDetectedSrid || P->mRequestedSrid.toInt() == 0 ) )
   {
     whereClause += QString( " AND %1(%2%3)=%4" )
                    .arg( P->mConnectionRO->majorVersion() < 2 ? "srid" : "st_srid" )
@@ -293,22 +268,16 @@ QString QgsPostgresFeatureIterator::whereClauseRect()
 
 bool QgsPostgresFeatureIterator::declareCursor( const QString& whereClause )
 {
-  bool fetchGeometry = !( mRequest.flags() & QgsFeatureRequest::NoGeometry );
-  if ( fetchGeometry && P->mGeometryColumn.isNull() )
-  {
-    QgsMessageLog::logMessage( QObject::tr( "Trying to fetch geometry on a layer without geometry." ), QObject::tr( "PostgreSQL" ) );
-    return false;
-  }
+  mFetchGeometry = !( mRequest.flags() & QgsFeatureRequest::NoGeometry ) && !P->mGeometryColumn.isNull();
 
   try
   {
     QString query = "SELECT ", delim = "";
 
-    if ( fetchGeometry )
+    if ( mFetchGeometry )
     {
-      query += QString( "%1(%2(%3%4),'%5')" )
+      query += QString( "%1(%2%3,'%4')" )
                .arg( P->mConnectionRO->majorVersion() < 2 ? "asbinary" : "st_asbinary" )
-               .arg( P->mConnectionRO->majorVersion() < 2 ? "force_2d" : "st_force_2d" )
                .arg( P->quotedIdentifier( P->mGeometryColumn ) )
                .arg( P->mSpatialColType == sctGeography ? "::geometry" : "" )
                .arg( P->endianString() );
@@ -364,6 +333,7 @@ bool QgsPostgresFeatureIterator::declareCursor( const QString& whereClause )
     {
       // reloading the fields might help next time around
       rewind();
+      P->loadFields();
       return false;
     }
   }
@@ -385,14 +355,131 @@ bool QgsPostgresFeatureIterator::getFeature( QgsPostgresResult &queryResult, int
 
     int col = 0;
 
-    if ( !( mRequest.flags() & QgsFeatureRequest::NoGeometry ) )
+    if ( mFetchGeometry )
     {
       int returnedLength = ::PQgetlength( queryResult.result(), row, col );
       if ( returnedLength > 0 )
       {
         unsigned char *featureGeom = new unsigned char[returnedLength + 1];
-        memset( featureGeom, 0, returnedLength + 1 );
         memcpy( featureGeom, PQgetvalue( queryResult.result(), row, col ), returnedLength );
+        memset( featureGeom + returnedLength, 0, 1 );
+
+        // modify 2.5D WKB types to make them compliant with OGR
+        unsigned int wkbType;
+        memcpy( &wkbType, featureGeom + 1, sizeof( wkbType ) );
+
+        // convert unsupported types to supported ones
+        switch ( wkbType )
+        {
+          case 15:
+            // 2D polyhedral => multipolygon
+            wkbType = 6;
+            break;
+          case 1015:
+            // 3D polyhedral => multipolygon
+            wkbType = 1006;
+            break;
+          case 17:
+            // 2D triangle => polygon
+            wkbType = 3;
+            break;
+          case 1017:
+            // 3D triangle => polygon
+            wkbType = 1003;
+            break;
+          case 16:
+            // 2D TIN => multipolygon
+            wkbType = 6;
+            break;
+          case 1016:
+            // TIN => multipolygon
+            wkbType = 1006;
+            break;
+        }
+        // convert from postgis types to qgis types
+        if ( wkbType >= 1000 )
+        {
+          wkbType = wkbType - 1000 + QGis::WKBPoint25D - 1;
+        }
+        memcpy( featureGeom + 1, &wkbType, sizeof( wkbType ) );
+
+        // change wkb type of inner geometries
+        if ( wkbType == QGis::WKBMultiPoint25D ||
+             wkbType == QGis::WKBMultiLineString25D ||
+             wkbType == QGis::WKBMultiPolygon25D )
+        {
+          unsigned int numGeoms = *(( int* )( featureGeom + 5 ) );
+          unsigned char* wkb = featureGeom + 9;
+          for ( unsigned int i = 0; i < numGeoms; ++i )
+          {
+            unsigned int localType;
+            memcpy( &localType, wkb + 1, sizeof( localType ) );
+            switch ( localType )
+            {
+              case 15:
+                // 2D polyhedral => multipolygon
+                localType = 6;
+                break;
+              case 1015:
+                // 3D polyhedral => multipolygon
+                localType = 1006;
+                break;
+              case 17:
+                // 2D triangle => polygon
+                localType = 3;
+                break;
+              case 1017:
+                // 3D triangle => polygon
+                localType = 1003;
+                break;
+              case 16:
+                // 2D TIN => multipolygon
+                localType = 6;
+                break;
+              case 1016:
+                // TIN => multipolygon
+                localType = 1006;
+                break;
+            }
+            if ( localType >= 1000 )
+            {
+              localType = localType - 1000 + QGis::WKBPoint25D - 1;
+            }
+            memcpy( wkb + 1, &localType, sizeof( localType ) );
+
+            // skip endian and type info
+            wkb += sizeof( unsigned int ) + 1;
+
+            // skip coordinates
+            switch ( wkbType )
+            {
+              case QGis::WKBMultiPoint25D:
+                wkb += sizeof( double ) * 3;
+                break;
+              case QGis::WKBMultiLineString25D:
+              {
+                unsigned int nPoints = *(( int* ) wkb );
+                wkb += sizeof( nPoints );
+                wkb += sizeof( double ) * 3 * nPoints;
+              }
+              break;
+              default:
+              case QGis::WKBMultiPolygon25D:
+              {
+                unsigned int nRings = *(( int* ) wkb );
+                wkb += sizeof( nRings );
+                for ( unsigned int j = 0; j < nRings; ++j )
+                {
+                  unsigned int nPoints = *(( int* ) wkb );
+                  wkb += sizeof( nPoints );
+                  wkb += sizeof( double ) * 3 * nPoints;
+                }
+              }
+              break;
+            }
+          }
+        }
+
         feature.setGeometryAndOwnership( featureGeom, returnedLength + 1 );
       }
       else

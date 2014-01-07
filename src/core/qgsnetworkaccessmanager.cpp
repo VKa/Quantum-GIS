@@ -28,7 +28,6 @@
 #include <QTimer>
 #include <QNetworkReply>
 
-#if QT_VERSION >= 0x40500
 class QgsNetworkProxyFactory : public QNetworkProxyFactory
 {
   public:
@@ -42,6 +41,10 @@ class QgsNetworkProxyFactory : public QNetworkProxyFactory
       // iterate proxies factories and take first non empty list
       foreach ( QNetworkProxyFactory *f, nam->proxyFactories() )
       {
+        QList<QNetworkProxy> systemproxies = f->systemProxyForQuery( query );
+        if ( systemproxies.size() > 0 )
+          return systemproxies;
+
         QList<QNetworkProxy> proxies = f->queryProxy( query );
         if ( proxies.size() > 0 )
           return proxies;
@@ -66,33 +69,24 @@ class QgsNetworkProxyFactory : public QNetworkProxyFactory
       return QList<QNetworkProxy>() << nam->fallbackProxy();
     }
 };
-#endif
-
-QgsNetworkAccessManager *QgsNetworkAccessManager::smNAM = 0;
 
 QgsNetworkAccessManager *QgsNetworkAccessManager::instance()
 {
-  if ( smNAM )
-    return smNAM;
+  static QgsNetworkAccessManager sInstance;
 
-  smNAM = new QgsNetworkAccessManager();
-
-  return smNAM;
+  return &sInstance;
 }
 
 QgsNetworkAccessManager::QgsNetworkAccessManager( QObject *parent )
     : QNetworkAccessManager( parent )
 {
-#if QT_VERSION >= 0x40500
   setProxyFactory( new QgsNetworkProxyFactory() );
-#endif
 }
 
 QgsNetworkAccessManager::~QgsNetworkAccessManager()
 {
 }
 
-#if QT_VERSION >= 0x40500
 void QgsNetworkAccessManager::insertProxyFactory( QNetworkProxyFactory *factory )
 {
   mProxyFactories.insert( 0, factory );
@@ -107,7 +101,6 @@ const QList<QNetworkProxyFactory *> QgsNetworkAccessManager::proxyFactories() co
 {
   return mProxyFactories;
 }
-#endif
 
 const QStringList &QgsNetworkAccessManager::excludeList() const
 {
@@ -127,18 +120,44 @@ void QgsNetworkAccessManager::setFallbackProxyAndExcludes( const QNetworkProxy &
 
 QNetworkReply *QgsNetworkAccessManager::createRequest( QNetworkAccessManager::Operation op, const QNetworkRequest &req, QIODevice *outgoingData )
 {
+  QSettings s;
+
+  QNetworkRequest *pReq(( QNetworkRequest * ) &req ); // hack user agent
+  pReq->setRawHeader( "User-Agent", s.value( "/qgis/networkAndProxy/userAgent", "Mozilla/5.0" ).toByteArray() );
+
   emit requestAboutToBeCreated( op, req, outgoingData );
   QNetworkReply *reply = QNetworkAccessManager::createRequest( op, req, outgoingData );
+
+  connect( reply, SIGNAL( downloadProgress( qint64, qint64 ) ), this, SLOT( connectionProgress() ) );
+  connect( reply, SIGNAL( uploadProgress( qint64, qint64 ) ), this, SLOT( connectionProgress() ) );
+  connect( reply, SIGNAL( destroyed( QObject* ) ), this, SLOT( connectionDestroyed( QObject* ) ) );
   emit requestCreated( reply );
 
   // abort request, when network timeout happens
   QTimer *timer = new QTimer( reply );
   connect( timer, SIGNAL( timeout() ), this, SLOT( abortRequest() ) );
+  timer->setSingleShot( true );
+  timer->start( s.value( "/qgis/networkAndProxy/networkTimeout", "20000" ).toInt() );
+
+  mActiveRequests.insert( reply, timer );
+  return reply;
+}
+
+void QgsNetworkAccessManager::connectionProgress()
+{
+  QNetworkReply *reply = qobject_cast<QNetworkReply *>( sender() );
+  Q_ASSERT( reply );
+
+  QTimer* timer = mActiveRequests.find( reply ).value();
+  Q_ASSERT( timer );
 
   QSettings s;
   timer->start( s.value( "/qgis/networkAndProxy/networkTimeout", "20000" ).toInt() );
+}
 
-  return reply;
+void QgsNetworkAccessManager::connectionDestroyed( QObject* reply )
+{
+  mActiveRequests.remove( qobject_cast<QNetworkReply*>( reply ) );
 }
 
 void QgsNetworkAccessManager::abortRequest()

@@ -39,7 +39,7 @@ class QgsComposerPictureWidget: public QWidget, private Ui::QgsComposerPictureWi
   public slots:
     void on_mPictureBrowseButton_clicked();
     void on_mPictureLineEdit_editingFinished();
-    void on_mRotationSpinBox_valueChanged( double d );
+    void on_mPictureRotationSpinBox_valueChanged( double d );
     void on_mPreviewListWidget_currentItemChanged( QListWidgetItem* current, QListWidgetItem* previous );
     void on_mAddDirectoryButton_clicked();
     void on_mRemoveDirectoryButton_clicked();
@@ -54,8 +54,21 @@ class QgsComposerPictureWidget: public QWidget, private Ui::QgsComposerPictureWi
     /**Sets the GUI elements to the values of mPicture*/
     void setGuiElementValues();
 
+    /**Sets the picture rotation GUI control value*/
+    void setPicRotationSpinValue( double r );
+
+    /** Load SVG and pixel-based image previews
+     * @param collapsed Whether the parent group box is collapsed
+     * @note added in 1.9
+     */
+    void loadPicturePreviews( bool collapsed );
+
   private:
     QgsComposerPicture* mPicture;
+    /** Whether the picture selection previews have been loaded
+     * @note added in 1.9
+     */
+    bool mPreviewsLoaded;
 
     /**Add the icons of a directory to the preview. Returns 0 in case of success*/
     int addDirectoryToPreview( const QString& path );

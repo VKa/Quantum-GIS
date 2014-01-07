@@ -19,6 +19,7 @@ email                : jef at norbit dot de
 #include "qgslogger.h"
 
 #include <QMetaType>
+#include <climits>
 
 QgsGeomColumnTypeThread::QgsGeomColumnTypeThread( QString name, bool useEstimatedMetaData, bool allowGeometrylessTables )
     : QThread()
@@ -61,15 +62,20 @@ void QgsGeomColumnTypeThread::run()
                                 mAllowGeometrylessTables ) ||
        layerProperties.isEmpty() )
   {
+    mConn->disconnect();
+    mConn = 0;
     return;
   }
 
-  int i = 0;
-  foreach ( QgsPostgresLayerProperty layerProperty, layerProperties )
+  int i = 0, n = layerProperties.size();
+  for ( QVector<QgsPostgresLayerProperty>::iterator it = layerProperties.begin(),
+        end = layerProperties.end();
+        it != end; ++it )
   {
+    QgsPostgresLayerProperty& layerProperty = *it;
     if ( !mStopped )
     {
-      emit progress( i++, layerProperties.size() );
+      emit progress( i++, n );
       emit progressMessage( tr( "Scanning column %1.%2.%3..." )
                             .arg( layerProperty.schemaName )
                             .arg( layerProperty.tableName )
@@ -77,7 +83,7 @@ void QgsGeomColumnTypeThread::run()
 
       if ( !layerProperty.geometryColName.isNull() &&
            ( layerProperty.types.value( 0, QGis::WKBUnknown ) == QGis::WKBUnknown ||
-             layerProperty.srids.value( 0, 0 ) == 0 ) )
+             layerProperty.srids.value( 0, INT_MIN ) == INT_MIN ) )
       {
         if ( dontResolveType )
         {

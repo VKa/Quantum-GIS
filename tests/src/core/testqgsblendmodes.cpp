@@ -45,12 +45,15 @@ class TestQgsBlendModes: public QObject
     void cleanup() {};// will be called after every testfunction.
 
     void vectorBlending();
+    void featureBlending();
+    void vectorLayerTransparency();
     void rasterBlending();
   private:
     bool imageCheck( QString theType ); //as above
     QgsMapRenderer * mpMapRenderer;
     QgsMapLayer * mpPointsLayer;
-    QgsMapLayer * mpPolysLayer;
+    QgsVectorLayer * mpPolysLayer;
+    QgsVectorLayer * mpLinesLayer;
     QgsRasterLayer* mRasterLayer1;
     QgsRasterLayer* mRasterLayer2;
     QString mTestDataDir;
@@ -82,8 +85,18 @@ void TestQgsBlendModes::initTestCase()
   QFileInfo myPolyFileInfo( myPolysFileName );
   mpPolysLayer = new QgsVectorLayer( myPolyFileInfo.filePath(),
                                      myPolyFileInfo.completeBaseName(), "ogr" );
+  mpPolysLayer->setSimplifyDrawingHints( QgsVectorLayer::NoSimplification );
   QgsMapLayerRegistry::instance()->addMapLayers(
     QList<QgsMapLayer *>() << mpPolysLayer );
+
+  //create a line layer that will be used in tests
+  QString myLinesFileName = mTestDataDir + "lines.shp";
+  QFileInfo myLineFileInfo( myLinesFileName );
+  mpLinesLayer = new QgsVectorLayer( myLineFileInfo.filePath(),
+                                     myLineFileInfo.completeBaseName(), "ogr" );
+  mpLinesLayer->setSimplifyDrawingHints( QgsVectorLayer::NoSimplification );
+  QgsMapLayerRegistry::instance()->addMapLayers(
+    QList<QgsMapLayer *>() << mpLinesLayer );
 
   //create two raster layers
   QFileInfo rasterFileInfo( mTestDataDir +  "landsat.tif" );
@@ -110,15 +123,53 @@ void TestQgsBlendModes::vectorBlending()
 {
   //Add two vector layers
   QStringList myLayers;
-  myLayers << mpPointsLayer->id();
+  myLayers << mpLinesLayer->id();
   myLayers << mpPolysLayer->id();
   mpMapRenderer->setLayerSet( myLayers );
 
   //Set blending modes for both layers
-  mpPointsLayer->setBlendMode( QPainter::CompositionMode_Overlay );
-  mpPolysLayer->setBlendMode( QPainter::CompositionMode_Multiply );
+  mpLinesLayer->setBlendMode( QPainter::CompositionMode_Difference );
+  mpPolysLayer->setBlendMode( QPainter::CompositionMode_Difference );
   mpMapRenderer->setExtent( mpPointsLayer->extent() );
   QVERIFY( imageCheck( "vector_blendmodes" ) );
+
+  //Reset layers
+  mpLinesLayer->setBlendMode( QPainter::CompositionMode_SourceOver );
+  mpPolysLayer->setBlendMode( QPainter::CompositionMode_SourceOver );
+}
+
+void TestQgsBlendModes::featureBlending()
+{
+  //Add two vector layers
+  QStringList myLayers;
+  myLayers << mpLinesLayer->id();
+  myLayers << mpPolysLayer->id();
+  mpMapRenderer->setLayerSet( myLayers );
+
+  //Set feature blending modes for point layer
+  mpLinesLayer->setFeatureBlendMode( QPainter::CompositionMode_Plus );
+  mpMapRenderer->setExtent( mpPointsLayer->extent() );
+  QVERIFY( imageCheck( "vector_featureblendmodes" ) );
+
+  //Reset layers
+  mpLinesLayer->setFeatureBlendMode( QPainter::CompositionMode_SourceOver );
+}
+
+void TestQgsBlendModes::vectorLayerTransparency()
+{
+  //Add two vector layers
+  QStringList myLayers;
+  myLayers << mpLinesLayer->id();
+  myLayers << mpPolysLayer->id();
+  mpMapRenderer->setLayerSet( myLayers );
+
+  //Set feature blending modes for point layer
+  mpLinesLayer->setLayerTransparency( 50 );
+  mpMapRenderer->setExtent( mpPointsLayer->extent() );
+  QVERIFY( imageCheck( "vector_layertransparency" ) );
+
+  //Reset layers
+  mpLinesLayer->setLayerTransparency( 0 );
 }
 
 void TestQgsBlendModes::rasterBlending()

@@ -151,6 +151,20 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     /**Sets new Extent and changes width, height (and implicitely also scale)*/
     void setNewExtent( const QgsRectangle& extent );
 
+    /**Sets new Extent for the current atlas preview and changes width, height (and implicitely also scale).
+      Atlas preview extents are only temporary, and are regenerated whenever the atlas feature changes
+    */
+    void setNewAtlasFeatureExtent( const QgsRectangle& extent );
+
+    /**Called when atlas preview is toggled, to force map item to update its extent and redraw*/
+    void toggleAtlasPreview();
+
+    /**Returns a pointer to the current map extent, which is either the original user specified
+      extent or the temporary atlas-driven feature extent depending on the current atlas state of the composition.
+      Both a const and non-const version are included.*/
+    QgsRectangle* currentMapExtent();
+    const QgsRectangle* currentMapExtent() const;
+
     PreviewMode previewMode() const {return mPreviewMode;}
     void setPreviewMode( PreviewMode m );
 
@@ -183,8 +197,8 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     /**True if composer map renders a WMS layer*/
     bool containsWMSLayer() const;
 
-    /**True if composer map contains layers with blend modes*/
-    bool containsBlendModes() const;
+    /**True if composer map contains layers with blend modes or flattened layers for vectors */
+    bool containsAdvancedEffects() const;
 
     /** stores state in Dom node
      * @param elem is Dom element corresponding to 'Composer' tag
@@ -246,6 +260,13 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     void setGridAnnotationFont( const QFont& f ) { mGridAnnotationFont = f; }
     QFont gridAnnotationFont() const { return mGridAnnotationFont; }
 
+    /**Sets font color for grid annotations
+        @note: this function was added in version 2.0*/
+    void setAnnotationFontColor( const QColor& c ) {mGridAnnotationFontColor = c;}
+    /**Get font color for grid annotations
+        @note: this function was added in version 2.0*/
+    QColor annotationFontColor() const {return mGridAnnotationFontColor;}
+
     /**Sets coordinate precision for grid annotations
     @note this function was added in version 1.4*/
     void setGridAnnotationPrecision( int p ) {mGridAnnotationPrecision = p;}
@@ -280,6 +301,32 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     void setGridFrameWidth( double w ) { mGridFrameWidth = w; }
     double gridFrameWidth() const { return mGridFrameWidth; }
 
+    /**Set grid frame pen thickness
+        @note: this function was added in version 2.1*/
+    void setGridFramePenSize( double w ) { mGridFramePenThickness = w; }
+    double gridFramePenSize() const { return mGridFramePenThickness; }
+
+    /**Sets pen color for grid frame
+        @note: this function was added in version 2.1*/
+    void setGridFramePenColor( const QColor& c ) { mGridFramePenColor = c;}
+    /**Get pen color for grid frame
+        @note: this function was added in version 2.1*/
+    QColor gridFramePenColor() const {return mGridFramePenColor;}
+
+    /**Sets first fill color for grid zebra frame
+        @note: this function was added in version 2.1*/
+    void setGridFrameFillColor1( const QColor& c ) { mGridFrameFillColor1 = c;}
+    /**Get first fill color for grid zebra frame
+        @note: this function was added in version 2.1*/
+    QColor gridFrameFillColor1() const {return mGridFrameFillColor1;}
+
+    /**Sets second fill color for grid zebra frame
+        @note: this function was added in version 2.1*/
+    void setGridFrameFillColor2( const QColor& c ) { mGridFrameFillColor2 = c;}
+    /**Get second fill color for grid zebra frame
+        @note: this function was added in version 2.1*/
+    QColor gridFrameFillColor2() const {return mGridFrameFillColor2;}
+
     /**In case of annotations, the bounding rectangle can be larger than the map item rectangle
     @note this function was added in version 1.4*/
     QRectF boundingRect() const;
@@ -292,7 +339,22 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     void setCrossLength( double l ) {mCrossLength = l;}
     double crossLength() {return mCrossLength;}
 
+    /**Sets rotation for the map - this does not affect the composer item shape, only the
+      way the map is drawn within the item
+     * @deprecated Use setMapRotation( double rotation ) instead
+     */
+    void setRotation( double r );
+    /**Returns the rotation used for drawing the map within the composer item
+     * @deprecated Use mapRotation() instead
+     */
+    double rotation() const { return mMapRotation;};
+
+    /**Sets rotation for the map - this does not affect the composer item shape, only the
+      way the map is drawn within the item
+      @note this function was added in version 2.1*/
     void setMapRotation( double r );
+    /**Returns the rotation used for drawing the map within the composer item*/
+    double mapRotation() const { return mMapRotation;};
 
     void updateItem();
 
@@ -325,15 +387,44 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     /** Sets the overview's inversion mode*/
     void setOverviewInverted( bool inverted );
 
+    /** Returns true if the extent is forced to center on the overview */
+    bool overviewCentered() const { return mOverviewCentered; }
+    /** Set the overview's centering mode */
+    void setOverviewCentered( bool centered );
+
     void setGridLineSymbol( QgsLineSymbolV2* symbol );
     QgsLineSymbolV2* gridLineSymbol() { return mGridLineSymbol; }
+
+    /** Returns the grid's blending mode */
+    QPainter::CompositionMode gridBlendMode() const {return mGridBlendMode;}
+    /** Sets the grid's blending mode*/
+    void setGridBlendMode( QPainter::CompositionMode blendMode );
 
     /**Sets mId to a number not yet used in the composition. mId is kept if it is not in use.
         Usually, this function is called before adding the composer map to the composition*/
     void assignFreeId();
 
+    /**Calculates width and hight of the picture (in mm) such that it fits into the item frame with the given rotation
+     * @deprecated Use bool QgsComposerItem::imageSizeConsideringRotation( double& width, double& height, double rotation )
+     * instead
+     */
+    bool imageSizeConsideringRotation( double& width, double& height ) const;
+    /**Calculates corner point after rotation and scaling
+     * @deprecated Use QgsComposerItem::cornerPointOnRotatedAndScaledRect( double& x, double& y, double width, double height, double rotation )
+     * instead
+     */
+    bool cornerPointOnRotatedAndScaledRect( double& x, double& y, double width, double height ) const;
+    /**Calculates width / height of the bounding box of a rotated rectangle
+    * @deprecated Use QgsComposerItem::sizeChangedByRotation( double& width, double& height, double rotation )
+    * instead
+    */
+    void sizeChangedByRotation( double& width, double& height );
+
   signals:
     void extentChanged();
+
+    /**Is emitted on rotation change to notify north arrow pictures*/
+    void mapRotationChanged( double newRotation );
 
   public slots:
 
@@ -341,6 +432,8 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     void updateCachedImage( );
     /**Call updateCachedImage if item is in render mode*/
     void renderModeUpdateCachedImage();
+
+    void overviewExtentChanged();
 
   private:
 
@@ -362,6 +455,11 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     // so that full rectangle in paper is used.
     QgsRectangle mExtent;
 
+    // Current temporary map region in map units. This is overwritten when atlas feature changes. It's also
+    // used when the user changes the map extent and an atlas preview is enabled. This allows the user
+    // to manually tweak each atlas preview page without affecting the actual original map extent.
+    QgsRectangle mAtlasFeatureExtent;
+
     // Cache used in composer preview
     QImage mCacheImage;
 
@@ -382,6 +480,9 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     /**Offset in y direction for showing map cache image*/
     double mYOffset;
 
+    /**Map rotation*/
+    double mMapRotation;
+
     /**Flag if layers to be displayed should be read from qgis canvas (true) or from stored list in mLayerSet (false)*/
     bool mKeepLayerSet;
 
@@ -396,6 +497,8 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     /**Blend mode for overview*/
     QPainter::CompositionMode mOverviewBlendMode;
     bool mOverviewInverted;
+    /** Centering mode for overview */
+    bool mOverviewCentered;
 
     /**Establishes signal/slot connection for update in case of layer change*/
     void connectUpdateSlot();
@@ -417,10 +520,14 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     double mGridOffsetY;
     /**Font for grid line annotation*/
     QFont mGridAnnotationFont;
+    /**Font color for grid line annotation*/
+    QColor mGridAnnotationFontColor;
     /**Digits after the dot*/
     int mGridAnnotationPrecision;
     /**True if coordinate values should be drawn*/
     bool mShowGridAnnotation;
+    /**Blend mode for grid*/
+    QPainter::CompositionMode mGridBlendMode;
 
     /**Annotation position for left map side (inside / outside / not shown)*/
     GridAnnotationPosition mLeftGridAnnotationPosition;
@@ -447,6 +554,10 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
 
     GridFrameStyle mGridFrameStyle;
     double mGridFrameWidth;
+    double mGridFramePenThickness;
+    QColor mGridFramePenColor;
+    QColor mGridFrameFillColor1;
+    QColor mGridFrameFillColor2;
 
     /**Current bounding rectangle. This is used to check if notification to the graphics scene is necessary*/
     QRectF mCurrentRectangle;
@@ -455,6 +566,10 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     QGraphicsView* mMapCanvas;
     /**True if annotation items, rubber band, etc. from the main canvas should be displayed*/
     bool mDrawCanvasItems;
+
+    /**Adjusts an extent rectangle to match the provided item width and height, so that extent
+     * center of extent remains the same */
+    void adjustExtentToItemShape( double itemWidth, double itemHeight, QgsRectangle& extent ) const;
 
     /**Draws the map grid*/
     void drawGrid( QPainter* p );
@@ -487,6 +602,9 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     @param poly out: the result polygon with the four corner points. The points are clockwise, starting at the top-left point
     @return true in case of success*/
     void mapPolygon( QPolygonF& poly ) const;
+    /** mapPolygon variant using a given extent */
+    void mapPolygon( const QgsRectangle& extent, QPolygonF& poly ) const;
+
     /**Calculates the extent to request and the yShift of the top-left point in case of rotation.*/
     void requestedExtent( QgsRectangle& extent ) const;
     /**Scales a composer map shift (in MM) and rotates it by mRotation
@@ -509,6 +627,7 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     void createDefaultOverviewFrameSymbol();
     void createDefaultGridLineSymbol();
     void initGridAnnotationFormatFromProject();
+
 };
 
 #endif

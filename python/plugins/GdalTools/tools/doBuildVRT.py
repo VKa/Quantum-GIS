@@ -45,17 +45,17 @@ class GdalToolsDialog(QWidget, Ui_Widget, BasePluginWidget):
       self.inSelector.setType( self.inSelector.FILE )
       self.outSelector.setType( self.outSelector.FILE )
       self.recurseCheck.hide()
-      self.visibleRasterLayers = QStringList()
+      self.visibleRasterLayers = []
 
       self.setParamsStatus(
         [
           (self.inSelector, SIGNAL("filenameChanged()")),
           (self.outSelector, SIGNAL("filenameChanged()")),
           (self.resolutionComboBox, SIGNAL("currentIndexChanged(int)"), self.resolutionCheck),
-          (self.srcNoDataSpin, SIGNAL("valueChanged(int)"), self.srcNoDataCheck, "1.7.0"),
+          (self.srcNoDataSpin, SIGNAL("valueChanged(int)"), self.srcNoDataCheck, 1700),
           (self.inputDirCheck, SIGNAL("stateChanged(int)")),
-          (self.separateCheck, SIGNAL("stateChanged(int)"), None, "1.7.0"),
-          (self.allowProjDiffCheck, SIGNAL("stateChanged(int)"), None, "1.7.0"),
+          (self.separateCheck, SIGNAL("stateChanged(int)"), None, 1700),
+          (self.allowProjDiffCheck, SIGNAL("stateChanged(int)"), None, 1700),
           (self.recurseCheck, SIGNAL("stateChanged(int)"), self.inputDirCheck),
           (self.inputSelLayersCheck, SIGNAL("stateChanged(int)"))
         ]
@@ -82,10 +82,10 @@ class GdalToolsDialog(QWidget, Ui_Widget, BasePluginWidget):
 
   def onVisibleLayersChanged(self):
       # refresh list of visible raster layers
-      self.visibleRasterLayers = QStringList()
+      self.visibleRasterLayers = []
       for layer in self.iface.mapCanvas().layers():
         if Utils.LayerRegistry.isRaster( layer ):
-          self.visibleRasterLayers << layer.source()
+          self.visibleRasterLayers.append( layer.source() )
 
       # refresh the text in the command viewer
       self.someValueChanged()
@@ -115,42 +115,42 @@ class GdalToolsDialog(QWidget, Ui_Widget, BasePluginWidget):
   def fillInputFilesEdit(self):
       lastUsedFilter = Utils.FileFilter.lastUsedRasterFilter()
       files = Utils.FileDialog.getOpenFileNames(self, self.tr( "Select the files for VRT" ), Utils.FileFilter.allRastersFilter(), lastUsedFilter)
-      if files.isEmpty():
+      if files == '':
         return
       Utils.FileFilter.setLastUsedRasterFilter(lastUsedFilter)
-      self.inSelector.setFilename(files.join(","))
+      self.inSelector.setFilename(",".join(files))
 
   def fillOutputFileEdit(self):
       outputFile = Utils.FileDialog.getSaveFileName(self, self.tr( "Select where to save the VRT" ), self.tr( "VRT (*.vrt)" ))
-      if outputFile.isEmpty():
+      if outputFile == '':
         return
       self.outSelector.setFilename(outputFile)
 
   def fillInputDir( self ):
       inputDir = Utils.FileDialog.getExistingDirectory( self, self.tr( "Select the input directory with files for VRT" ))
-      if inputDir.isEmpty():
+      if inputDir == '':
         return
       self.inSelector.setFilename( inputDir )
 
   def getArguments(self):
-      arguments = QStringList()
+      arguments = []
       if self.resolutionCheck.isChecked() and self.resolutionComboBox.currentIndex() >= 0:
-        arguments << "-resolution"
-        arguments << self.resolutions[self.resolutionComboBox.currentIndex()]
+        arguments.append("-resolution")
+        arguments.append(self.resolutions[self.resolutionComboBox.currentIndex()])
       if self.separateCheck.isChecked():
-        arguments << "-separate"
+        arguments.append("-separate")
       if self.srcNoDataCheck.isChecked():
-        arguments << "-srcnodata"
-        arguments << str(self.srcNoDataSpin.value())
+        arguments.append("-srcnodata")
+        arguments.append(str(self.srcNoDataSpin.value()))
       if self.allowProjDiffCheck.isChecked():
-        arguments << "-allow_projection_difference"
-      arguments << self.getOutputFileName()
+        arguments.append("-allow_projection_difference")
+      arguments.append(self.getOutputFileName())
       if self.inputSelLayersCheck.isChecked():
-        arguments << self.visibleRasterLayers
+        arguments.extend(self.visibleRasterLayers)
       elif self.inputDirCheck.isChecked():
-        arguments << Utils.getRasterFiles( self.getInputFileName(), self.recurseCheck.isChecked() )
+        arguments.extend(Utils.getRasterFiles( self.getInputFileName(), self.recurseCheck.isChecked() ))
       else:
-        arguments << self.getInputFileName()
+        arguments.extend(self.getInputFileName())
       return arguments
 
   def getOutputFileName(self):

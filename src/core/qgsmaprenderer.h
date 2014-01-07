@@ -37,7 +37,6 @@ class QgsMapRenderer;
 class QgsScaleCalculator;
 class QgsCoordinateReferenceSystem;
 class QgsDistanceArea;
-class QgsOverlayObjectPositionManager;
 class QgsVectorLayer;
 
 class QgsPalLayerSettings;
@@ -46,9 +45,9 @@ class QgsDiagramLayerSettings;
 class CORE_EXPORT QgsLabelPosition
 {
   public:
-    QgsLabelPosition( int id, double r, const QVector< QgsPoint >& corners, const QgsRectangle& rect, double w, double h, const QString& layer, const QString& labeltext, bool upside_down, bool diagram = false, bool pinned = false ):
-        featureId( id ), rotation( r ), cornerPoints( corners ), labelRect( rect ), width( w ), height( h ), layerID( layer ), labelText( labeltext ), upsideDown( upside_down ), isDiagram( diagram ), isPinned( pinned ) {}
-    QgsLabelPosition(): featureId( -1 ), rotation( 0 ), labelRect( QgsRectangle() ), width( 0 ), height( 0 ), layerID( "" ), labelText( "" ), upsideDown( false ), isDiagram( false ), isPinned( false ) {}
+    QgsLabelPosition( int id, double r, const QVector< QgsPoint >& corners, const QgsRectangle& rect, double w, double h, const QString& layer, const QString& labeltext, const QFont& labelfont, bool upside_down, bool diagram = false, bool pinned = false ):
+        featureId( id ), rotation( r ), cornerPoints( corners ), labelRect( rect ), width( w ), height( h ), layerID( layer ), labelText( labeltext ), labelFont( labelfont ), upsideDown( upside_down ), isDiagram( diagram ), isPinned( pinned ) {}
+    QgsLabelPosition(): featureId( -1 ), rotation( 0 ), labelRect( QgsRectangle() ), width( 0 ), height( 0 ), layerID( "" ), labelText( "" ), labelFont( QFont() ), upsideDown( false ), isDiagram( false ), isPinned( false ) {}
     int featureId;
     double rotation;
     QVector< QgsPoint > cornerPoints;
@@ -57,6 +56,7 @@ class CORE_EXPORT QgsLabelPosition
     double height;
     QString layerID;
     QString labelText;
+    QFont labelFont;
     bool upsideDown;
     bool isDiagram;
     bool isPinned;
@@ -75,6 +75,12 @@ class CORE_EXPORT QgsLabelingEngineInterface
     virtual void init( QgsMapRenderer* mp ) = 0;
     //! called to find out whether the layer is used for labeling
     virtual bool willUseLayer( QgsVectorLayer* layer ) = 0;
+    //! clears all PAL layer settings for registered layers
+    //! @note: this method was added in version 1.9
+    virtual void clearActiveLayers() = 0;
+    //! clears data defined objects from PAL layer settings for a registered layer
+    //! @note: this method was added in version 1.9
+    virtual void clearActiveLayer( QgsVectorLayer* layer ) = 0;
     //! called when starting rendering of a layer
     //! @note: this method was added in version 1.6
     virtual int prepareLayer( QgsVectorLayer* layer, QSet<int>& attrIndices, QgsRenderContext& ctx ) = 0;
@@ -104,7 +110,13 @@ class CORE_EXPORT QgsLabelingEngineInterface
     virtual QgsLabelingEngineInterface* clone() = 0;
 };
 
-
+struct CORE_EXPORT QgsLayerCoordinateTransform
+{
+  QString srcAuthId;
+  QString destAuthId;
+  int srcDatumTransform; //-1 if unknown or not specified
+  int destDatumTransform;
+};
 
 /** \ingroup core
  * A non GUI class for rendering a map layer set onto a QPainter.
@@ -237,7 +249,7 @@ class CORE_EXPORT QgsMapRenderer : public QObject
     bool hasCrsTransformEnabled() const;
 
     //! sets destination coordinate reference system
-    void setDestinationCrs( const QgsCoordinateReferenceSystem& crs );
+    void setDestinationCrs( const QgsCoordinateReferenceSystem& crs, bool refreshCoordinateTransformInfo = true );
 
     //! returns CRS of destination coordinate reference system
     const QgsCoordinateReferenceSystem& destinationCrs() const;
@@ -278,10 +290,15 @@ class CORE_EXPORT QgsMapRenderer : public QObject
 
     //! Returns a QPainter::CompositionMode corresponding to a BlendMode
     //! Added in 1.9
-    static QPainter::CompositionMode getCompositionMode( const QgsMapRenderer::BlendMode blendMode );
+    static QPainter::CompositionMode getCompositionMode( const QgsMapRenderer::BlendMode &blendMode );
     //! Returns a BlendMode corresponding to a QPainter::CompositionMode
     //! Added in 1.9
-    static QgsMapRenderer::BlendMode getBlendModeEnum( const QPainter::CompositionMode blendMode );
+    static QgsMapRenderer::BlendMode getBlendModeEnum( const QPainter::CompositionMode &blendMode );
+
+    void addLayerCoordinateTransform( const QString& layerId, const QString& srcAuthId, const QString& destAuthId, int srcDatumTransform = -1, int destDatumTransform = -1 );
+    void clearLayerCoordinateTransforms();
+
+    const QgsCoordinateTransform* transformation( const QgsMapLayer *layer ) const;
 
   signals:
 
@@ -297,6 +314,9 @@ class CORE_EXPORT QgsMapRenderer : public QObject
 
     //! emitted when layer's draw() returned false
     void drawError( QgsMapLayer* );
+
+    //! Notifies higher level components to show the datum transform dialog and add a QgsLayerCoordinateTransformInfo for that layer
+    void datumTransformInfoRequested( const QgsMapLayer* ml, const QString& srcAuthId, const QString& destAuthId ) const;
 
   public slots:
 
@@ -315,10 +335,6 @@ class CORE_EXPORT QgsMapRenderer : public QObject
      * also sets the contents of the r2 parameter
      */
     bool splitLayersExtent( QgsMapLayer* layer, QgsRectangle& extent, QgsRectangle& r2 );
-
-    /**Creates an overlay object position manager subclass according to the current settings
-    @note this method was added in version 1.1*/
-    QgsOverlayObjectPositionManager* overlayManagerFromSettings();
 
     //! indicates drawing in progress
     static bool mDrawing;
@@ -374,8 +390,8 @@ class CORE_EXPORT QgsMapRenderer : public QObject
     //! Locks rendering loop for concurrent draws
     QMutex mRenderMutex;
 
-  private:
-    const QgsCoordinateTransform* tr( QgsMapLayer *layer );
+    QHash< QString, QgsLayerCoordinateTransform > mLayerCoordinateTransformInfo;
+
 };
 
 #endif

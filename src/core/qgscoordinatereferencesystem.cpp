@@ -42,6 +42,7 @@
 #include <ogr_srs_api.h>
 #include <cpl_error.h>
 #include <cpl_conv.h>
+#include <cpl_csv.h>
 
 CUSTOM_CRS_VALIDATION QgsCoordinateReferenceSystem::mCustomSrsValidation = NULL;
 
@@ -112,7 +113,7 @@ bool QgsCoordinateReferenceSystem::createFromId( const long theId, CrsType theTy
   return result;
 }
 
-bool QgsCoordinateReferenceSystem::createFromString( const QString theDefinition )
+bool QgsCoordinateReferenceSystem::createFromString( const QString &theDefinition )
 {
   bool result = false;
   QRegExp reCrsId( "^(epsg|postgis|internal)\\:(\\d+)$", Qt::CaseInsensitive );
@@ -156,7 +157,7 @@ bool QgsCoordinateReferenceSystem::createFromString( const QString theDefinition
   return result;
 }
 
-bool QgsCoordinateReferenceSystem::createFromUserInput( const QString theDefinition )
+bool QgsCoordinateReferenceSystem::createFromUserInput( const QString &theDefinition )
 {
   QString theWkt;
   char *wkt = NULL;
@@ -195,8 +196,8 @@ void QgsCoordinateReferenceSystem::setupESRIWktFix( )
   {
     CPLSetConfigOption( "GDAL_FIX_ESRI_WKT", configNew );
     if ( strcmp( configNew, CPLGetConfigOption( "GDAL_FIX_ESRI_WKT", "" ) ) != 0 )
-      QgsLogger::warning( QString( "GDAL_FIX_ESRI_WKT could not be set to %1 : %2"
-                                 ).arg( configNew ).arg( CPLGetConfigOption( "GDAL_FIX_ESRI_WKT", "" ) ) ) ;
+      QgsLogger::warning( QString( "GDAL_FIX_ESRI_WKT could not be set to %1 : %2" )
+                          .arg( configNew ).arg( CPLGetConfigOption( "GDAL_FIX_ESRI_WKT", "" ) ) ) ;
     QgsDebugMsg( QString( "set GDAL_FIX_ESRI_WKT : %1" ).arg( configNew ) );
   }
   else
@@ -415,7 +416,7 @@ bool QgsCoordinateReferenceSystem::axisInverted() const
   return mAxisInverted != 0;
 }
 
-bool QgsCoordinateReferenceSystem::createFromWkt( QString theWkt )
+bool QgsCoordinateReferenceSystem::createFromWkt( const QString &theWkt )
 {
   mIsValidFlag = false;
   mWkt.clear();
@@ -495,7 +496,7 @@ bool QgsCoordinateReferenceSystem::isValid() const
   return mIsValidFlag;
 }
 
-bool QgsCoordinateReferenceSystem::createFromProj4( const QString theProj4String )
+bool QgsCoordinateReferenceSystem::createFromProj4( const QString &theProj4String )
 {
   //
   // Examples:
@@ -607,6 +608,7 @@ bool QgsCoordinateReferenceSystem::createFromProj4( const QString theProj4String
     // split on spaces followed by a plus sign (+) to deal
     // also with parameters containing spaces (e.g. +nadgrids)
     // make sure result is trimmed (#5598)
+    QStringList myParams;
     foreach ( QString param, myProj4String.split( QRegExp( "\\s+(?=\\+)" ), QString::SkipEmptyParts ) )
     {
       QString arg = QString( "' '||parameters||' ' LIKE %1" ).arg( quotedValue( QString( "% %1 %" ).arg( param.trimmed() ) ) );
@@ -618,6 +620,7 @@ bool QgsCoordinateReferenceSystem::createFromProj4( const QString theProj4String
       {
         sql += delim + arg;
         delim = " AND ";
+        myParams << param.trimmed();
       }
     }
 
@@ -630,6 +633,25 @@ bool QgsCoordinateReferenceSystem::createFromProj4( const QString theProj4String
     {
       // datum might have disappeared in definition - retry without it
       myRecord = getRecord( sql + " order by deprecated" );
+    }
+
+    if ( !myRecord.empty() )
+    {
+      // Bugfix 8487 : test param lists are equal, except for +datum
+      QStringList foundParams;
+      foreach ( QString param, myRecord["parameters"].split( QRegExp( "\\s+(?=\\+)" ), QString::SkipEmptyParts ) )
+      {
+        if ( !param.startsWith( "+datum=" ) )
+          foundParams << param.trimmed();
+      }
+
+      myParams.sort();
+      foundParams.sort();
+
+      if ( myParams != foundParams )
+      {
+        myRecord.clear();
+      }
     }
   }
 
@@ -1475,11 +1497,11 @@ bool QgsCoordinateReferenceSystem::saveAsUserCRS( QString name )
   QgsMessageLog::logMessage( QObject::tr( "Saved user CRS [%1]" ).arg( toProj4() ), QObject::tr( "CRS" ) );
 
   int return_id;
-  if(myResult == SQLITE_OK)
+  if ( myResult == SQLITE_OK )
   {
     return_id = sqlite3_last_insert_rowid( myDatabase );
-    setInternalId(return_id);
-    
+    setInternalId( return_id );
+
     //We add the just created user CRS to the list of recently used CRS
     QSettings settings;
     //QStringList recentProjections = settings.value( "/UI/recentProjections" ).toStringList();
@@ -1487,8 +1509,8 @@ bool QgsCoordinateReferenceSystem::saveAsUserCRS( QString name )
     QStringList projectionsAuthId = settings.value( "/UI/recentProjectionsAuthId" ).toStringList();
     //recentProjections.append();
     //settings.setValue( "/UI/recentProjections", recentProjections );
-    projectionsProj4.append(toProj4());
-    projectionsAuthId.append(authid());
+    projectionsProj4.append( toProj4() );
+    projectionsAuthId.append( authid() );
     settings.setValue( "/UI/recentProjectionsProj4", projectionsProj4 );
     settings.setValue( "/UI/recentProjectionsAuthId", projectionsAuthId );
 
@@ -1656,10 +1678,15 @@ bool QgsCoordinateReferenceSystem::loadIDs( QHash<int, QString> &wkts )
 
 int QgsCoordinateReferenceSystem::syncDb()
 {
+  QString dbFilePath = QgsApplication::srsDbFilePath();
+  syncDatumTransform( dbFilePath );
+
   int inserted = 0, updated = 0, deleted = 0, errors = 0;
 
+  qDebug( "Load srs db from: %s", QgsApplication::srsDbFilePath().toLocal8Bit().constData() );
+
   sqlite3 *database;
-  if ( sqlite3_open( QgsApplication::srsDbFilePath().toUtf8().constData(), &database ) != SQLITE_OK )
+  if ( sqlite3_open( dbFilePath.toUtf8().constData(), &database ) != SQLITE_OK )
   {
     qCritical( "Could not open database: %s [%s]\n", QgsApplication::srsDbFilePath().toLocal8Bit().constData(), sqlite3_errmsg( database ) );
     return -1;
@@ -1671,6 +1698,10 @@ int QgsCoordinateReferenceSystem::syncDb()
     return -1;
 
   }
+
+  // fix up database, if not done already //
+  if ( sqlite3_exec( database, "alter table tbl_srs add noupdate boolean", 0, 0, 0 ) == SQLITE_OK )
+    sqlite3_exec( database, "update tbl_srs set noupdate=(auth_name='EPSG' and auth_id in (5513,5514,5221,2065,102067,4156,4818))", 0, 0, 0 );
 
   sqlite3_exec( database, "UPDATE tbl_srs SET srid=141001 WHERE srid=41001 AND auth_name='OSGEO' AND auth_id='41001'", 0, 0, 0 );
 
@@ -1710,7 +1741,7 @@ int QgsCoordinateReferenceSystem::syncDb()
       continue;
     }
 
-    sql = QString( "SELECT parameters FROM tbl_srs WHERE auth_name='EPSG' AND auth_id='%1'" ).arg( it.key() );
+    sql = QString( "SELECT parameters,noupdate FROM tbl_srs WHERE auth_name='EPSG' AND auth_id='%1'" ).arg( it.key() );
     if ( sqlite3_prepare( database, sql.toAscii(), sql.size(), &select, &tail ) != SQLITE_OK )
     {
       qCritical( "Could not prepare: %s [%s]\n", sql.toAscii().constData(), sqlite3_errmsg( database ) );
@@ -1721,6 +1752,9 @@ int QgsCoordinateReferenceSystem::syncDb()
     if ( sqlite3_step( select ) == SQLITE_ROW )
     {
       srsProj4 = ( const char * ) sqlite3_column_text( select, 0 );
+
+      if ( QString::fromUtf8(( char * )sqlite3_column_text( select, 1 ) ).toInt() != 0 )
+        continue;
     }
 
     sqlite3_finalize( select );
@@ -1801,7 +1835,7 @@ int QgsCoordinateReferenceSystem::syncDb()
     sql += delim + QString::number( i );
     delim = ",";
   }
-  sql += ")";
+  sql += ") AND NOT noupdate";
 
   if ( sqlite3_exec( database, sql.toUtf8(), 0, 0, 0 ) == SQLITE_OK )
   {
@@ -1816,7 +1850,7 @@ int QgsCoordinateReferenceSystem::syncDb()
   }
 
 #if !defined(PJ_VERSION) || PJ_VERSION!=470
-  sql = QString( "select auth_name,auth_id,parameters from tbl_srs WHERE auth_name<>'EPSG' AND NOT deprecated" );
+  sql = QString( "select auth_name,auth_id,parameters from tbl_srs WHERE auth_name<>'EPSG' AND NOT deprecated AND NOT noupdate" );
   if ( sqlite3_prepare( database, sql.toAscii(), sql.size(), &select, &tail ) == SQLITE_OK )
   {
     while ( sqlite3_step( select ) == SQLITE_ROW )
@@ -1908,4 +1942,212 @@ int QgsCoordinateReferenceSystem::syncDb()
     return -errors;
   else
     return updated + inserted;
+}
+
+bool QgsCoordinateReferenceSystem::syncDatumTransform( const QString& dbPath )
+{
+  const char *filename = CSVFilename( "datum_shift.csv" );
+  FILE *fp = VSIFOpen( filename, "rb" );
+  if ( !fp )
+  {
+    return false;
+  }
+
+  char **fieldnames = CSVReadParseLine( fp );
+
+  // "SEQ_KEY","COORD_OP_CODE","SOURCE_CRS_CODE","TARGET_CRS_CODE","REMARKS","COORD_OP_SCOPE","AREA_OF_USE_CODE","AREA_SOUTH_BOUND_LAT","AREA_NORTH_BOUND_LAT","AREA_WEST_BOUND_LON","AREA_EAST_BOUND_LON","SHOW_OPERATION","DEPRECATED","COORD_OP_METHOD_CODE","DX","DY","DZ","RX","RY","RZ","DS","PREFERRED"
+
+  struct
+  {
+    const char *src;
+    const char *dst;
+    int idx;
+  } map[] =
+  {
+    // { "SEQ_KEY", "", -1 },
+    { "SOURCE_CRS_CODE", "source_crs_code", -1 },
+    { "TARGET_CRS_CODE", "target_crs_code", -1 },
+    { "REMARKS", "remarks", -1 },
+    { "COORD_OP_SCOPE", "scope", -1 },
+    { "AREA_OF_USE_CODE", "area_of_use_code", -1 },
+    // { "AREA_SOUTH_BOUND_LAT", "", -1 },
+    // { "AREA_NORTH_BOUND_LAT", "", -1 },
+    // { "AREA_WEST_BOUND_LON", "", -1 },
+    // { "AREA_EAST_BOUND_LON", "", -1 },
+    // { "SHOW_OPERATION", "", -1 },
+    { "DEPRECATED", "deprecated", -1 },
+    { "COORD_OP_METHOD_CODE", "coord_op_method_code", -1 },
+    { "DX", "p1", -1 },
+    { "DY", "p2", -1 },
+    { "DZ", "p3", -1 },
+    { "RX", "p4", -1 },
+    { "RY", "p5", -1 },
+    { "RZ", "p6", -1 },
+    { "DS", "p7", -1 },
+    { "PREFERRED", "preferred", -1 },
+    { "COORD_OP_CODE", "coord_op_code", -1 },
+  };
+
+  QString update = "UPDATE tbl_datum_transform SET ";
+  QString insert, values;
+
+  int n = CSLCount( fieldnames );
+
+  int idxid = -1, idxrx = -1, idxry = -1, idxrz = -1;
+  for ( unsigned int i = 0; i < sizeof( map ) / sizeof( *map ); i++ )
+  {
+    bool last = i == sizeof( map ) / sizeof( *map ) - 1;
+
+    map[i].idx = CSLFindString( fieldnames, map[i].src );
+    if ( map[i].idx < 0 )
+    {
+      qWarning( "field %s not found", map[i].src );
+      CSLDestroy( fieldnames );
+      fclose( fp );
+      return false;
+    }
+
+    if ( strcmp( map[i].src, "COORD_OP_CODE" ) == 0 )
+      idxid = i;
+    if ( strcmp( map[i].src, "RX" ) == 0 )
+      idxrx = i;
+    if ( strcmp( map[i].src, "RY" ) == 0 )
+      idxry = i;
+    if ( strcmp( map[i].src, "RZ" ) == 0 )
+      idxrz = i;
+
+    if ( i > 0 )
+    {
+      insert += ",";
+      values += ",";
+
+      if ( last )
+      {
+        update += " WHERE ";
+      }
+      else
+      {
+        update += ",";
+      }
+    }
+
+    update += QString( "%1=%%2" ).arg( map[i].dst ).arg( i + 1 );
+
+    insert += map[i].dst;
+    values += QString( "%%1" ).arg( i + 1 );
+
+    qWarning( "%d: src=%s dst=%s idx=%d", i, map[i].src, map[i].dst, map[i].idx );
+  }
+
+  insert = "INSERT INTO tbl_datum_transform(" + insert + ") VALUES (" + values + ")";
+
+  QgsDebugMsgLevel( QString( "insert:%1" ).arg( insert ), 4 );
+  QgsDebugMsgLevel( QString( "update:%1" ).arg( update ), 4 );
+
+  CSLDestroy( fieldnames );
+
+  Q_ASSERT( idxid >= 0 );
+  Q_ASSERT( idxrx >= 0 );
+  Q_ASSERT( idxry >= 0 );
+  Q_ASSERT( idxrz >= 0 );
+
+  sqlite3 *db;
+  int openResult = sqlite3_open( dbPath.toUtf8().constData(), &db );
+  if ( openResult != SQLITE_OK )
+  {
+    fclose( fp );
+    return false;
+  }
+
+  if ( sqlite3_exec( db, "BEGIN TRANSACTION", 0, 0, 0 ) != SQLITE_OK )
+  {
+    qCritical( "Could not begin transaction: %s [%s]\n", QgsApplication::srsDbFilePath().toLocal8Bit().constData(), sqlite3_errmsg( db ) );
+    sqlite3_close( db );
+    fclose( fp );
+    return false;
+  }
+
+  QStringList v;
+  v.reserve( sizeof( map ) / sizeof( *map ) );
+
+  while ( !feof( fp ) )
+  {
+    char **values = CSVReadParseLine( fp );
+
+    v.clear();
+
+    if ( CSLCount( values ) < n )
+    {
+      qWarning( "Only %d columns", CSLCount( values ) );
+      continue;
+    }
+
+    for ( unsigned int i = 0; i < sizeof( map ) / sizeof( *map ); i++ )
+    {
+      int idx = map[i].idx;
+      Q_ASSERT( idx != -1 );
+      Q_ASSERT( idx < n );
+      v.insert( i, *values[ idx ] ? quotedValue( values[idx] ) : "NULL" );
+    }
+
+    //switch sign of rotation parameters. See http://trac.osgeo.org/proj/wiki/GenParms#towgs84-DatumtransformationtoWGS84
+    if ( v[ idxid ] == "9607" )
+    {
+      v[ idxid ] = "9606";
+      v[ idxrx ] = qgsDoubleToString( -v[ idxrx ].toDouble() );
+      v[ idxry ] = qgsDoubleToString( -v[ idxry ].toDouble() );
+      v[ idxrz ] = qgsDoubleToString( -v[ idxrz ].toDouble() );
+    }
+
+    //entry already in db?
+    sqlite3_stmt *stmt;
+    QString cOpCode;
+    QString sql = QString( "SELECT coord_op_code FROM tbl_datum_transform WHERE coord_op_code=%1" ).arg( v[ idxid ] );
+    int prepareRes = sqlite3_prepare( db, sql.toAscii(), sql.size(), &stmt, NULL );
+    if ( prepareRes != SQLITE_OK )
+      continue;
+
+    if ( sqlite3_step( stmt ) == SQLITE_ROW )
+    {
+      cOpCode = ( const char * ) sqlite3_column_text( stmt, 0 );
+    }
+    sqlite3_finalize( stmt );
+
+    sql = cOpCode.isEmpty() ? insert : update;
+    for ( int i = 0; i < v.size(); i++ )
+    {
+      sql = sql.arg( v[i] );
+    }
+
+    if ( sqlite3_exec( db, sql.toUtf8(), 0, 0, 0 ) != SQLITE_OK )
+    {
+      qCritical( "SQL: %s", sql.toUtf8().constData() );
+      qCritical( "Error: %s", sqlite3_errmsg( db ) );
+    }
+  }
+
+  if ( sqlite3_exec( db, "COMMIT", 0, 0, 0 ) != SQLITE_OK )
+  {
+    qCritical( "Could not commit transaction: %s [%s]\n", QgsApplication::srsDbFilePath().toLocal8Bit().constData(), sqlite3_errmsg( db ) );
+    return false;
+  }
+
+  sqlite3_close( db );
+  return true;
+}
+
+QString QgsCoordinateReferenceSystem::geographicCRSAuthId() const
+{
+  if ( geographicFlag() )
+  {
+    return mAuthId;
+  }
+  else if ( mCRS )
+  {
+    return OSRGetAuthorityName( mCRS, "GEOGCS" ) + QString( ":" ) + OSRGetAuthorityCode( mCRS, "GEOGCS" );
+  }
+  else
+  {
+    return "";
+  }
 }

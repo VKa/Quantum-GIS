@@ -63,6 +63,8 @@ class CORE_EXPORT QgsSimpleLineSymbolLayerV2 : public QgsLineSymbolLayerV2
     void setOutputUnit( QgsSymbolV2::OutputUnit unit );
     QgsSymbolV2::OutputUnit outputUnit() const;
 
+    double estimateMaxBleed() const;
+
     // new stuff
 
     Qt::PenStyle penStyle() const { return mPenStyle; }
@@ -161,6 +163,8 @@ class CORE_EXPORT QgsMarkerLineSymbolLayerV2 : public QgsLineSymbolLayerV2
     virtual void setWidth( double width );
     virtual double width() const;
 
+    double estimateMaxBleed() const;
+
     // new stuff
 
     bool rotateMarker() const { return mRotateMarker; }
@@ -189,6 +193,7 @@ class CORE_EXPORT QgsMarkerLineSymbolLayerV2 : public QgsLineSymbolLayerV2
     void renderPolylineInterval( const QPolygonF& points, QgsSymbolV2RenderContext& context );
     void renderPolylineVertex( const QPolygonF& points, QgsSymbolV2RenderContext& context, Placement placement = Vertex );
     void renderPolylineCentral( const QPolygonF& points, QgsSymbolV2RenderContext& context );
+    double markerAngle( const QPolygonF& points, bool isRing, int vertex );
 
     bool mRotateMarker;
     double mInterval;
@@ -197,48 +202,6 @@ class CORE_EXPORT QgsMarkerLineSymbolLayerV2 : public QgsLineSymbolLayerV2
     double mOffset;
     QgsSymbolV2::OutputUnit mOffsetUnit;
     Placement mPlacement;
-};
-
-/////////
-
-#define DEFAULT_LINEDECORATION_COLOR  QColor(0,0,0)
-#define DEFAULT_LINEDECORATION_WIDTH  DEFAULT_LINE_WIDTH
-
-class CORE_EXPORT QgsLineDecorationSymbolLayerV2 : public QgsLineSymbolLayerV2
-{
-  public:
-    QgsLineDecorationSymbolLayerV2( QColor color = DEFAULT_LINEDECORATION_COLOR,
-                                    double width = DEFAULT_LINEDECORATION_WIDTH );
-
-    ~QgsLineDecorationSymbolLayerV2();
-
-    // static stuff
-
-    static QgsSymbolLayerV2* create( const QgsStringMap& properties = QgsStringMap() );
-
-    // implemented from base classes
-
-    QString layerType() const;
-
-    void startRender( QgsSymbolV2RenderContext& context );
-
-    void stopRender( QgsSymbolV2RenderContext& context );
-
-    void renderPolyline( const QPolygonF& points, QgsSymbolV2RenderContext& context );
-
-    QgsStringMap properties() const;
-
-    QgsSymbolLayerV2* clone() const;
-
-    void toSld( QDomDocument &doc, QDomElement &element, QgsStringMap props ) const;
-
-    void setOutputUnit( QgsSymbolV2::OutputUnit unit );
-    QgsSymbolV2::OutputUnit outputUnit() const;
-
-  protected:
-    QPen mPen;
-    QPen mSelPen;
-
 };
 
 #endif

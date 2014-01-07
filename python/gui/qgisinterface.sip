@@ -30,6 +30,8 @@ class QgisInterface : QObject
      */
     virtual QgsLegendInterface* legendInterface() = 0;
 
+    virtual QgsPluginManagerInterface* pluginManagerInterface() = 0;
+
   public slots: // TODO: do these functions really need to be slots?
 
     /* Exposed functions */
@@ -321,7 +323,8 @@ class QgisInterface : QObject
      */
 
     //! Menus
-    virtual QMenu *fileMenu() = 0;
+    virtual QMenu *fileMenu() = 0 /Deprecated/;
+    virtual QMenu *projectMenu() = 0;
     virtual QMenu *editMenu() = 0;
     virtual QMenu *viewMenu() = 0;
     virtual QMenu *layerMenu() = 0;
@@ -366,7 +369,7 @@ class QgisInterface : QObject
     */
     virtual QToolBar *webToolBar() = 0;
 
-    //! File menu actions
+    //! Project menu actions
     virtual QAction *actionNewProject() = 0;
     virtual QAction *actionOpenProject() = 0;
     virtual QAction *actionSaveProject() = 0;
@@ -385,6 +388,7 @@ class QgisInterface : QObject
     virtual QAction *actionDeleteSelected() = 0;
     virtual QAction *actionMoveFeature() = 0;
     virtual QAction *actionSplitFeatures() = 0;
+    virtual QAction *actionSplitParts() = 0;
     virtual QAction *actionAddRing() = 0;
     virtual QAction *actionAddPart() = 0;
     virtual QAction *actionSimplifyFeature() = 0;
@@ -404,12 +408,14 @@ class QgisInterface : QObject
     virtual QAction *actionSelectFreehand() = 0;
     virtual QAction *actionSelectRadius() = 0;
     virtual QAction *actionIdentify() = 0;
+    virtual QAction *actionFeatureAction() = 0;
     virtual QAction *actionMeasure() = 0;
     virtual QAction *actionMeasureArea() = 0;
     virtual QAction *actionZoomFullExtent() = 0;
     virtual QAction *actionZoomToLayer() = 0;
     virtual QAction *actionZoomToSelected() = 0;
     virtual QAction *actionZoomLast() = 0;
+    virtual QAction *actionZoomNext() = 0;
     virtual QAction *actionZoomActualSize() = 0;
     virtual QAction *actionMapTips() = 0;
     virtual QAction *actionNewBookmark() = 0;
@@ -427,6 +433,7 @@ class QgisInterface : QObject
     /** @note added in 1.9 */
     virtual QAction *actionPasteLayerStyle() = 0;
     virtual QAction *actionOpenTable() = 0;
+    virtual QAction *actionOpenFieldCalculator() = 0;
     virtual QAction *actionToggleEditing() = 0;
     /** @note added in 1.9 */
     virtual QAction *actionSaveActiveLayerEdits() = 0;
@@ -479,7 +486,10 @@ class QgisInterface : QObject
 
     virtual QDialog* getFeatureForm( QgsVectorLayer *l, QgsFeature &f ) = 0;
 
-    virtual void preloadForm(QString uifile) = 0;
+    virtual QgsVectorLayerTools* vectorLayerTools() = 0;
+
+    virtual void preloadForm( QString uifile ) = 0;
+
     /** Return vector layers in edit mode
      * @param modified whether to return only layers that have been modified
      * @returns list of layers in legend order, or empty list

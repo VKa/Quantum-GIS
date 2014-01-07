@@ -44,7 +44,6 @@
 QgsMapLayer::QgsMapLayer( QgsMapLayer::LayerType type,
                           QString lyrname,
                           QString source ) :
-    mTransparencyLevel( 255 ), // 0 is completely transparent
     mValid( false ), // assume the layer is invalid
     mDataSource( source ),
     mLayerOrigName( lyrname ), // store the original name
@@ -135,9 +134,10 @@ QgsRectangle QgsMapLayer::extent()
 }
 
 /** Write blend mode for layer */
-void QgsMapLayer::setBlendMode( const QPainter::CompositionMode blendMode )
+void QgsMapLayer::setBlendMode( const QPainter::CompositionMode &blendMode )
 {
   mBlendMode = blendMode;
+  emit blendModeChanged( blendMode );
 }
 
 /** Read blend mode for layer */
@@ -155,7 +155,6 @@ bool QgsMapLayer::draw( QgsRenderContext& rendererContext )
 void QgsMapLayer::drawLabels( QgsRenderContext& rendererContext )
 {
   Q_UNUSED( rendererContext );
-  // QgsDebugMsg("entered.");
 }
 
 bool QgsMapLayer::readLayerXML( const QDomElement& layerElement )
@@ -359,6 +358,43 @@ bool QgsMapLayer::readLayerXML( const QDomElement& layerElement )
     mAbstract = abstractElem.text();
   }
 
+  //keywordList
+  QDomElement keywordListElem = layerElement.firstChildElement( "keywordList" );
+  if ( !keywordListElem.isNull() )
+  {
+    QStringList kwdList;
+    for ( QDomNode n = keywordListElem.firstChild(); !n.isNull(); n = n.nextSibling() )
+    {
+      kwdList << n.toElement().text();
+    }
+    mKeywordList = kwdList.join( ", " );
+  }
+
+  //metadataUrl
+  QDomElement dataUrlElem = layerElement.firstChildElement( "dataUrl" );
+  if ( !dataUrlElem.isNull() )
+  {
+    mDataUrl = dataUrlElem.text();
+    mDataUrlFormat = dataUrlElem.attribute( "format", "" );
+  }
+
+  //attribution
+  QDomElement attribElem = layerElement.firstChildElement( "attribution" );
+  if ( !attribElem.isNull() )
+  {
+    mAttribution = attribElem.text();
+    mAttributionUrl = attribElem.attribute( "href", "" );
+  }
+
+  //metadataUrl
+  QDomElement metaUrlElem = layerElement.firstChildElement( "metadataUrl" );
+  if ( !metaUrlElem.isNull() )
+  {
+    mMetadataUrl = metaUrlElem.text();
+    mMetadataUrlType = metaUrlElem.attribute( "type", "" );
+    mMetadataUrlFormat = metaUrlElem.attribute( "format", "" );
+  }
+
 #if 0
   //read transparency level
   QDomNode transparencyNode = layer_node.namedItem( "transparencyLevelInt" );
@@ -374,7 +410,7 @@ bool QgsMapLayer::readLayerXML( const QDomElement& layerElement )
   readCustomProperties( layerElement );
 
   return true;
-} // void QgsMapLayer::readXML
+} // bool QgsMapLayer::readLayerXML
 
 
 bool QgsMapLayer::readXml( const QDomNode& layer_node )
@@ -457,6 +493,55 @@ bool QgsMapLayer::writeLayerXML( QDomElement& layerElement, QDomDocument& docume
   layerElement.appendChild( layerName );
   layerElement.appendChild( layerTitle );
   layerElement.appendChild( layerAbstract );
+
+  // layer keyword list
+  QStringList keywordStringList = keywordList().split( "," );
+  if ( keywordStringList.size() > 0 )
+  {
+    QDomElement layerKeywordList = document.createElement( "keywordList" );
+    for ( int i = 0; i < keywordStringList.size(); ++i )
+    {
+      QDomElement layerKeywordValue = document.createElement( "value" );
+      QDomText layerKeywordText = document.createTextNode( keywordStringList.at( i ).trimmed() );
+      layerKeywordValue.appendChild( layerKeywordText );
+      layerKeywordList.appendChild( layerKeywordValue );
+    }
+    layerElement.appendChild( layerKeywordList );
+  }
+
+  // layer metadataUrl
+  QString aDataUrl = dataUrl();
+  if ( !aDataUrl.isEmpty() )
+  {
+    QDomElement layerDataUrl = document.createElement( "dataUrl" ) ;
+    QDomText layerDataUrlText = document.createTextNode( aDataUrl );
+    layerDataUrl.appendChild( layerDataUrlText );
+    layerDataUrl.setAttribute( "format", dataUrlFormat() );
+    layerElement.appendChild( layerDataUrl );
+  }
+
+  // layer attribution
+  QString aAttribution = attribution();
+  if ( !aAttribution.isEmpty() )
+  {
+    QDomElement layerAttribution = document.createElement( "attribution" ) ;
+    QDomText layerAttributionText = document.createTextNode( aAttribution );
+    layerAttribution.appendChild( layerAttributionText );
+    layerAttribution.setAttribute( "href", attributionUrl() );
+    layerElement.appendChild( layerAttribution );
+  }
+
+  // layer metadataUrl
+  QString aMetadataUrl = metadataUrl();
+  if ( !aMetadataUrl.isEmpty() )
+  {
+    QDomElement layerMetadataUrl = document.createElement( "metadataUrl" ) ;
+    QDomText layerMetadataUrlText = document.createTextNode( aMetadataUrl );
+    layerMetadataUrl.appendChild( layerMetadataUrlText );
+    layerMetadataUrl.setAttribute( "type", metadataUrlType() );
+    layerMetadataUrl.setAttribute( "format", metadataUrlFormat() );
+    layerElement.appendChild( layerMetadataUrl );
+  }
 
   // timestamp if supported
   if ( timestamp() > QDateTime() )
@@ -607,18 +692,6 @@ void QgsMapLayer::setCrs( const QgsCoordinateReferenceSystem& srs, bool emitSign
     emit layerCrsChanged();
 }
 
-#if 0
-unsigned int QgsMapLayer::getTransparency()
-{
-  return mTransparencyLevel;
-}
-
-void QgsMapLayer::setTransparency( unsigned int theInt )
-{
-  mTransparencyLevel = theInt;
-}
-#endif
-
 QString QgsMapLayer::capitaliseLayerName( const QString& name )
 {
   // Capitalise the first letter of the layer name if requested
@@ -693,7 +766,7 @@ QString QgsMapLayer::loadDefaultStyle( bool & theResultFlag )
   return loadNamedStyle( styleURI(), theResultFlag );
 }
 
-bool QgsMapLayer::loadNamedStyleFromDb( const QString db, const QString theURI, QString &qml )
+bool QgsMapLayer::loadNamedStyleFromDb( const QString &db, const QString &theURI, QString &qml )
 {
   QgsDebugMsg( QString( "db = %1 uri = %2" ).arg( db ).arg( theURI ) );
 
@@ -737,7 +810,7 @@ bool QgsMapLayer::loadNamedStyleFromDb( const QString db, const QString theURI, 
   return theResultFlag;
 }
 
-QString QgsMapLayer::loadNamedStyle( const QString theURI, bool &theResultFlag )
+QString QgsMapLayer::loadNamedStyle( const QString &theURI, bool &theResultFlag )
 {
   QgsDebugMsg( QString( "uri = %1 myURI = %2" ).arg( theURI ).arg( publicSource() ) );
 
@@ -875,7 +948,7 @@ QString QgsMapLayer::saveDefaultStyle( bool & theResultFlag )
   return saveNamedStyle( styleURI(), theResultFlag );
 }
 
-QString QgsMapLayer::saveNamedStyle( const QString theURI, bool & theResultFlag )
+QString QgsMapLayer::saveNamedStyle( const QString &theURI, bool &theResultFlag )
 {
   QString myErrorMessage;
   QDomDocument myDocument;
@@ -1050,7 +1123,7 @@ void QgsMapLayer::exportSldStyle( QDomDocument &doc, QString &errorMsg )
   doc = myDocument;
 }
 
-QString QgsMapLayer::saveSldStyle( const QString theURI, bool & theResultFlag )
+QString QgsMapLayer::saveSldStyle( const QString &theURI, bool &theResultFlag )
 {
   QString errorMsg;
   QDomDocument myDocument;
@@ -1107,7 +1180,7 @@ QString QgsMapLayer::saveSldStyle( const QString theURI, bool & theResultFlag )
   return tr( "ERROR: Failed to created SLD style file as %1. Check file permissions and retry." ).arg( filename );
 }
 
-QString QgsMapLayer::loadSldStyle( const QString theURI, bool &theResultFlag )
+QString QgsMapLayer::loadSldStyle( const QString &theURI, bool &theResultFlag )
 {
   QgsDebugMsg( "Entered." );
 

@@ -95,7 +95,7 @@ class ValidateDialog( QDialog, Ui_Dialog ):
     self.marker = MarkerErrorGeometry(self.iface.mapCanvas())
 
     settings = QSettings()
-    self.restoreGeometry( settings.value("/fTools/ValidateDialog/geometry").toByteArray() )
+    self.restoreGeometry( settings.value("/fTools/ValidateDialog/geometry", QByteArray(), type=QByteArray) )
 
     QObject.connect( self.browseShpError, SIGNAL( "clicked()" ), self.outFile )
     QObject.connect( self.ckBoxShpError, SIGNAL( "stateChanged( int )" ), self.updateGui )
@@ -103,7 +103,7 @@ class ValidateDialog( QDialog, Ui_Dialog ):
 
   def closeEvent(self, e):
     settings = QSettings()
-    settings.setValue( "/fTools/ValidateDialog/geometry", QVariant(self.saveGeometry()) )
+    settings.setValue( "/fTools/ValidateDialog/geometry", self.saveGeometry())
     QDialog.closeEvent(self, e)
     del self.marker
 
@@ -111,12 +111,10 @@ class ValidateDialog( QDialog, Ui_Dialog ):
     if ( e.modifiers() == Qt.ControlModifier or \
          e.modifiers() == Qt.MetaModifier ) and \
          e.key() == Qt.Key_C:
-      #selection = self.tblUnique.selectedItems()
-      items = QString()
+      items = ""
       for row in range( self.tblUnique.rowCount() ):
-        items.append( self.tblUnique.item( row, 0 ).text()
-        + "," + self.tblUnique.item( row, 1 ).text() + "\n" )
-      if not items.isEmpty():
+        items += self.tblUnique.item( row, 0 ).text() + "," + self.tblUnique.item( row, 1 ).text() + "\n"
+      if items:
         clip_board = QApplication.clipboard()
         clip_board.setText( items )
     else:
@@ -137,6 +135,7 @@ class ValidateDialog( QDialog, Ui_Dialog ):
     if self.ckBoxShpError.isChecked():
       self.lineEditShpError.setEnabled( True )
       self.browseShpError.setEnabled( True )
+      self.addToCanvasCheck.setEnabled(True)
       self.tblUnique.setEnabled( False )
       self.lstCount.setEnabled( False )
       self.label_2.setEnabled( False )
@@ -145,6 +144,7 @@ class ValidateDialog( QDialog, Ui_Dialog ):
     else:
       self.lineEditShpError.setEnabled( False )
       self.browseShpError.setEnabled( False )
+      self.addToCanvasCheck.setEnabled(False)
       self.tblUnique.setEnabled( True )
       self.lstCount.setEnabled( True )
       self.label_2.setEnabled( True )
@@ -156,7 +156,7 @@ class ValidateDialog( QDialog, Ui_Dialog ):
     (self.shapefileName, self.encoding) = ftools_utils.saveDialog( self )
     if self.shapefileName is None or self.encoding is None:
       return
-    self.lineEditShpError.setText( QString( self.shapefileName ) )
+    self.lineEditShpError.setText( self.shapefileName )
 
   def zoomToError(self, curr, prev):
       if curr is None:
@@ -167,7 +167,7 @@ class ValidateDialog( QDialog, Ui_Dialog ):
       mc = self.iface.mapCanvas()
       mc.zoomToPreviousExtent()
 
-      e = item.data(Qt.UserRole).toPyObject()
+      e = item.data(Qt.UserRole)
 
       if type(e)==QgsPoint:
         e = mc.mapRenderer().layerToMapCoordinates( self.vlayer, e )
@@ -181,8 +181,8 @@ class ValidateDialog( QDialog, Ui_Dialog ):
         self.marker.reset()
 
         ft = QgsFeature()
-        (fid,ok) = self.tblUnique.item(row, 0).text().toInt()
-        if not ok or not self.vlayer.getFeatures( QgsFeatureRequest().setFilterFid( fid ) ).nextFeature( ft ):
+        fid = int(self.tblUnique.item(row, 0).text())
+        if not self.vlayer.getFeatures( QgsFeatureRequest().setFilterFid( fid ) ).nextFeature( ft ):
           return
 
         rect = mc.mapRenderer().layerExtentToOutputExtent( self.vlayer, ft.geometry().boundingBox() )
@@ -229,13 +229,12 @@ class ValidateDialog( QDialog, Ui_Dialog ):
     self.buttonOk.setEnabled( True )
     if success == "writeShape":
       extra = ""
-      addToTOC = QMessageBox.question( self, self.tr("Geometry"),
-                 self.tr( "Created output shapefile:\n%1\n%2\n\nWould you like to add the new layer to the TOC?" ).arg( unicode( self.shapefileName ) ).arg( extra ),
-                 QMessageBox.Yes, QMessageBox.No, QMessageBox.NoButton )
-      if addToTOC == QMessageBox.Yes:
-        if not ftools_utils.addShapeToCanvas( unicode( self.shapefileName ) ):
-          QMessageBox.warning( self, self.tr( "Geometry"),
-                               self.tr( "Error loading output shapefile:\n%1" ).arg( unicode( self.shapefileName ) ) )
+      if self.addToCanvasCheck.isChecked():
+        addCanvasCheck = ftools_utils.addShapeToCanvas(unicode(self.shapefileName))
+        if not addCanvasCheck:
+          QMessageBox.warning( self, self.tr("Geometry"), self.tr( "Error loading output shapefile:\n%s" ) % ( unicode( self.shapefileName ) ))
+      else:
+        QMessageBox.information(self, self.tr("Geometry"),self.tr("Created output shapefile:\n%s\n%s" ) % ( unicode( self.shapefileName ), extra))
     else:
       self.tblUnique.setColumnCount( 2 )
       count = 0
@@ -250,7 +249,7 @@ class ValidateDialog( QDialog, Ui_Dialog ):
           message = err.what()
           errItem = QTableWidgetItem( message )
           if err.hasWhere(): # if there is a location associated with the error
-            errItem.setData(Qt.UserRole, QVariant(err.where()))
+            errItem.setData(Qt.UserRole, err.where())
           self.tblUnique.setItem( count, 1, errItem )
           count += 1
       self.tblUnique.setHorizontalHeaderLabels( [ self.tr("Feature"), self.tr("Error(s)") ] )
@@ -336,7 +335,7 @@ class validateThread( QThread ):
             geometry = QgsGeometry().fromPoint( myPoint )
             ft = QgsFeature()
             ft.setGeometry( geometry )
-            ft.setAttributes( [ QVariant( fidItem ), QVariant( message ) ] )
+            ft.setAttributes( [ fidItem, message ] )
             writer.addFeature( ft )
       del writer
       return "writeShape"
